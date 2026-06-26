@@ -1,0 +1,16 @@
+{
+  "name": "NEYO — School Operating System",
+  "short_name": "NEYO",
+  "description": "Run admissions, attendance, fees and academics in one place. Built for Kenyan schools.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#faf8f2",
+  "theme_color": "#1c2740",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

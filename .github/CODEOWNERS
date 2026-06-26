@@ -1,0 +1,13 @@
+# NEYO code ownership (A.19.4 — supports "require review" branch protection).
+# Replace @your-github-username with the founder's handle (and add teammates).
+# Anyone listed here is auto-requested as a reviewer on matching PRs.
+
+# Everything by default.
+*                       @your-github-username
+
+# Security-sensitive areas — always review carefully.
+/src/lib/core/          @your-github-username
+/src/lib/crypto/        @your-github-username
+/src/lib/security/      @your-github-username
+/prisma/                @your-github-username
+/.github/               @your-github-username

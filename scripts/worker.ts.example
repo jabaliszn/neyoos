@@ -1,0 +1,22 @@
+/**
+ * NEYO background worker (Feature A.12) — PRODUCTION, separate process.
+ * Rename to worker.ts and run with: tsx scripts/worker.ts  (after `npm i bullmq ioredis`)
+ * Deploy this as its own process on Fly.io (separate from the web/API).
+ */
+import { Worker } from "bullmq";
+import { runJob } from "../src/lib/jobs/jobs.service";
+
+const worker = new Worker(
+  "neyo-jobs",
+  async (job) => {
+    const { name, payload } = job.data as { name: string; payload?: unknown };
+    const r = await runJob(name, payload);
+    if (!r.ok) throw new Error(r.error ?? "job failed");
+    return r.result;
+  },
+  { connection: { url: process.env.REDIS_URL! }, concurrency: 5 }
+);
+
+worker.on("completed", (job) => console.log(`✓ ${job.name} (${job.id})`));
+worker.on("failed", (job, err) => console.error(`✗ ${job?.name}: ${err.message}`));
+console.log("NEYO worker started, draining queue 'neyo-jobs'…");

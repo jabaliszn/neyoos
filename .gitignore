@@ -1,0 +1,21 @@
+node_modules
+.next
+out
+dist
+build
+coverage
+*.log
+.DS_Store
+
+# Prisma local dev database
+prisma/dev.db
+prisma/dev.db-journal
+
+# Env files (keep .env out of git in real projects)
+.env.local
+
+# Worker is generated from worker.ts.example at Docker build (A.19); never commit it
+scripts/worker.ts
+
+# Vercel link metadata
+.vercel

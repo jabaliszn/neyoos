@@ -1,0 +1,3888 @@
+// NEYO database schema — Chunk 0 Foundation
+// Dev provider: sqlite (file-based, zero-install, testable in preview today).
+// Production: change provider to "postgresql" and point DATABASE_URL at Neon.
+//   Postgres-only features flagged in code: Row-Level Security (A.2), tsvector search (A.11).
+// Each feature chunk EXTENDS this schema with its own models.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// The 16 roles (Part A.3). SQLite has no native enums, so we store the role as
+// a string and validate it against this list in Zod (Chunk 2 of every feature).
+// Canonical role list lives in src/lib/core/roles.ts.
+// ---------------------------------------------------------------------------
+
+// A school / business / farm / creator account = one Tenant (A.2 Multi-Tenancy).
+model Tenant {
+  id     String  @id @default(cuid())
+  name   String
+  slug   String  @unique // used for subdomain + ID prefix (A.4)
+  county String? // Kenyan county, e.g. "Nairobi"
+  phone  String? // +254 7XX XXX XXX
+  email  String?
+  osKey  String  @default("school") // I.50: school | business | farm | creator
+
+  // Onboarding (G.3)
+  curriculum           String? // "CBC" | "8-4-4" | "BOTH"
+  onboardedAt          DateTime?
+  // G.14 Day-One Demo Mode: a sandboxed, time-boxed tenant that auto-expires.
+  isDemo               Boolean   @default(false)
+  demoExpiresAt        DateTime? // when the demo tenant is purged (null = not a demo / kept)
+  // G.21 (founder 2026-06-12): DAY | BOARDING | DAY_AND_BOARDING — gates the
+  // hostel module + boarding-fee features for day-only schools.
+  schoolType           String    @default("DAY")
+  // G.24 uniform supplier/tailor (orders are relayed to them).
+  uniformSupplierName  String?
+  uniformSupplierPhone String? // +254...
+
+  // Calendar preferences (A.17.3): opt-in to showing religious moments.
+  showReligiousHolidays Boolean @default(true)
+  libraryFinesEnabled   Boolean @default(true) // customizable switch for late book returns fines (H.3)
+  libraryFinePerDayKes Int     @default(10) // customizable late-return fine amount per chargeable day
+
+  // School Profile & Branding (G.9). Used across receipts/reports/ID cards and
+  // (later) the public subdomain landing site (G.11).
+  motto               String?
+  vision              String?
+  mission             String?
+  about               String? // short description / "about us"
+  logoUrl             String? // school badge/logo (stored via A.9)
+  brandPrimary        String? // hex, e.g. "#1c2740"
+  brandAccent         String? // hex, e.g. "#1f9d5f"
+  addressLine         String? // postal/physical address
+  socialLinks         String? // JSON: { facebook, instagram, tiktok, youtube, website }
+  // Joining requirements MASTER list (G.9): JSON array of
+  // { label, category, quantity?, mandatory } shown to new parents at admission.
+  joiningRequirements String?
+  documentDesignJson String? // I.42 school-owned document/ID design defaults
+  // G.17 geofence for GPS-verified staff clock-in (null = geofence off).
+  gpsLat              Float?
+  gpsLng              Float?
+  gpsRadiusM          Int? // allowed distance from the gate, metres (e.g. 300)
+
+  // B.24 Owner Dashboard: fee-collection target the owner measures against.
+  collectionTargetPct         Int @default(85) // % of billed fees expected collected this term
+  // B.25 Procurement: POs above this need leadership approval (KES).
+  poApprovalThresholdKes      Int @default(50000)
+  // B.25 Expenses: expenses above this need leadership approval (KES).
+  expenseApprovalThresholdKes Int @default(20000)
+  // G.12 Sibling Intelligence: default % discount applied to a sibling's fee
+  // invoice when a family has 2+ children enrolled (0 = off; bursar applies it).
+  siblingDiscountPct          Int @default(0)
+
+  // G.34 Security Hardening: enforce 2FA for all leadership/staff roles
+  enforce2Fa Boolean @default(false)
+
+  // H.2 Multi-Owner Support: when a school has 2+ owners and this is ON, certain
+  // critical actions need a SECOND owner's approval (dual control) — every
+  // decision is logged. Auto-no-ops when there's only one owner.
+  requireJointOwnerApproval Boolean @default(false)
+
+  // H.2 Customized Printing Limits: max document prints per user per day for
+  // non-privileged roles (null/0 = unlimited). Privileged roles (Principal,
+  // Deputy, Academics HOD, Owner) bypass the limit and set it.
+  printLimitPerDay Int? @default(0)
+
+  // H.2 Boarding Term-End Print Scheduler: "AUTO" = the print station prints
+  // jobs as they queue (default); "HOLD" = boarding schools hold all jobs and
+  // batch-print them only at term end. School-wide, leadership-controlled.
+  printStationMode String @default("AUTO")
+
+  // H.5 Cafeteria Table Allocation: default number of seats per dining table.
+  cafeteriaTableSize Int @default(8)
+  cafeteriaMealModel String @default("HYBRID") // HYBRID | CARDS_ONLY | BOARDING_GROUPS | NO_CARDS
+  cafeteriaMealScope String @default("ALL") // ALL | LUNCH | SUPPER
+
+  // H.2 Role-Based Settings & Module Visibility Control: per-school map of which
+  // nav items / settings are HIDDEN for which roles. JSON: { "<href>": ["ROLE",..] }.
+  // Owner/Principal-managed; non-concerned staff can be reduced to just their
+  // own Security (password) + language. Empty/null = nothing extra hidden.
+  navVisibility String?
+
+  // Per-tenant encryption key (A.2.7, DEK/KEK envelope pattern).
+  // The tenant's DEK is AES-256-GCM-encrypted with the master KEK (env/KMS).
+  encryptedDek String? // base64 wrapped DEK
+  dekIv        String? // base64 IV used to wrap the DEK
+  dekTag       String? // base64 GCM auth tag for the wrapped DEK
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                    User[]
+  idSequences              IdSequence[]
+  auditLogs                AuditLog[]
+  modules                  TenantModule[]
+  subscription             Subscription?
+  usageCounters            UsageCounter[]
+  paymentCredential        PaymentCredential?
+  payments                 Payment[]
+  notifications            Notification[]
+  webPushSubscriptions     WebPushSubscription[]
+  messageAcknowledgements  MessageAcknowledgement[]
+  messageDeliveryReports   MessageDeliveryReport[]
+  intercomCalls            IntercomCall[]
+  notificationTemplates    NotificationTemplate[]
+  conversations            Conversation[]
+  storedFiles              StoredFile[]
+  storageProvider          TenantStorageProvider?
+  storageUsageSnapshots    StorageUsageSnapshot[]
+  documentVerifications    DocumentVerification[]
+  apiKeys                  ApiKey[]
+  webhookSubscriptions     WebhookSubscription[]
+  webhookDeliveries        WebhookDelivery[]
+  calendarEvents           CalendarEvent[]
+  visitorLogs              VisitorLog[]
+  admissionInquiries       AdmissionInquiry[]
+  phoneMessages            PhoneMessage[]
+  schoolClasses            SchoolClass[]
+  students                 Student[]
+  guardians                Guardian[]
+  studentImports           StudentImport[]
+  studentTransfers         StudentTransfer[]
+  attendanceRecords        AttendanceRecord[]
+  principalDelegationTasks PrincipalDelegationTask[]
+  promotionRuns            PromotionRun[]
+  admissionApplications    AdmissionApplication[]
+  staffAttendance          StaffAttendance[]
+  departments              Department[]
+  subjects                 Subject[]
+  academicTerms            AcademicTerm[]
+  timetableSlots           TimetableSlot[]
+  dutyRosterEntries        DutyRosterEntry[]
+  lessonPlans              LessonPlan[]
+  homework                 Homework[]
+  classNotes               ClassNote[]
+  homeworkSubmissions      HomeworkSubmission[]
+  quizzes                  Quiz[]
+  forumThreads             ForumThread[]
+  bulkMessages             BulkMessage[]
+  teacherCommsApprovals    TeacherCommsApprovalRequest[]
+  libraryBooks             LibraryBook[]
+  bookIssues               BookIssue[]
+  hostels                  Hostel[]
+  hostelAttendance         HostelAttendance[]
+  transportRoutes          TransportRoute[]
+  drivers                  Driver[]
+  vehicles                 Vehicle[]
+  gpsBusLocations          GpsBusLocation[]
+  cctvCameras              CctvCamera[]
+  hardwareDeviceConnections HardwareDeviceConnection[]
+  stores                   Store[]
+  assets                   Asset[]
+  mealPlanEntries          MealPlanEntry[]
+  mealCards                MealCard[]
+  cafeteriaTables          CafeteriaTable[]
+  cafeteriaQueueEntries    CafeteriaQueueEntry[]
+  uniformOrders            UniformOrder[]
+  uniformSizes             UniformSize[]
+  assetMaintenance         AssetMaintenance[]
+  suppliers                Supplier[]
+  supplierContracts        SupplierContract[]
+  purchaseRequests         PurchaseRequest[]
+  purchaseQuotes           PurchaseQuote[]
+  purchaseOrders           PurchaseOrder[]
+  expenseCategories        ExpenseCategory[]
+  costCenters              CostCenter[]
+  expenses                 Expense[]
+  disciplineIncidents      DisciplineIncident[]
+  suspensions              Suspension[]
+  counselingNotes          CounselingNote[]
+  studentMedical           StudentMedical[]
+  clinicVisits             ClinicVisit[]
+  medicationPlans          MedicationPlan[]
+  printJobs                PrintJob[]
+  printApprovalRequests    PrintApprovalRequest[]
+  gatePasses               GatePass[]
+  pickupPersons            PickupPerson[]
+  altPickupAuthorizations  AltPickupAuthorization[]
+  ownerApprovalRequests    OwnerApprovalRequest[]
+  panicAlerts              PanicAlert[]
+  exams                    Exam[]
+  examResults              ExamResult[]
+  examReleaseApprovals     ExamReleaseApprovalRequest[]
+  cbcStrands               CbcStrand[]
+  cbcAssessments           CbcAssessment[]
+  feeStructures            FeeStructure[]
+  invoices                 Invoice[]
+  staffSalaries            StaffSalary[]
+  payrollRuns              PayrollRun[]
+  staffProfiles            StaffProfile[]
+  leaveRequests            LeaveRequest[]
+  jobPostings              JobPosting[]
+  appraisals               Appraisal[]
+  disciplinaryRecords      DisciplinaryRecord[]
+  trainingRecords          TrainingRecord[]
+  termPulses               TermPulse[]
+  savedViews               SavedView[]
+  teacherSubjects          TeacherSubject[]
+  classSubjectNeeds        ClassSubjectNeed[]
+  timetableConfigs         TimetableConfig[]
+  onlineClassSessions      OnlineClassSession[]
+  onlineClassParticipants  OnlineClassParticipant[]
+  onlineClassSignals       OnlineClassSignal[]
+  onlineClassQuestions     OnlineClassQuestion[]
+  learningVideos           LearningVideo[]
+  learningVideoSessions    LearningVideoSession[]
+  classVoiceRooms          ClassVoiceRoom[]
+  classVoiceParticipants   ClassVoiceParticipant[]
+  classVoiceSignals        ClassVoiceSignal[]
+  syllabusTopics           SyllabusTopic[]
+  examTimetableSlots       ExamTimetableSlot[]
+  examMaterialRecords      ExamMaterialRecord[]
+  promisesToPay            PromiseToPay[]
+  reportCardDayCheckIns    ReportCardDayCheckIn[]
+  newsPosts                NewsPost[]
+  publicSiteSettings       PublicSiteSettings?
+  publicSiteLeaders        PublicSiteLeader[]
+  publicSiteTestimonials   PublicSiteTestimonial[]
+  publicSiteGalleryImages  PublicSiteGalleryImage[]
+  publicSiteActivities     PublicSiteActivity[]
+  entranceExamPapers       EntranceExamPaper[] // Added for entrance exam papers (H.3)
+}
+
+// B.9 extended staff record (User holds login/role; this holds HR facts).
+model StaffProfile {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId           String   @unique
+  tscNumber        String? // Teachers Service Commission no.
+  nationalId       String?
+  kraPin           String?
+  qualifications   String? // "B.Ed (Maths/Physics), Kenyatta University"
+  employmentDate   String? // YYYY-MM-DD
+  contractType     String   @default("PERMANENT") // PERMANENT | CONTRACT | BOM | INTERN
+  contractEndDate  String? // for CONTRACT/BOM/INTERN
+  emergencyContact String?
+  visibilityAreas  String? // JSON array: KITCHEN | CLINIC | TRANSPORT | SECURITY | GENERAL, narrows SUPPORT_STAFF access
+  updatedAt        DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// B.9 leave management. Balances derive from LEAVE_TYPES allowances - taken.
+model LeaveRequest {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId        String
+  userName      String
+  type          String // ANNUAL | SICK | MATERNITY | PATERNITY | COMPASSIONATE | STUDY
+  startDate     String // YYYY-MM-DD
+  endDate       String
+  days          Int
+  reason        String?
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  decidedById   String?
+  decidedByName String?
+  decidedAt     DateTime?
+  decisionNote  String?
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
+}
+
+// B.9 recruitment.
+model JobPosting {
+  id           String           @id @default(cuid())
+  tenantId     String
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  deadline     String? // YYYY-MM-DD
+  open         Boolean          @default(true)
+  applications JobApplication[]
+  createdAt    DateTime         @default(now())
+
+  @@index([tenantId])
+}
+
+model JobApplication {
+  id        String     @id @default(cuid())
+  postingId String
+  posting   JobPosting @relation(fields: [postingId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  email     String?
+  notes     String?
+  status    String     @default("NEW") // NEW | SHORTLISTED | INTERVIEWED | HIRED | REJECTED
+  createdAt DateTime   @default(now())
+}
+
+// B.9 performance appraisal (simple periodic review).
+model Appraisal {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId       String
+  userName     String
+  period       String // "2026-T2"
+  score        Int // 1..5
+  strengths    String?
+  improvements String?
+  reviewerId   String
+  reviewerName String
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, userId])
+}
+
+// B.9 disciplinary records (staff).
+model DisciplinaryRecord {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId         String
+  userName       String
+  date           String
+  category       String // VERBAL_WARNING | WRITTEN_WARNING | SUSPENSION | OTHER
+  details        String
+  actionTaken    String?
+  recordedById   String
+  recordedByName String
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, userId])
+}
+
+// B.9 training / CPD records.
+model TrainingRecord {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId         String
+  userName       String
+  title          String // "SEPU CBC upskilling workshop"
+  provider       String?
+  date           String
+  durationDays   Int      @default(1)
+  certificateUrl String?
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, userId])
+}
+
+// B.8 staff salary setup (KES/month).
+model StaffSalary {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId                String   @unique
+  basicKes              Int
+  houseAllowanceKes     Int      @default(0)
+  transportAllowanceKes Int      @default(0)
+  otherAllowanceKes     Int      @default(0)
+  saccoKes              Int      @default(0) // monthly SACCO contribution
+  loanKes               Int      @default(0) // monthly loan repayment
+  updatedAt             DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// B.8 one month's payroll run.
+model PayrollRun {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  period        String // "2026-06"
+  status        String    @default("DRAFT") // DRAFT | APPROVED
+  payslips      Payslip[]
+  createdById   String
+  createdByName String
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([tenantId, period])
+}
+
+// B.8 one staff member's payslip in a run (all KES).
+model Payslip {
+  id             String     @id @default(cuid())
+  runId          String
+  run            PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  userId         String
+  userName       String
+  role           String
+  basicKes       Int
+  allowancesKes  Int
+  overtimeKes    Int        @default(0)
+  grossKes       Int
+  payeKes        Int
+  shifKes        Int // SHA/SHIF 2.75%
+  nssfKes        Int // employee Tier I+II
+  housingLevyKes Int // AHL 1.5%
+  saccoKes       Int
+  loanKes        Int
+  netKes         Int
+
+  @@unique([runId, userId])
+}
+
+// B.7 fee structure: what a class level pays in a term (KES).
+model FeeStructure {
+  id       String    @id @default(cuid())
+  tenantId String
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name     String // "Form 2 — Term 2 2026"
+  level    String // class level it applies to ("Form 2", "Grade 4")
+  classId  String? // optional exact class/stream override (I.35)
+  year     Int
+  term     Int
+  items    FeeItem[]
+  invoices Invoice[]
+
+  @@unique([tenantId, level, year, term, classId])
+}
+
+model FeeItem {
+  id          String       @id @default(cuid())
+  structureId String
+  structure   FeeStructure @relation(fields: [structureId], references: [id], onDelete: Cascade)
+  label       String // "Tuition", "Boarding", "Activity fee"
+  amountKes   Int
+}
+
+// B.7 invoice: one student's bill for a term (from a structure or manual).
+// status derived from amounts: UNPAID | PARTIAL | PAID (computed, stored for filters).
+model Invoice {
+  id             String        @id @default(cuid())
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceNo      String // KH-INV-000001 (A.4)
+  studentId      String
+  structureId    String?
+  structure      FeeStructure? @relation(fields: [structureId], references: [id], onDelete: SetNull)
+  description    String // "Term 2 2026 fees" or manual reason
+  kind           String        @default("FEE") // FEE | ARREARS | MANUAL | SERVICE
+  totalKes       Int
+  paidKes        Int           @default(0)
+  discountKes    Int           @default(0) // B.7 scholarships/bursaries/waivers
+  discountReason String? // "Bursary — county fund", "Sibling discount"
+  reminderSentAt DateTime? // last overdue-SMS (dedupe window)
+  // B.7+ print tracking (proof-of-payment discipline)
+  printCount     Int           @default(0)
+  lastPrintedAt  DateTime?
+  lastPrintedBy  String?
+  status         String        @default("UNPAID") // UNPAID | PARTIAL | PAID
+  dueDate        String // YYYY-MM-DD
+  year           Int
+  term           Int
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  promisesToPay PromiseToPay[]
+
+  @@unique([tenantId, invoiceNo])
+  @@index([tenantId, studentId])
+  @@index([tenantId, status, dueDate])
+}
+
+// B.6 CBC competency strand within a subject (e.g. English -> "Listening and
+// Speaking"). learningOutcome = the KICD outcome statement (B.6.2 tagging).
+model CbcStrand {
+  id              String          @id @default(cuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subjectId       String
+  name            String
+  learningOutcome String?
+  assessments     CbcAssessment[]
+
+  @@unique([tenantId, subjectId, name])
+  @@index([tenantId, subjectId])
+}
+
+// B.6 formative assessment: one observation of one learner on one strand.
+// level: 4=EE 3=ME 2=AE 1=BE (KICD 4-point rubric).
+model CbcAssessment {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId   String
+  strandId    String
+  strand      CbcStrand @relation(fields: [strandId], references: [id], onDelete: Cascade)
+  level       Int // 1..4
+  comment     String?
+  date        String // YYYY-MM-DD
+  teacherId   String
+  teacherName String
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, strandId, date])
+}
+
+// B.5 exam (e.g. "End of Term 2", "CAT 1"). Subjects mapped via ExamSubject.
+model Exam {
+  id               String                       @id @default(cuid())
+  tenantId         String
+  tenant           Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String
+  year             Int
+  term             Int // 1..3
+  type             String                       @default("EXAM") // EXAM | CAT
+  maxMarks         Int                          @default(100)
+  published        Boolean                      @default(false) // published = parents/students can see
+  subjects         ExamSubject[]
+  results          ExamResult[]
+  releaseApprovals ExamReleaseApprovalRequest[]
+  createdAt        DateTime                     @default(now())
+
+  @@index([tenantId, year, term])
+}
+
+// I.2 results-release approval workflow. HOD/academics request, Principal/Owner approves.
+model ExamReleaseApprovalRequest {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  examId          String
+  exam            Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  requestedById   String
+  requestedByName String
+  requestedAt     DateTime  @default(now())
+  decidedById     String?
+  decidedByName   String?
+  decidedAt       DateTime?
+  decisionNote    String?
+  summaryJson     String?
+
+  @@index([tenantId, status, requestedAt])
+  @@index([tenantId, examId])
+}
+
+// Subjects sat in an exam (B.5.2).
+model ExamSubject {
+  id        String @id @default(cuid())
+  examId    String
+  exam      Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subjectId String
+
+  @@unique([examId, subjectId])
+}
+
+// One student's mark in one subject of one exam. Idempotent upsert target.
+model ExamResult {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  examId      String
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId   String
+  subjectId   String
+  marks       Int // raw marks out of exam.maxMarks
+  enteredById String
+  updatedAt   DateTime @updatedAt
+
+  @@unique([examId, studentId, subjectId])
+  @@index([tenantId, examId, studentId])
+}
+
+// B.4 departments (Languages, Sciences, Humanities...).
+model Department {
+  id       String    @id @default(cuid())
+  tenantId String
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name     String
+  hodId    String? // User with HOD role
+  subjects Subject[]
+
+  @@unique([tenantId, name])
+}
+
+// B.4 subjects (Mathematics, Kiswahili, Integrated Science...).
+model Subject {
+  id             String          @id @default(cuid())
+  tenantId       String
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  code           String // "MAT", "KIS", "ENG"
+  curriculum     String // "CBC" | "8-4-4" | "BOTH"
+  departmentId   String?
+  department     Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  archived       Boolean         @default(false)
+  timetableSlots TimetableSlot[]
+  lessonPlans    LessonPlan[]
+  homework       Homework[]
+  classNotes     ClassNote[]
+  quizzes        Quiz[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// B.4 academic calendar — Kenyan 3-term year.
+model AcademicTerm {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  year      Int
+  term      Int // 1 | 2 | 3
+  startDate String // YYYY-MM-DD
+  endDate   String
+  current   Boolean @default(false)
+
+  @@unique([tenantId, year, term])
+}
+
+// I.78 — generated teacher duty-roster timetable.
+model DutyRosterEntry {
+  id                   String   @id @default(cuid())
+  tenantId             String
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  termLabel            String
+  rotationPeriod       String // WEEKLY | BI_WEEKLY | MONTHLY
+  weekNo               Int
+  startDate            String // YYYY-MM-DD
+  endDate              String // YYYY-MM-DD
+  primaryTeacherId     String
+  primaryTeacherName   String
+  assistantTeacherId   String?
+  assistantTeacherName String?
+  dutyTeamSize         Int      @default(2)
+  dutyTeacherIds       String? // JSON array for all teachers assigned in this reshuffle cycle
+  dutyTeacherNames     String? // JSON array for display/print
+  duties               String
+  generatedById        String
+  generatedByName      String
+  createdAt            DateTime @default(now())
+
+  @@unique([tenantId, termLabel, weekNo])
+  @@index([tenantId, termLabel])
+  @@index([tenantId, primaryTeacherId])
+}
+
+// B.4 timetable — one subject slot per class/day/period.
+model TimetableSlot {
+  id           String  @id @default(cuid())
+  tenantId     String
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId      String
+  subjectId    String
+  subject      Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId    String? // User
+  dayOfWeek    Int // 1=Mon .. 5=Fri
+  period       Int // 1..8
+  slotType     String  @default("ACADEMIC") // ACADEMIC | REMEDIAL | PREP
+  weekRotation String  @default("ALL") // ALL | WEEK_A | WEEK_B for alternating Saturdays
+  venue        String? // classroom/lab/hall for venue printing
+
+  @@unique([tenantId, classId, dayOfWeek, period, slotType])
+  @@index([tenantId, teacherId, dayOfWeek, period])
+}
+
+// B.4 lesson plans (teacher-owned; AI assist comes at B.23).
+model LessonPlan {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacherId   String
+  teacherName String
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  classId     String
+  date        String // YYYY-MM-DD
+  topic       String
+  objectives  String?
+  activities  String?
+  notes       String?
+  status      String   @default("PLANNED") // PLANNED | TAUGHT | SKIPPED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, teacherId, date])
+  @@index([tenantId, classId, date])
+}
+
+// B.12 homework a teacher assigns to a whole class (subject-tagged).
+// Parents/students see it on the shared family portal (B.10/B.11).
+// Submissions + grading come at B.13 (LMS) — this model is reused there.
+model Homework {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId      String
+  subjectId    String
+  subject      Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId    String
+  teacherName  String // denormalized for fast portal lists
+  title        String
+  instructions String?
+  dueDate      String // YYYY-MM-DD
+  fileUrl      String? // optional attachment (A.9 storage)
+  fileName     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  submissions HomeworkSubmission[] // B.13
+
+  @@index([tenantId, classId, dueDate])
+  @@index([tenantId, teacherId])
+}
+
+// B.12 class notes / study material a teacher shares with a class.
+// Students download these from the shared portal. B.13 LMS reuses this model.
+model ClassNote {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId     String
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId   String
+  teacherName String
+  title       String
+  description String?
+  fileUrl     String // A.9 storage (PDF/DOC/image)
+  fileName    String
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, classId])
+  @@index([tenantId, teacherId])
+}
+
+// B.13 a student's submission for a Homework task. One per student per task.
+// Graded by the teacher (gradePct + feedback).
+model HomeworkSubmission {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  homeworkId  String
+  homework    Homework  @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  studentId   String
+  text        String? // typed answer / cover note
+  fileUrl     String? // optional uploaded work (A.9)
+  fileName    String?
+  late        Boolean   @default(false) // submitted after dueDate
+  submittedAt DateTime  @default(now())
+  gradePct    Int? // 0-100, set by teacher
+  feedback    String?
+  gradedById  String?
+  gradedAt    DateTime?
+
+  @@unique([homeworkId, studentId])
+  @@index([tenantId, homeworkId])
+  @@index([tenantId, studentId])
+}
+
+// B.13 quiz with auto-grading. Questions are MCQ; grading is SERVER-side
+// (correct answers never leave the server before an attempt).
+model Quiz {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId      String
+  subjectId    String
+  subject      Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId    String
+  teacherName  String
+  title        String
+  instructions String?
+  published    Boolean  @default(false) // students only see published
+  dueDate      String? // YYYY-MM-DD; attempts blocked after this
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@index([tenantId, classId])
+  @@index([tenantId, teacherId])
+}
+
+model QuizQuestion {
+  id           String @id @default(cuid())
+  tenantId     String
+  quizId       String
+  quiz         Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  order        Int
+  prompt       String
+  options      String // JSON array of option strings (2-6)
+  correctIndex Int // index into options — NEVER sent to students pre-attempt
+
+  @@index([tenantId, quizId])
+}
+
+// One graded attempt per student per quiz (auto-graded on submit).
+model QuizAttempt {
+  id          String   @id @default(cuid())
+  tenantId    String
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId   String
+  answers     String // JSON array of selected indexes (aligned to question order)
+  score       Int // correct answers
+  total       Int // question count at attempt time
+  scorePct    Int // rounded %
+  submittedAt DateTime @default(now())
+
+  @@unique([quizId, studentId])
+  @@index([tenantId, studentId])
+}
+
+// B.13 class discussion forum — thread + flat replies, per class.
+model ForumThread {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId    String
+  title      String
+  body       String
+  authorId   String
+  authorName String
+  authorRole String // TEACHER | STUDENT | PARENT | ... (for the role chip)
+  locked     Boolean  @default(false) // teacher can lock a thread
+  createdAt  DateTime @default(now())
+
+  posts ForumPost[]
+
+  @@index([tenantId, classId])
+}
+
+model ForumPost {
+  id         String      @id @default(cuid())
+  tenantId   String
+  threadId   String
+  thread     ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  body       String
+  authorId   String
+  authorName String
+  authorRole String
+  createdAt  DateTime    @default(now())
+
+  @@index([tenantId, threadId])
+}
+
+// B.14 one bulk send (SMS/announcement) to an audience. Receipt of WHO was
+// targeted + delivery counts + cost — the school's communication ledger.
+model BulkMessage {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  audienceType   String // SCHOOL_GUARDIANS | CLASS_GUARDIANS | ROLE
+  classId        String? // when CLASS_GUARDIANS
+  audienceLabel  String // human label frozen at send time ("Form 2 East parents")
+  role           String? // when ROLE (e.g. TEACHER)
+  channel        String // sms | in_app (dispatcher cascade for users)
+  body           String
+  recipientCount Int
+  sentCount      Int
+  skippedCount   Int
+  costKes        Float    @default(0)
+  senderId       String
+  senderName     String
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// B.15 a library book (physical copies + optional digital file).
+// isbn doubles as the barcode value for phone scanning.
+
+// I.10 — teacher class-parent messages require Principal/Deputy approval before delivery.
+model TeacherCommsApprovalRequest {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  audienceType    String // CLASS_GUARDIANS only for now
+  classId         String
+  audienceLabel   String
+  channel         String    @default("in_app") // teachers may request in_app only; SMS is blocked
+  body            String
+  recipientCount  Int
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  requestedById   String
+  requestedByName String
+  decidedById     String?
+  decidedByName   String?
+  decidedAt       DateTime?
+  decisionNote    String?
+  bulkMessageId   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, requestedById])
+}
+
+model LibraryBook {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title       String
+  author      String?
+  isbn        String? // barcode / ISBN — scanned or typed
+  category    String? // "Set book", "Reference", "Fiction"...
+  shelf       String? // physical location, e.g. "B2"
+  copiesTotal Int      @default(1)
+  fileUrl     String? // digital copy (A.9) — the "digital library"
+  fileName    String?
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  issues BookIssue[]
+
+  @@unique([tenantId, isbn])
+  @@index([tenantId, archived])
+}
+
+// B.15 one borrow record. Open while returnedAt is null. fineKes is
+// auto-computed from days overdue at return time (and previewed live).
+model BookIssue {
+  id             String      @id @default(cuid())
+  tenantId       String
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bookId         String
+  book           LibraryBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  // H.5 Teacher Book Borrowing: a borrower is a STUDENT or a STAFF member.
+  borrowerType   String      @default("STUDENT") // STUDENT | STAFF
+  studentId      String? // set when borrowerType = STUDENT
+  borrowerUserId String? // set when borrowerType = STAFF (a User)
+  studentName    String // denormalized borrower name (student or staff) for fast lists
+  admissionNo    String      @default("") // student admission no; "" / TSC-style id for staff
+  issuedById     String
+  issuedByName   String
+  issuedAt       DateTime    @default(now())
+  dueDate        String // YYYY-MM-DD
+  returnedAt     DateTime?
+  fineKes        Int         @default(0)
+  finePaid       Boolean     @default(false)
+
+  @@index([tenantId, bookId])
+  @@index([tenantId, studentId])
+  @@index([tenantId, returnedAt])
+}
+
+// B.16 a hostel building (dorm). gender: BOYS | GIRLS | MIXED.
+model Hostel {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String // "Simba House"
+  gender         String // BOYS | GIRLS | MIXED
+  masterId       String? // User (HOSTEL_MASTER / housemother)
+  boardingFeeKes Int      @default(0) // per-term boarding fee (B.7 invoicing)
+  archived       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  rooms HostelRoom[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+// B.16 a room within a hostel; capacity = number of beds.
+model HostelRoom {
+  id       String @id @default(cuid())
+  tenantId String
+  hostelId String
+  hostel   Hostel @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  name     String // "Room 4"
+  capacity Int    @default(4)
+
+  allocations HostelAllocation[]
+
+  @@unique([tenantId, hostelId, name])
+  @@index([tenantId, hostelId])
+}
+
+// B.16 one student in one bed. Open while releasedAt is null.
+// bedNo is the bed within the room (1..capacity).
+model HostelAllocation {
+  id          String     @id @default(cuid())
+  tenantId    String
+  roomId      String
+  room        HostelRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  studentId   String
+  studentName String // denormalized
+  admissionNo String
+  bedNo       Int
+  allocatedAt DateTime   @default(now())
+  releasedAt  DateTime?
+
+  @@index([tenantId, roomId])
+  @@index([tenantId, studentId])
+}
+
+// B.16 curfew register — one row per boarder per night.
+// status: IN (present at curfew) | OUT (missing!) | LEAVE (authorised away).
+model HostelAttendance {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId    String
+  studentName  String
+  hostelName   String
+  date         String // YYYY-MM-DD (the night of)
+  status       String // IN | OUT | LEAVE
+  note         String?
+  markedById   String
+  markedByName String
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, studentId, date])
+  @@index([tenantId, date])
+}
+
+// B.17 a transport route (e.g. "Route A — Kasarani"). Stops as JSON list.
+model TransportRoute {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String // "Route A — Kasarani"
+  stops      String? // JSON array of stop names, in order
+  termFeeKes Int      @default(0) // per-term transport fee (B.7 invoicing)
+  vehicleId  String?
+  vehicle    Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driverId   String?
+  driver     Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  archived   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  assignments TransportAssignment[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+
+// I.47 — hardware connection registry: truthful status, never fake connected.
+model HardwareDeviceConnection {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deviceType  String   // GPS | BARCODE | THERMAL_PRINTER | RFID | FINGERPRINT | CCTV | FACE_CAMERA
+  label       String
+  status      String   @default("NOT_CONNECTED") // NOT_CONNECTED | READY_TO_PAIR | CONNECTED | ERROR
+  deviceName  String?
+  lastSeenAt  DateTime?
+  metadataJson String?
+  updatedById String?
+  updatedByName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, deviceType, label])
+  @@index([tenantId, deviceType, status])
+}
+
+// I.47 — GPS bus tracker feed seam. Tracker hardware posts coordinates here.
+model GpsBusLocation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicleId   String?
+  vehicleRegNo String?
+  trackerId   String
+  lat         Float
+  lng         Float
+  speedKph    Float?
+  headingDeg  Float?
+  recordedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, trackerId, recordedAt])
+  @@index([tenantId, vehicleId, recordedAt])
+}
+
+// I.47 — CCTV connection seam. Stores camera/NVR endpoints only; no video saved by NEYO.
+model CctvCamera {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  location    String
+  streamUrl   String?
+  status      String   @default("NOT_CONNECTED")
+  lastCheckedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId, status])
+}
+
+// B.17 a driver (staff or contracted).
+model Driver {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fullName      String
+  phone         String // +254...
+  licenseNo     String // DL number
+  licenseExpiry String? // YYYY-MM-DD — expiry alerts
+  nationalId    String?
+  archived      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  routes TransportRoute[]
+
+  @@unique([tenantId, licenseNo])
+  @@index([tenantId])
+}
+
+// B.17 a vehicle. insuranceExpiry/inspectionExpiry drive compliance alerts (KE NTSA).
+model Vehicle {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  regNo            String // "KCB 123A"
+  make             String? // "Toyota Coaster"
+  capacity         Int      @default(33)
+  insuranceExpiry  String? // YYYY-MM-DD
+  inspectionExpiry String? // NTSA inspection sticker
+  archived         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  routes          TransportRoute[]
+  maintenanceLogs VehicleMaintenance[]
+  fuelLogs        FuelLog[]
+
+  @@unique([tenantId, regNo])
+  @@index([tenantId])
+}
+
+// B.17 maintenance entry (service, repairs, tyres...).
+model VehicleMaintenance {
+  id          String   @id @default(cuid())
+  tenantId    String
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date        String // YYYY-MM-DD
+  type        String // SERVICE | REPAIR | TYRES | INSPECTION | OTHER
+  description String
+  costKes     Int      @default(0)
+  odometerKm  Int?
+  garage      String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, vehicleId, date])
+}
+
+// B.17 fuel fill-up. litres + cost; odometer enables consumption tracking.
+model FuelLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date        String // YYYY-MM-DD
+  litres      Float
+  costKes     Int
+  odometerKm  Int?
+  station     String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, vehicleId, date])
+}
+
+// B.17 student on a route (open while releasedAt null). pickupStop from the route's stops.
+model TransportAssignment {
+  id          String         @id @default(cuid())
+  tenantId    String
+  routeId     String
+  route       TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  studentId   String
+  studentName String
+  admissionNo String
+  pickupStop  String?
+  assignedAt  DateTime       @default(now())
+  releasedAt  DateTime?
+
+  @@index([tenantId, routeId])
+  @@index([tenantId, studentId])
+}
+
+// B.18 a physical store (Main Store, Kitchen Store, Lab Store...).
+model Store {
+  id       String  @id @default(cuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name     String
+  location String?
+  archived Boolean @default(false)
+
+  items StockItem[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+// B.18 a stock item in a store. qty is the CURRENT balance (updated by
+// movements). reorderLevel drives the low-stock alert. sellPriceKes set =
+// item can be SOLD to students (uniform, books) → lands on their invoice.
+model StockItem {
+  id           String        @id @default(cuid())
+  tenantId     String
+  storeId      String
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name         String
+  category     String // "Food", "Stationery", "Uniform", "Cleaning", "Lab"...
+  unit         String        @default("pcs") // pcs | kg | L | bales | boxes
+  qty          Float         @default(0)
+  reorderLevel Float         @default(0)
+  sellPriceKes Int? // set = sellable to students (B.7 invoice link)
+  imageUrl     String? // G.24 uniform catalogue photo (A.9 storage)
+  sizes        UniformSize[] // B.25 per-size stock split
+  trackExpiry  Boolean       @default(false) // perishables -> batch+expiry mode
+  archived     Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+
+  batches   StockBatch[]
+  movements StockMovement[]
+
+  @@unique([tenantId, storeId, name])
+  @@index([tenantId, storeId])
+}
+
+// B.18 a batch of a perishable item (flour, rice, lab reagents).
+model StockBatch {
+  id         String    @id @default(cuid())
+  tenantId   String
+  itemId     String
+  item       StockItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  batchNo    String
+  qty        Float
+  expiryDate String? // YYYY-MM-DD — expiry alerts
+  receivedAt DateTime  @default(now())
+
+  @@index([tenantId, itemId])
+}
+
+// B.18 every stock change — the audit trail. type: IN | OUT | SALE | ADJUST.
+// SALE rows carry the student + the invoice the sale was billed to.
+model StockMovement {
+  id          String    @id @default(cuid())
+  tenantId    String
+  itemId      String
+  item        StockItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type        String // IN | OUT | SALE | ADJUST
+  qty         Float // positive number; sign comes from type
+  reason      String? // "Term 2 delivery", "Kitchen issue — lunch", "Sold to student"
+  studentId   String? // SALE: who bought it
+  studentName String?
+  invoiceId   String? // SALE: the B.7 invoice it was billed to
+  byId        String
+  byName      String
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, itemId, createdAt])
+  @@index([tenantId, studentId])
+}
+
+// B.18 a fixed asset (separate from consumable stock): computers, furniture,
+// vehicles already have their own module — this is the general register.
+model Asset {
+  id                     String             @id @default(cuid())
+  tenantId               String
+  tenant                 Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tag                    String // "KH-AST-0001"
+  name                   String
+  category               String // "ICT", "Furniture", "Kitchen", "Sports"...
+  location               String?
+  custodian              String? // person responsible
+  acquiredOn             String? // YYYY-MM-DD
+  valueKes               Int                @default(0)
+  condition              String             @default("GOOD") // GOOD | FAIR | NEEDS_REPAIR | DISPOSED
+  // B.25: straight-line depreciation — % of acquisition value per year.
+  // 0 = no depreciation (land). Book value computed from acquiredOn.
+  depreciationPctPerYear Int                @default(0)
+  // B.25: next planned service date (YYYY-MM-DD) — due/overdue badges.
+  nextMaintenanceOn      String?
+  archived               Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  maintenance            AssetMaintenance[]
+
+  @@unique([tenantId, tag])
+  @@index([tenantId])
+}
+
+// B.25 maintenance/repair log per asset (mirrors B.17 VehicleMaintenance).
+model AssetMaintenance {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  date      String // YYYY-MM-DD
+  kind      String   @default("SERVICE") // SERVICE | REPAIR | INSPECTION | OTHER
+  costKes   Int      @default(0)
+  note      String?
+  byName    String
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, assetId])
+}
+
+// B.19 weekly menu — one entry per day+meal. menu is the dish text.
+model MealPlanEntry {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dayOfWeek Int // 1=Mon .. 7=Sun
+  mealType  String // BREAKFAST | LUNCH | SUPPER
+  menu      String // "Githeri + greens", "Ugali, sukuma, beef stew"
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, dayOfWeek, mealType])
+  @@index([tenantId])
+}
+
+// H.5 Cafeteria Table Allocation — students are seated per CLASS (never mixed
+// across classes/streams) at tables of a chosen size, for a meal session
+// (LUNCH | SUPPER). One row per table; the seated learners are stored as JSON
+// (id/name/admNo frozen at allocation time) so the seating plan is printable.
+model CafeteriaTable {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  session      String // LUNCH | SUPPER
+  classId      String
+  classLabel   String // "Form 2 East" frozen at allocation
+  tableNo      Int // 1-based within the class
+  seats        Int // table size used
+  studentsJson String // JSON array of { id, name, admNo }
+  createdAt    DateTime @default(now())
+
+  @@unique([tenantId, session, classId, tableNo])
+  @@index([tenantId, session])
+}
+
+// I.19/B.19 — Cafeteria meal serving queue. One queue per date + meal session.
+model CafeteriaQueueEntry {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  date         String // YYYY-MM-DD
+  session      String // BREAKFAST | LUNCH | SUPPER
+  queueNo      Int
+  studentId    String
+  studentName  String
+  admissionNo  String
+  classLabel   String?
+  status       String    @default("WAITING") // WAITING | SERVED | CANCELLED
+  joinedAt     DateTime  @default(now())
+  servedAt     DateTime?
+  servedById   String?
+  servedByName String?
+
+  @@unique([tenantId, date, session, studentId])
+  @@index([tenantId, date, session, status])
+  @@index([tenantId, studentId])
+}
+
+// B.19 a student's meal card (e.g. lunch plan for the term). Issued =
+// IMMEDIATELY billed to the student's invoice (founder rule). cardNo printed
+// on the card the student shows at the serving line.
+model MealCard {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cardNo      String // MC-0001
+  studentId   String
+  studentName String
+  admissionNo String
+  planName    String // "Lunch plan — Term 2 2026"
+  meals       String // JSON array of meal types covered, e.g. ["LUNCH"]
+  termFeeKes  Int
+  invoiceId   String // the B.7 invoice this card was billed to
+  year        Int
+  term        Int
+  active      Boolean   @default(true)
+  issuedAt    DateTime  @default(now())
+  cancelledAt DateTime?
+
+  @@unique([tenantId, cardNo])
+  @@index([tenantId, studentId])
+}
+
+// G.24 a parent's uniform order from the catalogue. Billed to the student's
+// invoice on PLACEMENT (founder rule); the supplier/tailor delivers at school.
+// status: PLACED -> SENT_TO_SUPPLIER -> DELIVERED (or CANCELLED).
+model UniformOrder {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderNo     String // UO-0001
+  studentId   String
+  studentName String
+  admissionNo String
+  itemId      String // StockItem (Uniform category)
+  itemName    String
+  size        String? // "Size 32", "M", custom note
+  qty         Int
+  unitKes     Int
+  totalKes    Int
+  invoiceId   String // billed at placement (founder invoice rule)
+  status      String    @default("PLACED")
+  placedById  String // the PARENT (or staff) who ordered
+  placedAt    DateTime  @default(now())
+  deliveredAt DateTime?
+
+  @@unique([tenantId, orderNo])
+  @@index([tenantId, studentId])
+  @@index([tenantId, status])
+}
+
+// G.22 PLATFORM feature flags (NEYO company level — NOT tenant-owned!).
+// SUPER_ADMIN pauses a module key globally while we keep building it:
+// paused modules disappear from nav + block APIs for ALL schools, with a
+// "coming soon" note. No row = live.
+model PlatformFlag {
+  id        String   @id @default(cuid())
+  moduleKey String   @unique
+  paused    Boolean  @default(false)
+  note      String? // "Cafeteria is in beta — back next week"
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+// B.20 a discipline incident. Demerit points feed behavior tracking.
+// severity: MINOR | MAJOR | SEVERE. MAJOR+ auto-SMS the guardian.
+model DisciplineIncident {
+  id               String    @id @default(cuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId        String
+  studentName      String
+  admissionNo      String
+  date             String // YYYY-MM-DD
+  category         String // FIGHTING | BULLYING | LATENESS | NOISEMAKING | SNEAKING | VANDALISM | CHEATING | OTHER
+  severity         String // MINOR | MAJOR | SEVERE
+  points           Int       @default(1) // demerit points (behavior tracking)
+  description      String
+  actionTaken      String? // "Warned", "Manual work", "Sent to deputy"
+  reportedById     String
+  reportedByName   String
+  status           String    @default("APPROVED") // PENDING | APPROVED | REJECTED
+  approvedById     String?
+  approvedByName   String?
+  approvedAt       DateTime?
+  decisionNote     String?
+  parentNotifiedAt DateTime?
+  proofFileUrl     String? // Added for incident photo proof (H.3)
+  proofFileName    String? // Added for incident photo proof name (H.3)
+  createdAt        DateTime  @default(now())
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, date])
+}
+
+// B.20 a suspension. Active while status=ACTIVE and today <= endDate.
+model Suspension {
+  id               String    @id @default(cuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId        String
+  studentName      String
+  admissionNo      String
+  startDate        String // YYYY-MM-DD
+  endDate          String
+  reason           String
+  conditions       String? // "Return with parent", "Letter of apology"
+  status           String    @default("ACTIVE") // ACTIVE | COMPLETED | REVOKED
+  issuedById       String
+  issuedByName     String
+  approvedById     String?
+  approvedByName   String?
+  approvedAt       DateTime?
+  decisionNote     String?
+  parentNotifiedAt DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, status])
+}
+
+// B.20 CONFIDENTIAL counseling note. Only counseling.confidential holders
+// (Principal/Deputy) ever read these — never parents, never regular staff.
+model CounselingNote {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId     String
+  studentName   String
+  date          String // YYYY-MM-DD
+  sessionType   String // INDIVIDUAL | GROUP | FAMILY | REFERRAL
+  note          String // the confidential record
+  followUpOn    String? // YYYY-MM-DD reminder
+  counselorId   String
+  counselorName String
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, studentId])
+}
+
+// B.21 one medical profile per student: blood group, chronic conditions,
+// ALLERGIES (JSON array — drives alerts on clinic + kitchen), SHA number.
+model StudentMedical {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId  String   @unique
+  bloodGroup String? // A+ B- O+ ...
+  conditions String? // "Asthma", "Sickle cell trait"
+  allergies  String? // JSON array of strings: ["Penicillin","Groundnuts"]
+  shaNumber  String? // SHA (ex-NHIF) member number
+  notes      String?
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// B.21 a clinic/sickbay visit.
+model ClinicVisit {
+  id               String    @id @default(cuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId        String
+  studentName      String
+  admissionNo      String
+  date             String // YYYY-MM-DD
+  complaint        String // "Headache and fever"
+  treatment        String // "Paracetamol 500mg, rest"
+  medicationGiven  String?
+  referredTo       String? // "Kiambu Level 5" when referred out
+  recordedById     String
+  recordedByName   String
+  parentNotifiedAt DateTime? // referrals SMS the guardian
+  createdAt        DateTime  @default(now())
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, date])
+}
+
+// B.21 an ongoing medication plan (e.g. asthma inhaler, antibiotics course).
+model MedicationPlan {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId   String
+  studentName String
+  drug        String // "Amoxicillin 250mg"
+  dosage      String // "1 tablet"
+  frequency   String // "3x daily after meals"
+  startDate   String // YYYY-MM-DD
+  endDate     String?
+  active      Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  doses MedicationDose[]
+
+  @@index([tenantId, studentId])
+}
+
+// B.21 each administered dose (the tracking trail).
+model MedicationDose {
+  id       String         @id @default(cuid())
+  tenantId String
+  planId   String
+  plan     MedicationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  givenAt  DateTime       @default(now())
+  byId     String
+  byName   String
+  note     String?
+
+  @@index([tenantId, planId])
+}
+
+// G.31 print queue (founder 2026-06-12): documents print THEMSELVES at the
+// reception print station. If the printer/station is off, jobs stay QUEUED
+// and flush automatically when it comes back. kind: INVOICE | RECEIPT |
+// CLASS_BATCH (all invoices of a class in one PDF for easy distribution).
+model PrintJob {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kind       String // INVOICE | RECEIPT | CLASS_BATCH
+  refId      String // invoiceId / paymentId / structureId
+  classId    String? // grouping for distribution
+  classLabel String? // "Form 2 East" frozen at queue time
+  title      String // "Invoice KH-INV-000012 — Achieng (PAID)"
+  url        String // the PDF endpoint the station fetches
+  status     String    @default("QUEUED") // QUEUED | PRINTED | FAILED
+  queuedBy   String // "System (cash payment)" / user name
+  queuedAt   DateTime  @default(now())
+  printedAt  DateTime?
+
+  @@index([tenantId, status])
+  @@index([tenantId, classId])
+}
+
+// H.2 Customized Printing Limits — when a non-privileged user hits their daily
+// print limit, they raise a PrintApprovalRequest that a Principal/Deputy/HOD
+// approves. Approval lets that user print one more document of that kind.
+model PrintApprovalRequest {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedById   String
+  requestedByName String
+  docKind         String // INVOICE | RECEIPT | REPORT_CARD | ID_CARD | TRANSCRIPT | LETTER | OTHER
+  docRef          String? // e.g. invoiceId — what they want to print
+  reason          String?
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED | USED
+  decidedById     String?
+  decidedByName   String?
+  decidedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, requestedById, status])
+}
+
+// B.22 a gate pass: a student leaving campus during school hours (clinic
+// runs, family emergencies). Must be authorised; gate staff check the code.
+model GatePass {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  passNo         String // GP-0001 — quoted at the gate
+  studentId      String
+  studentName    String
+  admissionNo    String
+  reason         String
+  leaveAt        DateTime
+  returnBy       DateTime? // null = not returning today
+  escortName     String? // who picks/escorts the learner
+  status         String    @default("ACTIVE") // ACTIVE | USED | EXPIRED | CANCELLED
+  issuedById     String
+  issuedByName   String
+  approvedById   String?
+  approvedByName String?
+  approvedAt     DateTime?
+  decisionNote   String?
+  usedAt         DateTime? // stamped by the gate when the student exits
+  createdAt      DateTime  @default(now())
+
+  @@unique([tenantId, passNo])
+  @@index([tenantId, status])
+  @@index([tenantId, studentId])
+}
+
+// B.22 authorised-pickup list: ONLY these people may collect the student.
+model PickupPerson {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId    String
+  fullName     String
+  relationship String // "Mother", "Uncle", "House help"
+  phone        String // +254...
+  nationalId   String? // checked at the gate
+  active       Boolean  @default(true)
+  addedById    String
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, studentId])
+}
+
+// H.4 Alternate Pickup verification — a ONE-TIME authorization for someone NOT
+// on the permanent pickup list. The parent (or office) creates it with a secure
+// short code and optionally an uploaded screenshot of the confirmation message
+// they sent the picker. The guard verifies the code (and/or views the
+// screenshot) at the gate, which marks it USED + SMS-confirms the parent.
+model AltPickupAuthorization {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId      String
+  studentName    String // frozen for the gate sheet
+  pickerName     String
+  pickerPhone    String? // +254...
+  relationship   String? // "Aunt", "Family friend"
+  code           String // secure short verification code shown at the gate
+  screenshotUrl  String? // A.9 file: screenshot of the parent's confirmation message
+  screenshotName String?
+  status         String    @default("ACTIVE") // ACTIVE | USED | CANCELLED | EXPIRED
+  expiresAt      DateTime // single-day validity by default
+  verifiedAt     DateTime?
+  verifiedById   String?
+  createdById    String
+  createdByName  String
+  createdAt      DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, studentId])
+}
+
+// B.22 emergency panic alert: any staff triggers; leadership is SMSed and
+// every staff member gets an in-app alert instantly.
+model PanicAlert {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kind         String // FIRE | MEDICAL | INTRUDER | OTHER
+  location     String // "Science lab block"
+  note         String?
+  raisedById   String
+  raisedByName String
+  resolvedAt   DateTime?
+  resolvedBy   String?
+  smsSent      Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// B.3 teacher + support-staff attendance (clock in/out). One row per user/day.
+model StaffAttendance {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId       String
+  userName     String // denormalized for fast lists
+  role         String
+  date         String // YYYY-MM-DD (Nairobi)
+  clockInAt    DateTime
+  clockOutAt   DateTime?
+  // G.17 GPS verification (null = clocked in before geofencing / geofence off)
+  gpsVerified  Boolean   @default(false)
+  gpsLat       Float?
+  gpsLng       Float?
+  gpsDistanceM Int?
+
+  @@unique([tenantId, userId, date])
+  @@index([tenantId, date])
+}
+
+// B.2 admission application — the pipeline record.
+// status: APPLIED -> REVIEW -> INTERVIEW -> OFFER (waiting deposit) ->
+//         ADMITTED | WAITLISTED | REJECTED | WITHDRAWN
+model AdmissionApplication {
+  id            String @id @default(cuid())
+  tenantId      String
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  applicationNo String // KH-ADM-000001 (A.4)
+  status        String @default("APPLIED")
+
+  // applicant
+  firstName      String
+  middleName     String?
+  lastName       String
+  gender         String // M | F
+  dateOfBirth    String? // YYYY-MM-DD
+  gradeWanted    String // "Grade 4" / "Form 1"
+  curriculum     String? // CBC | 8-4-4
+  previousSchool String?
+
+  // guardian
+  guardianName  String
+  guardianPhone String
+  guardianEmail String?
+
+  notes  String?
+  source String  @default("online") // online | walk_in | inquiry
+
+  // interview (B.2.3)
+  interviewDate   String? // YYYY-MM-DD
+  interviewTime   String? // HH:MM
+  interviewNote   String?
+  calendarEventId String?
+
+  // deposit-before-admission (B.2.8)
+  depositRequiredKes Int       @default(0)
+  depositPaidKes     Int       @default(0)
+  depositPaidAt      DateTime?
+  depositRef         String?
+
+  // outcome
+  decisionNote String?
+  letterCode   String? // admission letter verification (A.10)
+  studentId    String? @unique // set when admitted -> B.1 student created
+  inquiryId    String? // A.18 AdmissionInquiry origin
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, applicationNo])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
+// G.16 promotion / reshuffle run. moves JSON = [{studentId, fromClassId,
+// toClassId|null, graduated?:bool, prevStatus?, prevGradYear?}] — enables undo.
+model PromotionRun {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kind          String // "promotion" | "reshuffle"
+  summary       String // human description ("Promoted 5 classes · 142 students · 38 graduated")
+  moves         String // JSON move log (undo source of truth)
+  undoneAt      DateTime?
+  createdById   String
+  createdByName String
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// B.3 daily class attendance. One row per student per day (idempotent upsert).
+// status: P present | A absent | L late | E excused.
+// I.6 Principal Powers & Delegation: non-sensitive tasks assigned by Principal/Owner to teachers.
+model PrincipalDelegationTask {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title          String
+  details        String?
+  category       String    @default("GENERAL") // GENERAL | ACADEMICS | ATTENDANCE_FOLLOWUP | PARENT_FOLLOWUP | DUTY
+  assignedToId   String
+  assignedToName String
+  assignedById   String
+  assignedByName String
+  dueDate        String?
+  status         String    @default("OPEN") // OPEN | DONE | CANCELLED
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tenantId, assignedToId, status])
+  @@index([tenantId, assignedById, createdAt])
+}
+
+model AttendanceRecord {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId      String? // class at the time of marking (kept even if student moves)
+  date         String // YYYY-MM-DD (Nairobi day)
+  status       String // P | A | L | E
+  note         String?
+  smsSentAt    DateTime? // absentee auto-SMS bookkeeping (dedupe)
+  markedById   String
+  markedByName String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([tenantId, studentId, date])
+  @@index([tenantId, classId, date])
+  @@index([tenantId, date])
+}
+
+// B.1 transfer-out record (school-to-school). One ACTIVE transfer per student;
+// undo soft-reverses it (keeps the row for history, marks reversedAt).
+model StudentTransfer {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  destinationSchool String
+  destinationCounty String?
+  transferDate      String // YYYY-MM-DD
+  reason            String? // relocation | fees | boarding | discipline | other (free text allowed)
+  previousClassId   String? // restored on undo
+  letterCode        String? // DocumentVerification code for the leaving letter
+  reversedAt        DateTime?
+  createdById       String
+  createdByName     String
+  createdAt         DateTime  @default(now())
+
+  @@index([tenantId, studentId])
+}
+
+// B.1 bulk import history. One row per committed import run (CSV/XLSX/paste).
+// errorRows keeps the per-row failures as JSON so the bursar can fix + retry.
+model StudentImport {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fileName      String? // null when pasted from Google Sheets/clipboard
+  source        String // "csv" | "xlsx" | "paste"
+  totalRows     Int
+  createdRows   Int
+  failedRows    Int
+  errorRows     String? // JSON [{row, message}] (null when none)
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// Verifiable document record (A.10). The QR on a receipt/report points to
+// /verify/<code>; we confirm it matches the issued payload (anti-forgery).
+model DocumentVerification {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code        String   @unique // short public code in the QR/URL
+  docType     String // "payment_receipt", "report_card", ...
+  summary     String // human-readable one-liner shown on the verify page
+  payloadHash String // sha256 of the canonical document data
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+// A stored file (A.9). Tenant-owned; key is tenant-prefixed for isolation.
+
+model TenantStorageProvider {
+  id                    String   @id @default(cuid())
+  tenantId              String   @unique
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider              String   @default("NEYO_MANAGED_OBJECT_STORAGE") // NEYO_MANAGED_OBJECT_STORAGE | GOOGLE_WORKSPACE_MANAGED | GOOGLE_WORKSPACE_BYOS
+  status                String   @default("DESIGN_READY") // DESIGN_READY | READY_TO_CONNECT | CONNECTED | ERROR | DISABLED
+  accountEmail          String?
+  rootFolderId          String?
+  storageLimitBytes     BigInt   @default(16106127360) // 15 GiB starter where available
+  storageUsedBytes      BigInt   @default(0)
+  encryptionMode        String   @default("AES_256_GCM_ENVELOPE")
+  healthStatus          String   @default("NOT_CONNECTED") // NOT_CONNECTED | HEALTHY | WARNING | ERROR
+  lastHealthCheckAt     DateTime?
+  lastUpgradePromptAt   DateTime?
+  upgradePlan           String?
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([provider, healthStatus])
+}
+
+model StorageUsageSnapshot {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider          String
+  usedBytes         BigInt
+  limitBytes        BigInt
+  percentUsed       Int
+  healthStatus      String
+  actionRequired    String?
+  createdAt         DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([healthStatus])
+}
+
+model StoredFile {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key          String   @unique // storage object key, e.g. tenants/<id>/uploads/<uuid>.jpg
+  url          String // public/served URL
+  fileName     String
+  contentType  String
+  size         Int // bytes
+  category     String   @default("general") // avatar, attachment, document...
+  provider     String   @default("LOCAL_OR_R2")
+  providerObjectId String?
+  encrypted    Boolean  @default(false)
+  encryptionMode String?
+  checksumSha256 String?
+  wrappedKeyRef String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([category])
+}
+
+// A conversation thread (A.8). type: DIRECT | GROUP | ANNOUNCEMENT.
+model Conversation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type        String   @default("DIRECT")
+  title       String? // group name / announcement subject (null for 1:1)
+  classId     String? // G.19: set = this is THE class group chat (one per class)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt // bumped on each new message (for sorting)
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@unique([tenantId, classId])
+  @@index([tenantId])
+  @@index([updatedAt])
+}
+
+// Membership in a conversation, with read-receipt tracking.
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  lastReadAt     DateTime? // for unread counts + read receipts
+  role           String       @default("member") // member | admin (announcement sender)
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+// A message in a conversation (A.8).
+model Message {
+  id                String       @id @default(cuid())
+  conversationId    String
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tenantId          String
+  senderId          String
+  senderName        String
+  body              String
+  attachmentUrl     String? // set when A.9 file storage lands
+  attachmentName    String?
+  requiresAck       Boolean      @default(false) // I.85 "I received this" button
+  urgentFallbackAt  DateTime? // when non-readers/non-acknowledgers receive SMS fallback
+  fallbackSmsSentAt DateTime? // set after fallback job runs
+  createdAt         DateTime     @default(now())
+
+  acknowledgements MessageAcknowledgement[]
+  deliveryReport   MessageDeliveryReport?
+
+  @@index([conversationId, createdAt])
+  @@index([tenantId])
+  @@index([tenantId, urgentFallbackAt, fallbackSmsSentAt])
+}
+
+// I.85 — explicit "I received this" acknowledgement per message/user.
+model MessageAcknowledgement {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messageId      String
+  message        Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId         String
+  userName       String
+  acknowledgedAt DateTime @default(now())
+
+  @@unique([messageId, userId])
+  @@index([tenantId, userId])
+  @@index([tenantId, messageId])
+}
+
+// I.85 — sender-facing 24-hour delivery report for school messages.
+model MessageDeliveryReport {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messageId            String    @unique
+  message              Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  conversationId       String
+  senderId             String
+  senderName           String
+  recipientCount       Int
+  readCount            Int
+  ackCount             Int
+  unreadCount          Int
+  smsFallbackSentCount Int       @default(0)
+  unreadJson           String? // JSON [{userId,name,phone}]
+  summary              String
+  generatedAt          DateTime  @default(now())
+  notifiedAt           DateTime?
+
+  @@index([tenantId, senderId, generatedAt])
+  @@index([tenantId, conversationId])
+}
+
+// I.69/I.95 — in-product intercom call signalling. Audio is browser-to-browser;
+// this row is only the call state: RINGING -> ACCEPTED/DECLINED/ENDED/MISSED.
+model IntercomCall {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  callerId   String
+  callerName String
+  targetId   String
+  targetName String
+  status     String    @default("RINGING") // RINGING | ACCEPTED | DECLINED | ENDED | MISSED
+  acceptedAt DateTime?
+  endedAt    DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([tenantId, callerId, status])
+  @@index([tenantId, targetId, status])
+}
+
+// In-app notification (A.7). Belongs to a recipient user within a tenant.
+model WebPushSubscription {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, userId])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recipientId String // User.id
+  title       String
+  body        String
+  category    String    @default("general") // fees, attendance, exam, system...
+  href        String? // optional deep link
+  readAt      DateTime?
+  // Delivery summary across channels (JSON: {sms:"sent",email:"skipped",...})
+  channels    String?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([recipientId, readAt])
+}
+
+// Per-user channel preferences / unsubscribe (A.7).
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  // JSON map of channel -> boolean, e.g. {"sms":true,"email":false}
+  optOut    String   @default("{}")
+  updatedAt DateTime @updatedAt
+}
+
+// Reusable templates with {{variable}} substitution (A.7).
+model NotificationTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key       String // e.g. "fees_reminder"
+  title     String
+  body      String // may contain {{studentName}} etc.
+  category  String   @default("general")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+}
+
+// Per-tenant payment provider credentials (A.6). SECRETS ARE ENCRYPTED with the
+// tenant's DEK (A.2.7) before storage — we never keep plaintext Daraja keys.
+model PaymentCredential {
+  id                String   @id @default(cuid())
+  tenantId          String   @unique
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider          String   @default("mpesa_daraja")
+  // Non-secret config:
+  shortcode         String? // Paybill / Till number
+  environment       String   @default("sandbox") // sandbox | production
+  // Encrypted secrets (ciphertext from A.2.7 encryptForTenant):
+  consumerKeyEnc    String?
+  consumerSecretEnc String?
+  passkeyEnc        String?
+  isActive          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// A generic payment record (A.6). mpesaRef is globally unique (idempotency).
+model Payment {
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider          String    @default("mpesa_daraja")
+  amount            Int // KES
+  phone             String // payer, +254...
+  accountRef        String? // e.g. student adm no / invoice id
+  invoiceId         String? // B.7: when set, a PAID callback auto-applies to this invoice
+  description       String?
+  status            String    @default("PENDING") // PENDING | PAID | FAILED | CANCELLED
+  // Daraja identifiers:
+  checkoutRequestId String?   @unique // returned by STK push; correlates the callback
+  mpesaRef          String?   @unique // M-Pesa receipt number (globally unique)
+  resultCode        String?
+  resultDesc        String?
+  rawCallback       String? // JSON of the raw webhook for audit
+  createdAt         DateTime  @default(now())
+  paidAt            DateTime?
+
+  // Soft-delete (G.6): when set, the row is in the Recycle Bin (hidden from
+  // normal reads via tenantDb). Hard-purge removes it permanently.
+  deletedAt   DateTime?
+  deletedById String?
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+// NEYO platform subscription for a school (A.5). One per tenant.
+model Subscription {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  planKey String @default("free_karibu") // see core/plans.ts
+  status  String @default("ACTIVE") // ACTIVE | PAST_DUE | GRACE | SUSPENDED | CANCELLED
+
+  // Price grandfathering: the price locked in at subscribe time (KES/term).
+  grandfatheredPrice Int @default(0)
+
+  addOns String? // JSON array of add-on keys currently active
+
+  currentPeriodStart DateTime  @default(now())
+  currentPeriodEnd   DateTime // when the next payment is due
+  graceEndsAt        DateTime? // set when payment missed; data preserved until/after
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments SubscriptionPayment[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+// A payment attempt/record against a subscription (A.5/A.6).
+model SubscriptionPayment {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  tenantId       String
+  amount            Int // KES
+  status            String       @default("PENDING") // PENDING | PAID | FAILED
+  method            String       @default("central_mpesa_stk")
+  phone             String?
+  accountRef        String?
+  checkoutRequestId String?      @unique
+  mpesaRef          String?      @unique // globally-unique M-Pesa ref (A.6)
+  resultCode        String?
+  resultDesc        String?
+  rawCallback       String?
+  periodStart       DateTime
+  periodEnd      DateTime
+  createdAt      DateTime     @default(now())
+  paidAt         DateTime?
+
+  @@index([subscriptionId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+// Per-tenant metered usage within the current period (A.5 soft limits).
+model UsageCounter {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metric    String // "sms" | "students" | "staff" ...
+  used      Int      @default(0)
+  periodKey String // e.g. "2026-T2" to reset per billing period
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, metric, periodKey])
+  @@index([tenantId])
+}
+
+// H.2 Multi-Owner Support — a critical action that one owner initiates and a
+// DIFFERENT owner must approve (dual control). The rows + audit log form the
+// "confirmation log" of joint approvals.
+model OwnerApprovalRequest {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  action          String // PERMANENT_DELETE | PAYROLL_APPROVE | OWNER_ROLE_CHANGE | MODULE_CHANGE | OTHER
+  summary         String // human description of what is being authorised
+  payload         String? // JSON detail (what to act on) for the caller to execute
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED | EXECUTED
+  requestedById   String
+  requestedByName String
+  decidedById     String?
+  decidedByName   String?
+  decidedAt       DateTime?
+  decisionNote    String?
+  createdAt       DateTime  @default(now())
+
+  @@index([tenantId, status])
+}
+
+// Platform user. Belongs to a tenant and carries one of the 16 roles.
+model User {
+  id            String  @id @default(cuid())
+  tenantId      String
+  tenant        Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  neyoLoginId   String  @unique // global NEYO login ID (A.4 two-ID system)
+  fullName      String
+  phone         String? // +254 format
+  email         String?
+  role          String  @default("RECEPTIONIST") // validated against the 16 roles
+  secondaryRole String? // optional second role for dual-role staff
+
+  passwordHash String? // Argon2id in production (A.14)
+  isActive     Boolean @default(true)
+  language     String  @default("en") // A.15 preferred UI language: en | sw
+
+  // Two-factor authentication (A.1, TOTP / RFC 6238)
+  totpSecret     String? // base32 secret; null until setup begins
+  totpEnabled    Boolean   @default(false)
+  totpVerifiedAt DateTime? // when 2FA was first confirmed
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  otpCodes             OtpCode[]
+  sessions             Session[]
+  magicLinks           MagicLink[]
+  recoveryCodes        RecoveryCode[]
+  credentials          Credential[]
+  studentProfile       Student?              @relation("StudentUser")
+  guardianProfile      Guardian?             @relation("GuardianUser")
+  webPushSubscriptions WebPushSubscription[]
+  oauthAccounts        OAuthConnectedAccount[]
+
+  @@index([tenantId])
+  @@index([role])
+}
+
+
+model OAuthConnectedAccount {
+  id                String   @id @default(cuid())
+  tenantId          String
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String
+  providerAccountId String
+  email             String?
+  displayName       String?
+  linkedAt          DateTime @default(now())
+  lastUsedAt        DateTime?
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@index([tenantId])
+}
+
+model OAuthState {
+  id          String   @id @default(cuid())
+  state       String   @unique
+  tenantId    String
+  userId      String
+  provider    String
+  redirectTo  String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId, provider])
+  @@index([expiresAt])
+}
+
+// A registered WebAuthn passkey (A.1). The private key stays on the user's
+// device; we store the public key to verify their signed assertions.
+model Credential {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String    @unique // base64url of the raw credential ID
+  publicKey    String // base64url of the COSE public key
+  counter      Int       @default(0) // signature counter (anti-replay)
+  transports   String? // JSON array: ["internal","hybrid",...]
+  deviceLabel  String? // e.g. "iPhone Face ID"
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Short-lived WebAuthn challenge for register/login (A.1).
+model WebAuthnChallenge {
+  id        String   @id @default(cuid())
+  challenge String // the random base64url challenge we must verify back
+  purpose   String // "REGISTER" or "LOGIN"
+  userId    String? // set for REGISTER (the signed-in user)
+  email     String? // set for LOGIN (the claimed account)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([email])
+}
+
+// Short-lived "2FA pending" challenge issued after step-1 login succeeds but
+// before the TOTP code is entered. No real session exists until this is solved.
+model TotpChallenge {
+  id        String   @id @default(cuid())
+  token     String   @unique // opaque token held by the client during the challenge
+  userId    String
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime // short, e.g. now + 10 minutes
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Hashed single-use 2FA backup codes (A.1). Used if the user loses their phone.
+model RecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String // SHA-256 of the recovery code (never the raw code)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// One-time passcode for phone login (A.1). We store ONLY a hash of the code.
+model OtpCode {
+  id         String    @id @default(cuid())
+  phone      String // normalized +254XXXXXXXXX (E.164 without spaces)
+  codeHash   String // SHA-256 of the 6-digit code (never the raw code)
+  userId     String? // matched user, if the phone belongs to one
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose    String    @default("LOGIN") // LOGIN, etc.
+  attempts   Int       @default(0) // wrong-code attempts (verify-attempt limiting)
+  consumedAt DateTime? // set when successfully used; can't be reused
+  expiresAt  DateTime // typically now + 5 minutes
+  createdAt  DateTime  @default(now())
+
+  @@index([phone])
+  @@index([expiresAt])
+}
+
+// One-click email sign-in link (A.1). We store ONLY a hash of the token.
+model MagicLink {
+  id         String    @id @default(cuid())
+  email      String // normalized, lowercased
+  tokenHash  String    @unique // SHA-256 of the random token in the link
+  userId     String? // matched user, if the email belongs to one
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consumedAt DateTime? // single-use: set once the link is clicked successfully
+  expiresAt  DateTime // typically now + 15 minutes
+  createdAt  DateTime  @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
+// Server-side session behind the HTTP-only login cookie (A.1).
+// Storing sessions in the DB lets us do "logout everywhere" by user_id.
+model Session {
+  id        String  @id @default(cuid())
+  token     String  @unique // random opaque token stored in the cookie
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ipAddress String?
+  deviceId  String?
+
+  // Impersonation (A.2.9) / View-As (G.5). When set, `userId` is the REAL
+  // actor and `impersonatedUserId` is who they're temporarily acting as.
+  // viewAsReadOnly = true marks an in-school read-only "View As" (G.5) where
+  // all mutations are blocked.
+  impersonatedUserId String?
+  viewAsReadOnly     Boolean @default(false)
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+// Which product modules a school has enabled (A.2.6). One row per module.
+model TenantModule {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  moduleKey String // e.g. "attendance", "hostel" (see core/modules.ts)
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, moduleKey])
+  @@index([tenantId])
+}
+
+// Background job run record (A.12). Platform-level (not tenant-scoped):
+// jobs like the subscription state machine span all tenants.
+model JobRun {
+  id         String    @id @default(cuid())
+  name       String // registered job name, e.g. "subscription-state-machine"
+  status     String    @default("PENDING") // PENDING | RUNNING | SUCCESS | FAILED
+  progress   Int       @default(0) // 0-100
+  attempts   Int       @default(0)
+  payload    String? // JSON args
+  result     String? // JSON summary
+  error      String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([name])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Atomic counter for tenant-scoped IDs like KH-S-000247 (A.4).
+model IdSequence {
+  id         String @id @default(cuid())
+  tenantId   String
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType String // "STUDENT", "INVOICE", etc.
+  lastValue  Int    @default(0)
+
+  @@unique([tenantId, entityType])
+}
+
+// Immutable audit log (A.14). App code only ever inserts; never updates/deletes.
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actorId    String? // user who performed the action
+  actorName  String?
+  action     String // "student.create", "auth.login", ...
+  entityType String?
+  entityId   String?
+  metadata   String? // JSON string of extra context
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+}
+
+// =============================================================================
+// A.16 — Public API & Webhooks
+// =============================================================================
+
+// A developer API key for a tenant. The plaintext secret is shown ONCE at
+// creation; we store only a SHA-256 hash (keyHash) + a short non-secret prefix
+// (keyPrefix, e.g. "neyo_sk_3f9c") for display. Bearer auth (A.16.2) hashes the
+// presented token and looks it up here.
+model ApiKey {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String // human label, e.g. "SIS integration"
+  keyPrefix   String // non-secret, for display: "neyo_sk_3f9c…"
+  keyHash     String    @unique // SHA-256 of the full secret
+  scopes      String // JSON array of permission strings this key may use
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([keyHash])
+}
+
+// A tenant's webhook endpoint. Each delivery is HMAC-signed (A.16.5) with
+// `signingSecret` so the receiver can verify authenticity.
+model WebhookSubscription {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url            String // HTTPS endpoint to POST events to
+  events         String // JSON array of event names, or ["*"] for all
+  signingSecret  String // used to compute the HMAC-SHA256 signature
+  active         Boolean   @default(true)
+  description    String?
+  lastDeliveryAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  deliveries WebhookDelivery[]
+
+  @@index([tenantId])
+}
+
+// One delivery attempt-record for a webhook event (A.16.6 retry queue).
+// Status: PENDING | DELIVERED | FAILED. attempts + nextAttemptAt drive the
+// exponential-backoff retry job.
+model WebhookDelivery {
+  id             String              @id @default(cuid())
+  tenantId       String
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  event          String // e.g. "payment.recorded"
+  payload        String // JSON body sent
+  status         String              @default("PENDING") // PENDING | DELIVERED | FAILED
+  attempts       Int                 @default(0)
+  maxAttempts    Int                 @default(6)
+  responseStatus Int?
+  responseBody   String? // truncated response for debugging
+  error          String?
+  nextAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime            @default(now())
+
+  @@index([tenantId])
+  @@index([status, nextAttemptAt])
+  @@index([subscriptionId])
+}
+
+// =============================================================================
+// A.17 — Calendar (Shared)
+// =============================================================================
+
+// A school calendar event (A.17). Layered on top of the read-only Kenyan
+// holiday/cultural moments from A.15 (cultural-calendar.ts). Audience-targeting
+// (A.17.5): if `audienceRole` is null the event is school-wide; otherwise only
+// that role sees it / is invited.
+model CalendarEvent {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  // Stored as YYYY-MM-DD (all-day) plus optional HH:MM start/end for timed events.
+  date         String // "2026-07-15"
+  endDate      String? // multi-day events; null = single day
+  startTime    String? // "14:00" (24h, Africa/Nairobi); null = all-day
+  endTime      String?
+  location     String?
+  type         String   @default("event") // event | meeting | exam | holiday | sports | deadline
+  audienceRole String? // null = whole school; else a Role string (A.17.5)
+  color        String? // optional hex for the dot
+  // B.25 Recurring events: null = one-off. WEEKLY repeats on the same weekday
+  // as `date`; MONTHLY repeats on the same day-of-month. Expanded server-side.
+  recurrence   String? // null | "WEEKLY" | "MONTHLY"
+  recurUntil   String? // YYYY-MM-DD — last day the series may occur (inclusive)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, date])
+}
+
+// =============================================================================
+// A.18 — Receptionist Operations
+// =============================================================================
+
+// A front-desk visitor record (A.18.5). The receptionist signs visitors in and
+// out; an in-browser badge can be printed (thermal-printer device is a later
+// hardware seam). "purpose" + "host" capture why they're here and who they came
+// to see.
+model VisitorLog {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  phone       String? // +254...
+  idNumber    String? // national ID for security
+  purpose     String // e.g. "Fees enquiry", "Visiting student"
+  host        String? // staff/student they came to see
+  studentId   String? // B.16: set = visiting THIS boarder (hostel visitor tracking)
+  badgeNo     String // short per-day badge, e.g. "V-014"
+  signedInAt  DateTime  @default(now())
+  signedOutAt DateTime?
+  createdById String?
+
+  @@index([tenantId])
+  @@index([tenantId, signedInAt])
+  @@index([tenantId, studentId])
+}
+
+// A walk-in admission enquiry captured at the desk (A.18.6). Becomes a lead the
+// admissions team can follow up.
+model AdmissionInquiry {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parentName  String
+  phone       String
+  studentName String?
+  gradeWanted String? // e.g. "Grade 4", "Form 1"
+  curriculum  String? // "CBC" | "8-4-4"
+  notes       String?
+  status      String   @default("NEW") // NEW | CONTACTED | ENROLLED | CLOSED
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+// A phone message taken at reception and relayed to a staff member's inbox
+// (A.18.7). On creation we also drop a conversation message (A.8) to the
+// recipient; this row keeps the desk's own log.
+model PhoneMessage {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  callerName     String
+  callerPhone    String?
+  forUserId      String // staff member the message is for
+  forUserName    String
+  message        String
+  conversationId String? // the A.8 conversation we relayed into
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+}
+
+// =============================================================================
+// B.1 — Student Management
+// =============================================================================
+
+// A class/grade with an optional stream, e.g. "Grade 4 - Blue" (CBC) or
+// "Form 2 - East" (8-4-4). curriculum distinguishes the two systems.
+model SchoolClass {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  level          String // "Grade 4", "Form 2", "PP1"
+  stream         String? // "Blue", "East", "A" (null = single-stream)
+  curriculum     String   @default("CBC") // "CBC" | "8-4-4"
+  classTeacherId String? // a User (CLASS_TEACHER/TEACHER) — row-scoping (A.3.8)
+  capacity       Int?
+  archived       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  students Student[]
+
+  @@unique([tenantId, level, stream])
+  @@index([tenantId])
+}
+
+// A student. Tenant-owned + soft-deletable (G.6 Recycle Bin). Optionally linked
+// to a NEYO login User (the student account) and to one SchoolClass.
+model Student {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  admissionNo       String // school-side ID, e.g. KH-S-000247 (A.4)
+  legacyAdmissionNo String? // school's own pre-existing legacy admission number (A.1.8)
+  firstName         String
+  middleName        String?
+  lastName          String
+  gender            String // "M" | "F"
+  dateOfBirth       String? // YYYY-MM-DD
+  photoUrl          String?
+  status            String  @default("ACTIVE") // ACTIVE | INACTIVE | GRADUATED | TRANSFERRED | SUSPENDED
+  graduationYear    Int? // set when status -> GRADUATED ("Class of 2026"); cleared on un-graduate
+  finalClassLabel   String? // class at graduation (e.g. "Form 4 East") — kept after the seat is freed
+  // Government/registration identifiers (Kenya).
+  upiNumber         String? // NEMIS/UPI assessment number
+  birthCertNo       String?
+
+  classId      String?
+  schoolClass  SchoolClass? @relation(fields: [classId], references: [id], onDelete: SetNull)
+  boardingType String       @default("BOARDER") // "DAY" | "BOARDER" - gates hostel allocations (H.3)
+
+  // Optional linked NEYO login account (the student logs in).
+  userId String? @unique
+  user   User?   @relation("StudentUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  admittedOn DateTime @default(now())
+  notes      String?
+
+  // Soft-delete (G.6).
+  deletedAt   DateTime?
+  deletedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guardians             StudentGuardian[]
+  documents             StudentDocument[]
+  requirements          StudentRequirement[]
+  transfers             StudentTransfer[]
+  attendance            AttendanceRecord[]
+  promisesToPay         PromiseToPay[]
+  reportCardDayCheckIns ReportCardDayCheckIn[]
+  leavingCertificate    LeavingCertificate? // Added for Leaving Certificate Vault (H.3)
+
+  @@unique([tenantId, admissionNo])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, classId])
+  @@index([deletedAt])
+}
+
+// A parent/guardian. May be linked to a NEYO PARENT login User for the parent
+// portal (B.10) + PARENT row-scoping (A.3.9).
+model Guardian {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fullName   String
+  phone      String // +254...
+  email      String?
+  nationalId String?
+  userId     String?  @unique // linked PARENT User (B.10)
+  user       User?    @relation("GuardianUser", fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  students      StudentGuardian[]
+  promisesToPay PromiseToPay[]
+
+  @@index([tenantId])
+  @@index([tenantId, phone])
+}
+
+// Join: a student has one or more guardians, each with a relationship + primary flag.
+model StudentGuardian {
+  id           String   @id @default(cuid())
+  tenantId     String
+  studentId    String
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardianId   String
+  guardian     Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  relationship String   @default("Parent") // Parent | Mother | Father | Guardian | Other
+  isPrimary    Boolean  @default(false)
+
+  @@unique([studentId, guardianId])
+  @@index([tenantId])
+}
+
+// A stored document for a student (birth cert, report, KCPE slip...). Uses A.9.
+model StudentDocument {
+  id               String   @id @default(cuid())
+  tenantId         String
+  studentId        String
+  student          Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  label            String
+  fileUrl          String
+  fileName         String?
+  hardcopyLocation String   @default("Unspecified") // physical location for the original hardcopy
+  uploadedById     String?
+  createdAt        DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([studentId])
+}
+
+// Per-student joining requirement tick-off (G.9 master list -> per student).
+model StudentRequirement {
+  id          String    @id @default(cuid())
+  tenantId    String
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  label       String
+  category    String    @default("other")
+  quantity    String?
+  mandatory   Boolean   @default(true)
+  fulfilled   Boolean   @default(false)
+  fulfilledAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([studentId])
+}
+
+// G.33 2.0 — COMPANY-GLOBAL platform settings (deliberately NOT tenant-owned,
+// same family as PlatformFlag). Key-value: e.g. "liquid_level" = "1"|"2"|"3".
+// Only NEYO (SUPER_ADMIN) writes here — schools cannot change the system look.
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+// B.25 Uniform Management — per-size stock for Uniform-category StockItems.
+// The master StockItem.qty stays the total; size rows split it (S/M/L/Size 28…).
+model UniformSize {
+  id       String    @id @default(cuid())
+  tenantId String
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  itemId   String
+  item     StockItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  size     String // "XS".."XXL", "Size 26".."Size 34", custom
+  qty      Int       @default(0)
+
+  @@unique([tenantId, itemId, size])
+}
+
+// B.25 Supplier Management — who the school buys from.
+model Supplier {
+  id        String             @id @default(cuid())
+  tenantId  String
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  category  String // "Food", "Uniform", "Cleaning", "Stationery", "Transport", "Services", "Other"
+  phone     String? // +254...
+  email     String?
+  contact   String? // contact person
+  kraPin    String? // for compliant procurement later (C.24)
+  rating    Int                @default(0) // 0 = unrated, 1-5 stars
+  notes     String?
+  archived  Boolean            @default(false)
+  createdAt DateTime           @default(now())
+  contracts SupplierContract[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, category])
+}
+
+// B.25 supply contracts w/ expiry (≤30d alert pattern from B.17).
+model SupplierContract {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  title      String // "Maize flour supply — Term 2"
+  startsOn   String // YYYY-MM-DD
+  endsOn     String // YYYY-MM-DD
+  valueKes   Int      @default(0) // 0 = not stated
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, supplierId])
+}
+
+// B.25 Procurement — request → quotes → PO → approval → delivery → 3-way match.
+model PurchaseRequest {
+  id              String          @id @default(cuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title           String // "Term 3 dry foods"
+  details         String? // free text list of what's needed
+  neededBy        String? // YYYY-MM-DD
+  status          String          @default("OPEN") // OPEN | ORDERED | CANCELLED
+  requestedById   String
+  requestedByName String
+  createdAt       DateTime        @default(now())
+  quotes          PurchaseQuote[]
+  orders          PurchaseOrder[]
+
+  @@index([tenantId, status])
+}
+
+// Quotations gathered per request — the comparison board.
+model PurchaseQuote {
+  id           String          @id @default(cuid())
+  tenantId     String
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestId    String
+  request      PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  supplierId   String
+  supplierName String // frozen at quote time
+  amountKes    Int
+  note         String? // delivery time, terms
+  createdAt    DateTime        @default(now())
+
+  @@index([tenantId, requestId])
+}
+
+// The order itself. Approval threshold rule: totalKes > Tenant.poApprovalThresholdKes
+// => needs leadership approval before sending.
+model PurchaseOrder {
+  id                 String           @id @default(cuid())
+  tenantId           String
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  poNo               String // KH-PO-000001 (A.4)
+  requestId          String?
+  request            PurchaseRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  quoteId            String? // winning quote
+  supplierId         String
+  supplierName       String // frozen
+  title              String
+  totalKes           Int
+  status             String           @default("PENDING_APPROVAL") // PENDING_APPROVAL | APPROVED | SENT | DELIVERED | MATCHED | CANCELLED
+  approvedById       String?
+  approvedByName     String?
+  approvedAt         DateTime?
+  // Delivery (goods received note)
+  deliveredAt        DateTime?
+  deliveredNote      String? // what actually arrived
+  deliveredValueKes  Int? // value of goods received
+  // Supplier invoice (the 3rd leg of the match)
+  supplierInvoiceNo  String?
+  supplierInvoiceKes Int?
+  // 3-way match result
+  matchedAt          DateTime?
+  matchOk            Boolean?
+  matchNote          String? // mismatch explanation
+  createdById        String
+  createdByName      String
+  createdAt          DateTime         @default(now())
+
+  @@unique([tenantId, poNo])
+  @@index([tenantId, status])
+}
+
+// B.25 — Expenses Tracking. Categories + cost centers are the reporting
+// dimensions; Expense is the spend transaction with a threshold approval
+// state-machine and an optional receipt photo (A.9 storage).
+model ExpenseCategory {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String // "Utilities", "Repairs & Maintenance", "Stationery"
+  archived  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  expenses  Expense[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, archived])
+}
+
+// A cost center = the part of the school the spend belongs to (a department,
+// a department-like bucket, or "Whole school"). Drives the by-cost-center report.
+model CostCenter {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String // "Kitchen", "Boarding", "Administration", "Academics"
+  archived  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  expenses  Expense[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, archived])
+}
+
+// The spend record. Threshold rule: amountKes > Tenant.expenseApprovalThresholdKes
+// => needs leadership approval before it counts as real spend (and before it
+// hits the B.24 profitability line).
+model Expense {
+  id              String          @id @default(cuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        ExpenseCategory @relation(fields: [categoryId], references: [id])
+  categoryName    String // frozen at entry for the report even if a category is renamed
+  costCenterId    String?
+  costCenter      CostCenter?     @relation(fields: [costCenterId], references: [id])
+  costCenterName  String? // frozen
+  payee           String // who was paid: "KPLC", "Mama Wanjiku Tailors"
+  amountKes       Int
+  spentOn         String // YYYY-MM-DD (Nairobi date the money left)
+  note            String?
+  receiptFileUrl  String? // A.9 storage key (receipt photo / PDF) — OCR auto-extract is Bundi-gated
+  receiptFileName String?
+  status          String          @default("PENDING_APPROVAL") // PENDING_APPROVAL | APPROVED | REJECTED
+  approvedById    String?
+  approvedByName  String?
+  approvedAt      DateTime?
+  rejectedReason  String?
+  createdById     String
+  createdByName   String
+  createdAt       DateTime        @default(now())
+
+  @@index([tenantId, status])
+  @@index([tenantId, spentOn])
+}
+
+// ---------------------------------------------------------------------------
+// G.15 — Term Trends Pulse (founder-requested 2026-06-13).
+// A weekly leadership digest, computed every Monday 07:00 EAT from the rows the
+// other modules already write (B.1 enrolment, B.3 attendance, B.7 fees). One
+// row per tenant per ISO-week = idempotent send + a viewable history. The
+// one-line `summary` is rule-based; the richer narrative is the Bundi swap
+// point (B.23, platform-paused) — no feature depends on it.
+// ---------------------------------------------------------------------------
+model TermPulse {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  weekKey   String // ISO week the pulse covers, e.g. "2026-W24" (the week just ended)
+  weekStart String // YYYY-MM-DD Monday of the covered week (Nairobi)
+  weekEnd   String // YYYY-MM-DD Sunday of the covered week (Nairobi)
+
+  // Enrolment
+  activeStudents Int @default(0)
+  joinedThisWeek Int @default(0)
+
+  // Attendance (the covered week)
+  attendancePct     Int @default(0) // present+late / marked, %
+  attendancePrevPct Int @default(0) // previous week, for the WoW delta
+  attendanceMarked  Int @default(0) // total marks recorded that week
+
+  // Fees (the covered week)
+  collectedWeekKes  Int @default(0) // money applied to invoices this week
+  weeklyTargetKes   Int @default(0) // pro-rated weekly slice of the term target
+  collectionTermPct Int @default(0) // term-to-date collection % (vs target context)
+
+  summary   String // rule-based one-line digest (NEVER says "AI")
+  sentCount Int    @default(0) // how many leaders were notified
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, weekKey])
+  @@index([tenantId, createdAt])
+}
+
+model SavedView {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String
+  entityType String // e.g. "student", "invoice", "payment"
+  name       String
+  filters    String // JSON string of active filter key-values
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, userId, entityType])
+}
+
+model TeacherSubject {
+  id        String @id @default(cuid())
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacherId String // User.id
+  subjectId String // Subject.id
+
+  @@unique([tenantId, teacherId, subjectId])
+  @@index([tenantId])
+}
+
+model ClassSubjectNeed {
+  id             String  @id @default(cuid())
+  tenantId       String
+  tenant         Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId        String
+  subjectId      String // Subject.id
+  teacherId      String? // User.id
+  lessonsPerWeek Int     @default(5)
+
+  @@unique([tenantId, classId, subjectId])
+  @@index([tenantId])
+}
+
+
+// I.27 — YouTube learning inside NEYO.
+model LearningVideo {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  youtubeId    String
+  title        String
+  description  String?
+  channelTitle String?
+  thumbnailUrl String?
+  savedById    String
+  savedByName  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions LearningVideoSession[]
+
+  @@unique([tenantId, youtubeId])
+  @@index([tenantId, title])
+}
+
+model LearningVideoSession {
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  videoId       String
+  video         LearningVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  youtubeId     String
+  title         String
+  classId       String?
+  classLabel    String?
+  castCode      String        @unique
+  status        String        @default("ACTIVE") // ACTIVE | ENDED
+  startedById   String
+  startedByName String
+  startedAt     DateTime      @default(now())
+  endedAt       DateTime?
+
+  @@index([tenantId, startedAt])
+  @@index([tenantId, classId])
+}
+
+// I.89 — WebRTC online live classes (home/mobile/TV join room).
+model OnlineClassSession {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId              String
+  className            String
+  teacherId            String
+  teacherName          String
+  title                String
+  scheduledAt          String // ISO string set by teacher
+  status               String    @default("SCHEDULED") // SCHEDULED | RUNNING | ENDED | CANCELLED
+  roomId               String    @unique
+  joinUrl              String
+  tvAccessCode         String
+  muteAllStudents      Boolean   @default(false)
+  studentVideoDisabled Boolean   @default(false)
+  screenSharePeerId    String?
+  recordingAllowed     Boolean   @default(false) // NEYO never saves video by default; user may save locally only
+  startedAt            DateTime?
+  endedAt              DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  participants OnlineClassParticipant[]
+  signals      OnlineClassSignal[]
+  questions    OnlineClassQuestion[]
+
+  @@index([tenantId, classId, status])
+  @@index([tenantId, teacherId])
+}
+
+model OnlineClassParticipant {
+  id          String             @id @default(cuid())
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId   String
+  session     OnlineClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId      String
+  peerId      String             @unique
+  role        String // TEACHER | STUDENT | TV
+  displayName String
+  joinedAt    DateTime           @default(now())
+  lastSeenAt  DateTime           @default(now())
+
+  @@index([tenantId, sessionId])
+  @@index([tenantId, userId])
+}
+
+model OnlineClassSignal {
+  id          String             @id @default(cuid())
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId   String
+  session     OnlineClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  fromPeerId  String
+  toPeerId    String?
+  type        String // offer | answer | ice | join | leave
+  payload     String
+  deliveredAt DateTime?
+  createdAt   DateTime           @default(now())
+
+  @@index([tenantId, sessionId, toPeerId])
+  @@index([createdAt])
+}
+
+model OnlineClassQuestion {
+  id             String             @id @default(cuid())
+  tenantId       String
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId      String
+  session        OnlineClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId         String
+  peerId         String
+  studentName    String
+  question       String
+  status         String             @default("PENDING") // PENDING | APPROVED | DISMISSED
+  approvedById   String?
+  approvedByName String?
+  approvedAt     DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@index([tenantId, sessionId, status])
+  @@index([tenantId, userId])
+}
+
+model TimetableConfig {
+  id                 String  @id @default(cuid())
+  tenantId           String
+  tenant             Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId            String  @unique
+  periodsPerDay      Int     @default(8)
+  freePeriodsPerWeek Int     @default(4)
+  coCurricularCount  Int     @default(2)
+  coCurricularName   String  @default("Games")
+  schoolDayStartTime String  @default("08:00") // HH:MM — school chooses when normal lessons start
+  saturdayStartTime  String  @default("08:00") // HH:MM — Saturday/remedial/prep start
+  saturdayEndTime    String  @default("12:40") // HH:MM — Saturday short-day end
+  lessonDurationMins Int     @default(40)
+  shortBreakStart    Int     @default(2) // after Period 2
+  shortBreakMins     Int     @default(15)
+  longBreakStart     Int     @default(4) // after Period 4
+  longBreakMins      Int     @default(30)
+  lunchStart         Int     @default(6) // after Period 6
+  lunchMins          Int     @default(60)
+  hasRemedials       Boolean @default(false)
+  hasPreps           Boolean @default(false)
+  lunchShift         Int     @default(1)
+  hasSaturday        Boolean @default(true) // class-level Saturday toggle
+}
+
+// I.97 — syllabus coverage / scope tracking per class + subject + term.
+
+// I.9 — Class-group disappearing voice rooms. These store room/signalling
+// metadata only. NEYO does NOT store voice/audio recordings; browser WebRTC
+// carries the live audio stream peer-to-peer while these rows auto-expire.
+model ClassVoiceRoom {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversationId String
+  classId        String
+  roomKey        String    @unique
+  mode           String    @default("DISAPPEARING") // DISAPPEARING only for launch
+  status         String    @default("ACTIVE") // ACTIVE | ENDED | EXPIRED
+  createdById    String
+  createdByName  String
+  expiresAt      DateTime
+  endedAt        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  participants ClassVoiceParticipant[]
+  signals      ClassVoiceSignal[]
+
+  @@index([tenantId, conversationId, status])
+  @@index([tenantId, classId, status])
+  @@index([expiresAt])
+}
+
+model ClassVoiceParticipant {
+  id         String         @id @default(cuid())
+  tenantId   String
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roomId     String
+  room       ClassVoiceRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId     String
+  userName   String
+  role       String
+  peerId     String         @unique
+  joinedAt   DateTime       @default(now())
+  lastSeenAt DateTime       @default(now())
+  leftAt     DateTime?
+
+  @@unique([roomId, userId])
+  @@index([tenantId, roomId])
+  @@index([tenantId, userId])
+}
+
+model ClassVoiceSignal {
+  id          String         @id @default(cuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roomId      String
+  room        ClassVoiceRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  fromPeerId  String
+  toPeerId    String?
+  type        String // join | leave | offer | answer | ice | control
+  payload     String
+  deliveredAt DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime       @default(now())
+
+  @@index([tenantId, roomId, toPeerId])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+model SyllabusTopic {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId       String
+  subjectId     String
+  termId        String?
+  topic         String
+  scopeRef      String? // e.g. KICD strand / textbook chapter / scheme ref
+  deadline      String // YYYY-MM-DD
+  status        String    @default("PLANNED") // PLANNED | IN_PROGRESS | COVERED | LATE
+  coveredAt     DateTime?
+  teacherId     String?
+  teacherName   String?
+  notes         String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([tenantId, classId, subjectId])
+  @@index([tenantId, status, deadline])
+}
+
+// I.28 — dedicated exam timetable, separate from normal lesson timetable.
+model ExamTimetableSlot {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId       String
+  subjectId     String
+  examName      String
+  examDate      String // YYYY-MM-DD
+  startTime     String // HH:MM
+  endTime       String // HH:MM
+  venue         String?
+  notes         String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, classId, subjectId, examDate, startTime])
+  @@index([tenantId, examDate])
+  @@index([tenantId, classId])
+}
+
+
+// I.21 — records for exam applications and assembled exam materials.
+model ExamMaterialRecord {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  examName         String
+  materialType     String   // APPLICATION | MATERIALS | KNEC_REGISTRATION | CENTER_LOGISTICS | OTHER
+  title            String
+  examDate         String?  // YYYY-MM-DD where applicable
+  deadline         String?  // YYYY-MM-DD for applications/submissions
+  status           String   @default("PLANNED") // PLANNED | ASSEMBLING | READY | SUBMITTED | COLLECTED
+  checklistJson    String?  // JSON checklist of required papers/materials
+  hardcopyLocation String   // required: where physical file/materials are kept
+  fileUrl          String?  // optional soft copy/proof upload
+  fileName         String?
+  notes            String?
+  createdById      String
+  createdByName    String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, examDate])
+  @@index([tenantId, deadline])
+}
+
+model PromiseToPay {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceId      String
+  invoice        Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardianId     String
+  guardian       Guardian  @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  promiseDate    String // YYYY-MM-DD
+  amountKes      Int
+  planGroupId    String?
+  installmentNo  Int?
+  reminderSentAt DateTime?
+  status         String    @default("ACTIVE") // ACTIVE | KEPT | BROKEN | CANCELLED
+  createdAt      DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([studentId])
+  @@index([invoiceId])
+  @@index([tenantId, planGroupId])
+  @@index([tenantId, promiseDate, status])
+}
+
+model ReportCardDayCheckIn {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardianName String
+  queueNo      Int
+  checkedInAt  DateTime  @default(now())
+  printedAt    DateTime?
+  status       String    @default("WAITING") // WAITING | MEETING | COMPLETE | ABSENT
+
+  @@index([tenantId])
+  @@index([studentId])
+}
+
+// ---------------------------------------------------------------------------
+// G.11 — Public School Landing Site content.
+// These rows make the school subdomain site real and editable instead of a
+// hardcoded one-page placeholder. All rows are tenant-owned and public reads only
+// expose rows with `published = true` / `status = PUBLISHED`.
+// ---------------------------------------------------------------------------
+model PublicSiteSettings {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  heroHeadline      String  @default("Nurturing Excellence & Character")
+  heroSubheading    String? // factual school-specific introduction
+  heroImageUrl      String? // A.9 stored image for the landing hero
+  history           String? // school story / history
+  whyChooseUs       String? // JSON array of short proof points
+  mapEmbedUrl       String? // optional Google/OSM embed URL, entered by the school
+  seoTitle          String?
+  seoDescription    String?
+  ogImageUrl        String?
+  primaryCtaLabel   String  @default("Begin Application")
+  secondaryCtaLabel String  @default("Parent Portal")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PublicSiteLeader {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name      String
+  title     String // e.g. "Principal"
+  bio       String?
+  photoUrl  String?
+  email     String?
+  phone     String?
+  sortOrder Int     @default(0)
+  published Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, published, sortOrder])
+}
+
+model PublicSiteTestimonial {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  quote        String
+  guardianName String
+  relationship String? // e.g. "Parent, Form 2 East"
+  studentName  String?
+  photoUrl     String?
+  sortOrder    Int     @default(0)
+  published    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, published, sortOrder])
+}
+
+model PublicSiteGalleryImage {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title     String
+  caption   String?
+  imageUrl  String // A.9 stored image URL
+  category  String  @default("School life")
+  sortOrder Int     @default(0)
+  published Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, published, sortOrder])
+  @@index([tenantId, category])
+}
+
+model PublicSiteActivity {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String
+  iconName    String? // lucide icon key used by the UI, safe fallback if unknown
+  sortOrder   Int     @default(0)
+  published   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, published, sortOrder])
+}
+
+model NewsPost {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title        String
+  slug         String // e.g. "term-3-closing-announcement"
+  excerpt      String?
+  content      String // markdown / text content of the post
+  imageFileUrl String? // optional header image URL
+  status       String    @default("DRAFT") // DRAFT | PUBLISHED
+  featured     Boolean   @default(false)
+  publishedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status, publishedAt])
+}
+
+// ---------------------------------------------------------------------------
+// PART F.1 — Internal NEYO Founder Operations (dogfooding on neyo.co.ke).
+// Company-level records, deliberately NOT tenant-owned. These power NEYO's own
+// operating rhythm: build log, weekly metrics, founder meetings, interviews,
+// investor/board updates and annual impact reporting. Access is SUPER_ADMIN in
+// the service/API layer that follows.
+// ---------------------------------------------------------------------------
+
+
+
+
+
+model NeyoIntegrationSecret {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  provider    String
+  label       String
+  ciphertext  String
+  iv          String
+  tag         String
+  masked      String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([provider])
+}
+
+model NeyoCustomerThread {
+  id            String   @id @default(cuid())
+  tenantId      String?
+  schoolName    String
+  contactUserId String?
+  contactName   String
+  contactRole   String?
+  contactEmail  String?
+  contactPhone  String?
+  subject       String
+  status        String   @default("OPEN") // OPEN | WAITING_ON_NEYO | WAITING_ON_CUSTOMER | RESOLVED | CLOSED
+  priority      String   @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  source        String   @default("SCHOOL_OS") // SCHOOL_OS | NEYO_OPS | SMS | EMAIL | WHATSAPP | CALL
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages NeyoCustomerMessage[]
+
+  @@index([tenantId, status])
+  @@index([status, priority, lastMessageAt])
+}
+
+model NeyoCustomerMessage {
+  id          String   @id @default(cuid())
+  threadId    String
+  thread      NeyoCustomerThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  direction   String   @default("CUSTOMER") // CUSTOMER | NEYO | INTERNAL
+  body        String
+  authorId    String?
+  authorName  String
+  authorRole  String?
+  channel     String   @default("IN_APP") // IN_APP | SMS | EMAIL | WHATSAPP | CALL_NOTE
+  createdAt   DateTime @default(now())
+
+  @@index([threadId, createdAt])
+  @@index([direction, createdAt])
+}
+
+model NeyoContract {
+  id            String   @id @default(cuid())
+  title         String
+  schoolName    String
+  tenantId      String?
+  contactName   String
+  contactRole   String?
+  contactEmail  String?
+  contactPhone  String?
+  templateKey   String   @default("SCHOOL_ONBOARDING")
+  body          String
+  status        String   @default("DRAFT") // DRAFT | SENT | SIGNED | VOID
+  publicToken   String   @unique
+  sentAt        DateTime?
+  signedAt      DateTime?
+  signedByName  String?
+  signedByRole  String?
+  signatureText String?
+  signerIp      String?
+  notes         String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([tenantId])
+}
+
+model NeyoYoutubePost {
+  id              String   @id @default(cuid())
+  title           String
+  youtubeUrlOrId  String?
+  youtubeId       String?
+  caption         String
+  audience        String   @default("SCHOOLS") // SCHOOLS | PARENTS | TEACHERS | STUDENTS | PUBLIC
+  channel         String   @default("NEYO_YOUTUBE") // NEYO_YOUTUBE | SCHOOL_CHANNEL | OTHER
+  status          String   @default("DRAFT") // DRAFT | SCHEDULED | READY | POSTED | CANCELLED
+  scheduledFor    DateTime?
+  postedUrl       String?
+  ownerName       String?
+  schoolTenantId  String?
+  notes           String?
+  createdById     String
+  createdByName   String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, scheduledFor])
+  @@index([createdAt])
+  @@index([schoolTenantId])
+}
+
+model NeyoIdea {
+  id               String   @id @default(cuid())
+  title            String
+  description      String?
+  status           String   @default("IDEA") // IDEA | PLANNED | BUILDING | SHIPPED | PARKED
+  priority         String   @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  ownerName        String?
+  linkedFeatureKey String?
+  createdById      String
+  createdByName    String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([status, priority])
+  @@index([createdAt])
+}
+
+model NeyoBuildLog {
+  id             String   @id @default(cuid())
+  dateKey        String   @unique // YYYY-MM-DD, one official build log per day
+  title          String
+  shippedSummary String // concise public/internal summary of what shipped
+  details        String? // longer Markdown/plain text
+  screenshotRefs String? // JSON array of screenshot paths
+  commitRef      String? // git SHA/tag/reference when available
+  status         String   @default("DRAFT") // DRAFT | PUBLISHED
+  createdById    String?
+  createdByName  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([dateKey])
+  @@index([status])
+}
+
+model NeyoMetricSnapshot {
+  id               String   @id @default(cuid())
+  periodKey        String   @unique // e.g. 2026-W24, 2026-06, 2026-Q2
+  periodStart      String // YYYY-MM-DD
+  periodEnd        String // YYYY-MM-DD
+  revenueKes       Int      @default(0)
+  mrrKes           Int      @default(0)
+  payingSchools    Int      @default(0)
+  trialSchools     Int      @default(0)
+  activeSchools    Int      @default(0)
+  churnRiskSchools Int      @default(0)
+  smsSpendKes      Int      @default(0)
+  notes            String?
+  createdById      String?
+  createdByName    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([periodStart])
+}
+
+model NeyoFounderOpsEntry {
+  id              String    @id @default(cuid())
+  kind            String // WEEKLY_METRICS | MONTHLY_ALL_HANDS | QUARTERLY_AUDIT | ANNUAL_PLANNING | DEMO_DAY | INVESTOR_UPDATE | BOARD_MEETING | IMPACT_REPORT
+  periodKey       String? // YYYY-W##, YYYY-MM, YYYY-Q#, YYYY, or event slug
+  title           String
+  status          String    @default("PLANNED") // PLANNED | DONE | SKIPPED
+  scheduledFor    String? // YYYY-MM-DD
+  completedAt     DateTime?
+  summary         String?
+  notes           String?
+  decisionsJson   String? // JSON array of decisions made
+  actionItemsJson String? // JSON array of {task, owner, dueOn, done}
+  metricsJson     String? // JSON metrics snapshot relevant to this meeting/update
+  audience        String? // internal, investors, board, community, public
+  createdById     String?
+  createdByName   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([kind, periodKey])
+  @@index([kind, status])
+  @@index([scheduledFor])
+}
+
+model NeyoCustomerInterview {
+  id                String   @id @default(cuid())
+  schoolName        String
+  contactName       String
+  contactRole       String? // Principal, Bursar, Parent, Teacher, etc.
+  phone             String?
+  email             String?
+  county            String?
+  interviewDate     String // YYYY-MM-DD
+  channel           String   @default("CALL") // CALL | VISIT | WHATSAPP | VIDEO
+  status            String   @default("SCHEDULED") // SCHEDULED | DONE | CANCELLED
+  painPointsJson    String? // JSON array
+  quotesJson        String? // JSON array of exact customer quotes
+  opportunitiesJson String? // JSON array of product/commercial opportunities
+  followUp          String?
+  createdById       String?
+  createdByName     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([interviewDate])
+  @@index([status])
+  @@index([schoolName])
+}
+
+// ---- Leaving Certificate Vault (H.3) ---------------------------------------
+model LeavingCertificate {
+  id               String    @id @default(cuid())
+  tenantId         String
+  studentId        String    @unique
+  student          Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  certificateType  String // "KCPE" | "KCSE" | "OTHER"
+  certificateNo    String    @unique
+  status           String    @default("STORED") // STORED | HANDED_OVER
+  fileUrl          String? // scanned copy upload (optional)
+  fileName         String?
+  hardcopyLocation String    @default("Unspecified") // physical location of the hardcopy certificate (H.3) - MANDATORY!
+  handedOverTo     String? // who physically took it (e.g. Student, Parent)
+  handedOverAt     DateTime? // exact date and time of handover
+  handedOverById   String? // staff who did the handover
+  handedOverByName String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([tenantId])
+}
+
+// ---- Entrance Exam Paper Vault (H.3 / I.11) ---------------------------------
+// One printable interview/entrance paper per actual class/stream, managed from
+// Admissions so staff do not dig through files during new-student interviews.
+model EntranceExamPaper {
+  id               String    @id @default(cuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId          String? // SchoolClass.id; nullable only for old migrated level-only rows
+  classLevel       String // legacy/display fallback, e.g. "Form 1"
+  classLabel       String // exact class display, e.g. "Form 1 East"
+  title            String    @default("Entrance interview paper")
+  fileUrl          String
+  fileName         String
+  hardcopyLocation String    @default("Admissions office file")
+  uploadedById     String?
+  uploadedBy       String?
+  printCount       Int       @default(0)
+  lastPrintedAt    DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([tenantId, classId])
+  @@index([tenantId, classLabel])
+}

@@ -1,0 +1,841 @@
+<!doctype html><html><head><meta charset="utf-8"><title>NEYO Founder Manual</title><style>
+@page { size: A4; margin: 18mm 16mm; }
+body { font-family: Inter, Arial, sans-serif; color:#121a2e; line-height:1.48; font-size:10.5pt; }
+h1 { font-size:30pt; letter-spacing:-0.04em; margin:0 0 12pt; }
+h2 { page-break-before: always; font-size:19pt; margin:0 0 10pt; color:#121a2e; }
+h3 { font-size:13pt; margin:16pt 0 8pt; }
+p { margin: 0 0 8pt; }
+ul { margin: 0 0 10pt 18pt; padding:0; }
+li { margin:0 0 3pt; }
+pre { background:#f4f1e9; border:1px solid #ddd6c8; padding:8pt; border-radius:8pt; white-space:pre-wrap; font-size:9pt; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+table { width:100%; border-collapse:collapse; margin:8pt 0 12pt; font-size:9.5pt; }
+th,td { border:1px solid #ddd6c8; padding:6pt; text-align:left; vertical-align:top; }
+th { background:#f4f1e9; }
+blockquote { border-left:4px solid #1f9d5f; padding:6pt 10pt; background:#eef8f2; font-weight:700; }
+hr { border:none; border-top:1px solid #ddd6c8; margin:16pt 0; }
+.cover { page-break-after: always; min-height: 85vh; display:flex; flex-direction:column; justify-content:center; }
+.cover .brand { font-size:11pt; letter-spacing:0.28em; color:#1f9d5f; font-weight:900; }
+.cover h1 { font-size:44pt; line-height:0.95; }
+.cover p { font-size:13pt; max-width:540px; }
+</style></head><body><div class="cover"><div class="brand">NEYO</div><h1>NEYO Founder Manual</h1><p>A non-coder friendly operating guide for running, testing, deploying and selling NEYO.</p></div>
+<p><strong>Version:</strong> 2026-06-24  </p>
+<p><strong>Audience:</strong> Founder / non-coder operator  </p>
+<p><strong>Company:</strong> NEYO  </p>
+<p><strong>Scope:</strong> Company operations, School OS testing, local setup, deployment, pricing, marketing, and safe growth.</p>
+<hr/>
+<h2>Page 1 — What NEYO is</h2>
+<p>NEYO is a company that builds operating systems for organizations.</p>
+<p>Today the strongest live product is <strong>NEYO School OS</strong>. The wider company roadmap also includes <strong>Business OS</strong>, <strong>Farm OS</strong>, and <strong>Creator OS</strong>. The product must be operated from inside NEYO itself through <strong>NEYO Ops</strong>.</p>
+<p>The founder should think of NEYO as:</p>
+<ul>
+<li>one company;</li>
+<li>many operating systems;</li>
+<li>one shared platform layer;</li>
+<li>one internal company cockpit;</li>
+<li>many customer-facing products.</li>
+</ul>
+<p>The most important rule is simple:</p>
+<blockquote>NEYO must run NEYO inside NEYO.</blockquote>
+<hr/>
+<h2>Page 2 — The founder&#x27;s daily control room</h2>
+<p>Your main company control room is:</p>
+<pre><code>NEYO Ops → Business Operations</code></pre>
+<p>This is where you manage:</p>
+<ul>
+<li>company documents;</li>
+<li>pricing catalog;</li>
+<li>school accounts;</li>
+<li>subscriptions;</li>
+<li>grace-period enforcement;</li>
+<li>central billing;</li>
+<li>contracts;</li>
+<li>customer communication;</li>
+<li>YouTube posting calendar;</li>
+<li>brand assets;</li>
+<li>OS lifecycle planning;</li>
+<li>landing page content.</li>
+</ul>
+<p>If something is company-owned, it should live in NEYO Ops, not inside a school settings page.</p>
+<hr/>
+<h2>Page 3 — Product map</h2>
+<p>Current NEYO OS map:</p>
+<table>
+<tr><th>OS</th><th>Status</th><th>Purpose</th></tr>
+<tr><td>School OS</td><td>Live</td><td>Schools, fees, attendance, exams, staff, learning, parent communication</td></tr>
+<tr><td>Business OS</td><td>Waitlist / planned</td><td>SMEs, stock, customers, sales, teams</td></tr>
+<tr><td>Farm OS</td><td>Waitlist / planned</td><td>Cooperatives, farm records, inventory, teams</td></tr>
+<tr><td>Creator OS</td><td>Waitlist / planned</td><td>Creator businesses, content, sales, clients</td></tr>
+</table>
+<p>All OSes share the platform layer:</p>
+<ul>
+<li>login;</li>
+<li>tenancy;</li>
+<li>billing;</li>
+<li>audit logs;</li>
+<li>notifications;</li>
+<li>storage;</li>
+<li>search;</li>
+<li>calendar;</li>
+<li>NEYO Ops support.</li>
+</ul>
+<hr/>
+<h2>Page 4 — Important links inside the app</h2>
+<p>Common founder paths:</p>
+<pre><code>/founder                 NEYO Ops
+/settings/billing        school billing page
+/settings/payments       school fee payment credentials
+/settings/school         school profile and branding
+/learning-videos         YouTube learning module
+/privacy                 live Privacy Policy
+/terms                   live Terms of Service
+/os/school/login         School OS login
+/os/business/login       Business OS login route
+/os/farm/login           Farm OS login route
+/os/creator/login        Creator OS login route</code></pre>
+<p>Public website:</p>
+<pre><code>/                         NEYO company landing page</code></pre>
+<hr/>
+<h2>Page 5 — What must never be exposed publicly</h2>
+<p>The public landing page and marketing copy should show <strong>features and outcomes only</strong>.</p>
+<p>Never expose:</p>
+<ul>
+<li>API keys;</li>
+<li>credentials;</li>
+<li>database internals;</li>
+<li>provider passkeys;</li>
+<li>private implementation details;</li>
+<li>internal prompts;</li>
+<li>Daraja secrets;</li>
+<li>cloud secret names;</li>
+<li>exact infrastructure secrets;</li>
+<li>any private school data.</li>
+</ul>
+<p>Public copy should say:</p>
+<blockquote>&quot;Secure school payments and receipts.&quot;</blockquote>
+<p>Not:</p>
+<blockquote>&quot;We use this provider secret, this callback token, this table, and this database field.&quot;</blockquote>
+<hr/>
+<h2>Page 6 — Local testing tonight: simple version</h2>
+<p>To test NEYO locally on a laptop:</p>
+<pre><code>cd /home/user/neyo/neyo
+npm install
+./node_modules/.bin/prisma generate
+./node_modules/.bin/prisma migrate deploy
+npm run db:seed
+npm run dev</code></pre>
+<p>Open:</p>
+<pre><code>http://localhost:3000</code></pre>
+<p>Founder login commonly seeded in dev:</p>
+<pre><code>support@neyo.co.ke
+Karibu2026!</code></pre>
+<p>If the dev server is already running, refresh the browser.</p>
+<hr/>
+<h2>Page 7 — Local testing: safest command order</h2>
+<p>When node_modules disappear in the sandbox, run:</p>
+<pre><code>npm install</code></pre>
+<p>Then:</p>
+<pre><code>./node_modules/.bin/prisma generate
+./node_modules/.bin/prisma migrate deploy
+npm run db:seed
+NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck
+npm run test:roles</code></pre>
+<p>Use this for dev server in the sandbox:</p>
+<pre><code>(setsid npm run dev &lt;/dev/null &gt;/tmp/neyo-dev.log 2&gt;&amp;1 &amp;) ; sleep 18</code></pre>
+<p>Check log:</p>
+<pre><code>tail -80 /tmp/neyo-dev.log</code></pre>
+<hr/>
+<h2>Page 8 — Role safety</h2>
+<p>NEYO has 16 canonical roles. The role test must pass:</p>
+<pre><code>npm run test:roles</code></pre>
+<p>Expected:</p>
+<pre><code>24 passed, 0 failed</code></pre>
+<p>This confirms:</p>
+<ul>
+<li>roles exist;</li>
+<li>permission matrix is complete;</li>
+<li>tenant isolation tests pass;</li>
+<li>cross-tenant reads are blocked;</li>
+<li>ID generation works.</li>
+</ul>
+<p>Never ship major changes if role tests fail.</p>
+<hr/>
+<h2>Page 9 — How to test NEYO Ops</h2>
+<p>1. Login as SUPER_ADMIN.</p>
+<p>2. Open:</p>
+<pre><code>/founder</code></pre>
+<p>3. Click <strong>Business Operations</strong>.</p>
+<p>4. Check these sections:</p>
+<ul>
+<li>NEYO Business OS Cockpit;</li>
+<li>OS Lifecycle Board;</li>
+<li>Pricing &amp; Package Editor;</li>
+<li>YouTube Management &amp; Posting Hub;</li>
+<li>Contract Signing Management;</li>
+<li>Customer ↔ NEYO Communication Hub;</li>
+<li>Subscriptions &amp; Billing Override;</li>
+<li>Grace-period enforcement;</li>
+<li>Brand editor;</li>
+<li>Landing Page Content Editor.</li>
+</ul>
+<p>Each save should show a toast and write an audit log.</p>
+<hr/>
+<h2>Page 10 — Pricing management</h2>
+<p>Pricing is edited in:</p>
+<pre><code>NEYO Ops → Business Operations → Pricing &amp; Package Editor</code></pre>
+<p>The live catalog is stored as:</p>
+<pre><code>PlatformSetting: neyo_pricing_catalog</code></pre>
+<p>Rules:</p>
+<ul>
+<li>new subscriptions use the current catalog;</li>
+<li>existing subscriptions keep `grandfatheredPrice`;</li>
+<li>SMS is not inside packages;</li>
+<li>SMS is sold as an out-of-package top-up;</li>
+<li>price edits are SUPER_ADMIN-only;</li>
+<li>changes are audit logged.</li>
+</ul>
+<p>Test:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i48-pricing-catalog-test.ts</code></pre>
+<hr/>
+<h2>Page 11 — Central NEYO money</h2>
+<p>School fees and NEYO subscription money are separate.</p>
+<p>School fees:</p>
+<pre><code>Settings → Payments
+PaymentCredential
+Payment
+Invoice</code></pre>
+<p>NEYO company subscription money:</p>
+<pre><code>SubscriptionPayment
+/api/billing/public-stk
+/api/billing/central-callback</code></pre>
+<p>Central account references look like:</p>
+<pre><code>NEYO-&lt;school-slug&gt;</code></pre>
+<p>When paid, the callback reconnects the school automatically.</p>
+<hr/>
+<h2>Page 12 — Expired account reconnect</h2>
+<p>When a school is suspended, the root layout shows the expired checkout screen.</p>
+<p>The school enters a phone number and receives an M-Pesa STK prompt.</p>
+<p>Flow:</p>
+<pre><code>Suspended school → enter phone → central STK → callback → subscription ACTIVE → page reload → dashboard</code></pre>
+<p>Test:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i49-central-money-reconnect-test.ts</code></pre>
+<hr/>
+<h2>Page 13 — Grace-period enforcement</h2>
+<p>Daily job:</p>
+<pre><code>subscription-state-machine</code></pre>
+<p>Schedule:</p>
+<pre><code>Daily 01:00 EAT</code></pre>
+<p>Flow:</p>
+<pre><code>ACTIVE overdue → GRACE + notice
+GRACE ending soon → warning
+GRACE expired → final notice → SUSPENDED</code></pre>
+<p>Data rule:</p>
+<blockquote>Never delete school data because of non-payment.</blockquote>
+<p>Test:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i48-grace-enforcement-test.ts</code></pre>
+<hr/>
+<h2>Page 14 — Company documents</h2>
+<p>Editable in:</p>
+<pre><code>NEYO Ops → Business Operations → Legal editor</code></pre>
+<p>Settings:</p>
+<pre><code>privacy_policy
+terms_of_service</code></pre>
+<p>Public pages:</p>
+<pre><code>/privacy
+/terms</code></pre>
+<p>This means you can update legal copy without touching code.</p>
+<p>Test:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i48-company-documents-test.ts</code></pre>
+<hr/>
+<h2>Page 15 — Contracts</h2>
+<p>Contracts are managed in:</p>
+<pre><code>NEYO Ops → Contract Signing Management</code></pre>
+<p>Model:</p>
+<pre><code>NeyoContract</code></pre>
+<p>Public signing path:</p>
+<pre><code>/contracts/sign/[token]</code></pre>
+<p>A signer types:</p>
+<ul>
+<li>name;</li>
+<li>role;</li>
+<li>typed signature;</li>
+<li>agreement confirmation.</li>
+</ul>
+<p>Audit action:</p>
+<pre><code>platform.contract_signed</code></pre>
+<p>Test:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i48-contract-signing-test.ts</code></pre>
+<hr/>
+<h2>Page 16 — Customer communication hub</h2>
+<p>Schools can contact NEYO from:</p>
+<pre><code>Settings → Billing → Contact NEYO</code></pre>
+<p>NEYO receives messages in:</p>
+<pre><code>NEYO Ops → Customer ↔ NEYO Communication Hub</code></pre>
+<p>Models:</p>
+<pre><code>NeyoCustomerThread
+NeyoCustomerMessage</code></pre>
+<p>Use it for:</p>
+<ul>
+<li>billing issues;</li>
+<li>account issues;</li>
+<li>onboarding questions;</li>
+<li>support records;</li>
+<li>renewal communication.</li>
+</ul>
+<p>Test:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i48-customer-neyo-hub-test.ts</code></pre>
+<hr/>
+<h2>Page 17 — Brand assets</h2>
+<p>Brand assets are edited in:</p>
+<pre><code>NEYO Ops → NEYO Global Branding &amp; Asset Editor</code></pre>
+<p>Editable:</p>
+<ul>
+<li>logo;</li>
+<li>colors;</li>
+<li>favicon;</li>
+<li>PWA icon;</li>
+<li>Apple touch icon;</li>
+<li>wordmarks;</li>
+<li>Bundi mascot images;</li>
+<li>pattern tile.</li>
+</ul>
+<p>Root metadata reads these settings.</p>
+<p>Test:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i48-brand-assets-test.ts</code></pre>
+<hr/>
+<h2>Page 18 — Landing page content</h2>
+<p>Landing content is edited in:</p>
+<pre><code>NEYO Ops → Landing Page Content Editor</code></pre>
+<p>Stored as:</p>
+<pre><code>PlatformSetting: neyo_landing_content</code></pre>
+<p>Content includes:</p>
+<ul>
+<li>hero copy;</li>
+<li>CTAs;</li>
+<li>nav;</li>
+<li>product cards;</li>
+<li>trust stats;</li>
+<li>media slots;</li>
+<li>footer links;</li>
+<li>SEO title;</li>
+<li>SEO description;</li>
+<li>Open Graph image.</li>
+</ul>
+<p>Public page consumes it at:</p>
+<pre><code>/</code></pre>
+<hr/>
+<h2>Page 19 — Landing page design direction</h2>
+<p>The landing page should borrow the <strong>clarity</strong> of Odoo, not copy Odoo.</p>
+<p>Good direction:</p>
+<ul>
+<li>simple;</li>
+<li>product-first;</li>
+<li>warm white background;</li>
+<li>app grid;</li>
+<li>clear CTAs;</li>
+<li>real screenshots;</li>
+<li>no hype;</li>
+<li>no generic startup language.</li>
+</ul>
+<p>Avoid:</p>
+<ul>
+<li>purple glow;</li>
+<li>fake charts;</li>
+<li>over-dark hero;</li>
+<li>stock photos;</li>
+<li>fake testimonials;</li>
+<li>internal secrets;</li>
+<li>exaggerated claims.</li>
+</ul>
+<hr/>
+<h2>Page 20 — YouTube learning</h2>
+<p>Path:</p>
+<pre><code>/learning-videos</code></pre>
+<p>Works in two modes:</p>
+<p>1. Saved videos search — works without YouTube API key.</p>
+<p>2. Live YouTube search — works when `YOUTUBE_API_KEY` is configured.</p>
+<p>Search uses:</p>
+<ul>
+<li>strict safe search;</li>
+<li>embeddable videos only;</li>
+<li>education category;</li>
+<li>Kenya region;</li>
+<li>English relevance.</li>
+</ul>
+<p>Videos play inside NEYO using privacy-enhanced embeds.</p>
+<hr/>
+<h2>Page 21 — YouTube ads reality</h2>
+<p>NEYO can reduce distractions by:</p>
+<ul>
+<li>embedding inside NEYO;</li>
+<li>hiding comments;</li>
+<li>avoiding external YouTube browsing;</li>
+<li>using privacy-enhanced embed URLs;</li>
+<li>showing recommended learning ideas;</li>
+<li>not exposing downloads.</li>
+</ul>
+<p>But NEYO cannot fully guarantee zero YouTube ads for third-party YouTube videos.</p>
+<p>True zero-ad options:</p>
+<ul>
+<li>school-owned hosted videos;</li>
+<li>uploaded school-owned content;</li>
+<li>YouTube-side entitlement;</li>
+<li>future premium controlled media pipeline.</li>
+</ul>
+<hr/>
+<h2>Page 22 — Class casting</h2>
+<p>Learning videos can be cast from teacher phone to class screen.</p>
+<p>Flow:</p>
+<pre><code>Teacher saves video → Cast to class screen → NEYO creates cast code → TV/projector opens /learning-videos/cast/[code]</code></pre>
+<p>Students can later see videos shown in class.</p>
+<p>Test:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i27-youtube-learning-test.ts</code></pre>
+<hr/>
+<h2>Page 23 — Hardware rule</h2>
+<p>Hardware must never show connected unless truly connected.</p>
+<p>Allowed connection types:</p>
+<ul>
+<li>USB;</li>
+<li>Serial;</li>
+<li>Bluetooth;</li>
+<li>Wi-Fi/LAN;</li>
+<li>Keyboard/HID input;</li>
+<li>tracker feed for GPS.</li>
+</ul>
+<p>A test tool must never fake connection status.</p>
+<p>Test:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i47-hardware-deferred-seams-test.ts</code></pre>
+<hr/>
+<h2>Page 24 — School profile and branding</h2>
+<p>School-owned branding lives in:</p>
+<pre><code>Settings → School</code></pre>
+<p>This is separate from NEYO company branding.</p>
+<p>School branding controls:</p>
+<ul>
+<li>school logo;</li>
+<li>school colors;</li>
+<li>motto;</li>
+<li>public school profile;</li>
+<li>document branding;</li>
+<li>receipt/report styling.</li>
+</ul>
+<p>NEYO company branding lives in NEYO Ops.</p>
+<hr/>
+<h2>Page 25 — Payments for schools</h2>
+<p>School fee collection credentials live in:</p>
+<pre><code>Settings → Payments</code></pre>
+<p>These are tenant-owned.</p>
+<p>Use them for:</p>
+<ul>
+<li>parent fee payments;</li>
+<li>invoice callbacks;</li>
+<li>receipts;</li>
+<li>finance ledger;</li>
+<li>school Paybill/Till.</li>
+</ul>
+<p>Do not put NEYO company subscription credentials here.</p>
+<p>See:</p>
+<pre><code>docs/PAYMENTS-DEVELOPER-GUIDE.md</code></pre>
+<hr/>
+<h2>Page 26 — Finance testing checklist</h2>
+<p>To test finance:</p>
+<p>1. Open Finance.</p>
+<p>2. Create or find invoice.</p>
+<p>3. Trigger STK or record payment.</p>
+<p>4. Confirm invoice balance changes.</p>
+<p>5. Confirm receipt PDF works.</p>
+<p>6. Confirm SMS/notification path if configured.</p>
+<p>7. Confirm audit log exists.</p>
+<p>8. Confirm role restrictions:</p>
+<p>   - Bursar can record payments.</p>
+<p>   - Teacher cannot manage finance.</p>
+<p>Run role tests after finance changes.</p>
+<hr/>
+<h2>Page 27 — Student testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>create student;</li>
+<li>edit student;</li>
+<li>guardian link;</li>
+<li>parent login;</li>
+<li>student ID card;</li>
+<li>bulk ID cards;</li>
+<li>transfer letter;</li>
+<li>leaving certificate vault;</li>
+<li>class/stream filters;</li>
+<li>document branding;</li>
+<li>tenant isolation.</li>
+</ul>
+<p>Screenshots should show real Kenyan school context, not placeholder names.</p>
+<hr/>
+<h2>Page 28 — Attendance testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>class attendance;</li>
+<li>absent SMS path;</li>
+<li>hostel attendance;</li>
+<li>staff attendance;</li>
+<li>GPS/geofence if configured;</li>
+<li>duplicate prevention;</li>
+<li>teacher permissions;</li>
+<li>principal summary.</li>
+</ul>
+<p>Never let hardware attendance say connected unless a real device/feed exists.</p>
+<hr/>
+<h2>Page 29 — Academics testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>departments;</li>
+<li>subjects;</li>
+<li>HOD assignment;</li>
+<li>co-curricular department;</li>
+<li>timetable;</li>
+<li>marks entry;</li>
+<li>report cards;</li>
+<li>CBC reports;</li>
+<li>exam materials;</li>
+<li>duty roster;</li>
+<li>print outputs.</li>
+</ul>
+<p>For timetable printing, the output should fill A4 correctly and not behave like a compressed screenshot.</p>
+<hr/>
+<h2>Page 30 — Learning testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>LMS notes;</li>
+<li>homework;</li>
+<li>quizzes;</li>
+<li>forum;</li>
+<li>YouTube learning search;</li>
+<li>saved videos;</li>
+<li>shown-in-class videos;</li>
+<li>class screen casting;</li>
+<li>online class entry;</li>
+<li>mobile layout.</li>
+</ul>
+<p>No download action should appear for YouTube videos.</p>
+<hr/>
+<h2>Page 31 — Staff and HR testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>staff creation;</li>
+<li>staff import;</li>
+<li>TSC/KRA/National ID fields;</li>
+<li>contract type;</li>
+<li>contract end date;</li>
+<li>staff attendance;</li>
+<li>payroll;</li>
+<li>payslips;</li>
+<li>role changes;</li>
+<li>staff permissions.</li>
+</ul>
+<p>Staff contracts exist at staff-profile level; deeper templates can be added later if checklist asks.</p>
+<hr/>
+<h2>Page 32 — Hostel testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>hostel creation;</li>
+<li>room creation;</li>
+<li>bed allocation;</li>
+<li>mixed hostel rules;</li>
+<li>transfer;</li>
+<li>curfew attendance;</li>
+<li>missing-boarder SMS;</li>
+<li>freed bed tracking;</li>
+<li>boarding/day school gating.</li>
+</ul>
+<hr/>
+<h2>Page 33 — Library testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>book creation;</li>
+<li>issue book;</li>
+<li>return book;</li>
+<li>late fine amount;</li>
+<li>camera barcode scanner;</li>
+<li>external barcode scanner truthfulness;</li>
+<li>search;</li>
+<li>clearance;</li>
+<li>biometric gate where required.</li>
+</ul>
+<hr/>
+<h2>Page 34 — Transport testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>routes;</li>
+<li>vehicles;</li>
+<li>drivers;</li>
+<li>student assignment;</li>
+<li>invoices;</li>
+<li>maintenance;</li>
+<li>fuel;</li>
+<li>GPS seam;</li>
+<li>tracker feed;</li>
+<li>no fake connected GPS.</li>
+</ul>
+<hr/>
+<h2>Page 35 — Cafeteria and inventory testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>stock items;</li>
+<li>batches;</li>
+<li>expiry;</li>
+<li>low stock alerts;</li>
+<li>meal models;</li>
+<li>cards-only;</li>
+<li>boarding-group meals;</li>
+<li>no-cards mode;</li>
+<li>sales and supplier relay.</li>
+</ul>
+<hr/>
+<h2>Page 36 — Security testing checklist</h2>
+<p>Test:</p>
+<ul>
+<li>visitor sign-in;</li>
+<li>pickup verification;</li>
+<li>alternate pickup codes;</li>
+<li>panic alerts;</li>
+<li>passkeys;</li>
+<li>2FA;</li>
+<li>impersonation logs;</li>
+<li>wrong-school gate;</li>
+<li>row-scoped access.</li>
+</ul>
+<p>Audit logs are essential for support and safety.</p>
+<hr/>
+<h2>Page 37 — Print quality rules</h2>
+<p>Print outputs should be document-first, not screenshot-first.</p>
+<p>Rules:</p>
+<ul>
+<li>use A4 correctly;</li>
+<li>landscape for timetable where appropriate;</li>
+<li>portrait for class lists where appropriate;</li>
+<li>school logo top-left where useful;</li>
+<li>Powered by NEYO bottom-right or footer;</li>
+<li>avoid squeezed screen captures;</li>
+<li>content must fill the paper sensibly.</li>
+</ul>
+<p>Future print audit should check every print route.</p>
+<hr/>
+<h2>Page 38 — Deployment overview</h2>
+<p>Production should use:</p>
+<ul>
+<li>hosted Next.js app;</li>
+<li>Postgres/Neon database;</li>
+<li>object storage for files;</li>
+<li>proper environment variables;</li>
+<li>live Daraja credentials;</li>
+<li>SMS/email/WhatsApp credentials;</li>
+<li>observability;</li>
+<li>backups;</li>
+<li>custom domain.</li>
+</ul>
+<p>Never deploy with dev mock credentials for real money flows.</p>
+<p>See:</p>
+<pre><code>docs/DEPLOY.md</code></pre>
+<hr/>
+<h2>Page 39 — Environment variables to understand</h2>
+<p>Important categories:</p>
+<ul>
+<li>database URL;</li>
+<li>app base URL;</li>
+<li>session/security secrets;</li>
+<li>Daraja credentials;</li>
+<li>SMS provider credentials;</li>
+<li>email provider credentials;</li>
+<li>YouTube API key;</li>
+<li>object storage credentials;</li>
+<li>observability keys.</li>
+</ul>
+<p>Founder rule:</p>
+<blockquote>Credentials are not public website content.</blockquote>
+<hr/>
+<h2>Page 40 — GitHub basics for founder</h2>
+<p>When files are changed, they appear as modified/untracked.</p>
+<p>Typical workflow:</p>
+<pre><code>git status
+git add .
+git commit -m &quot;Describe the completed feature&quot;
+git push</code></pre>
+<p>If many generated files appear, check `.gitignore` and avoid committing:</p>
+<ul>
+<li>node_modules;</li>
+<li>build outputs;</li>
+<li>cache folders;</li>
+<li>local secrets.</li>
+</ul>
+<p>Ask for help before force-pushing.</p>
+<hr/>
+<h2>Page 41 — Testing before commit</h2>
+<p>Before a serious commit:</p>
+<pre><code>./node_modules/.bin/prisma generate
+./node_modules/.bin/prisma migrate deploy
+NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck
+npm run test:roles</code></pre>
+<p>For feature-specific tests, run the script named after the feature, for example:</p>
+<pre><code>./node_modules/.bin/tsx scripts/i49-central-money-reconnect-test.ts</code></pre>
+<hr/>
+<h2>Page 42 — Screenshots rule</h2>
+<p>For every visual feature:</p>
+<p>1. Run dev server.</p>
+<p>2. Open the page.</p>
+<p>3. Capture desktop screenshot.</p>
+<p>4. Capture mobile screenshot when layout is important.</p>
+<p>5. Save in `screenshots/`.</p>
+<p>6. Update checklist/context anchor.</p>
+<p>Example:</p>
+<pre><code>screenshots/i52-public-homepage-odoo-inspired-desktop.png</code></pre>
+<hr/>
+<h2>Page 43 — Marketing target: 100 schools by January</h2>
+<p>To reach 100 schools by January 2027, NEYO needs:</p>
+<ul>
+<li>a trusted public landing page;</li>
+<li>a demo approval flow;</li>
+<li>a school visit plan;</li>
+<li>referral loops;</li>
+<li>founder-led onboarding;</li>
+<li>WhatsApp follow-up;</li>
+<li>pricing clarity;</li>
+<li>simple printed pitch material;</li>
+<li>live product proof screenshots/videos.</li>
+</ul>
+<p>The best early market is schools with pain in:</p>
+<ul>
+<li>fees;</li>
+<li>receipts;</li>
+<li>attendance;</li>
+<li>report cards;</li>
+<li>parent communication;</li>
+<li>printing.</li>
+</ul>
+<hr/>
+<h2>Page 44 — School visit blueprint</h2>
+<p>For each school visit:</p>
+<p>1. Identify decision maker: Director, Principal, Bursar, ICT lead.</p>
+<p>2. Ask pain questions.</p>
+<p>3. Show only 3-5 relevant workflows.</p>
+<p>4. Do not overwhelm them with every module.</p>
+<p>5. Show fee receipt flow.</p>
+<p>6. Show parent SMS/payment proof.</p>
+<p>7. Show report card or ID card print.</p>
+<p>8. Ask for pilot commitment.</p>
+<p>9. Book onboarding date.</p>
+<p>10. Follow up same day.</p>
+<p>Best demo length: 18–25 minutes.</p>
+<hr/>
+<h2>Page 45 — Sales conversation script</h2>
+<p>Opening:</p>
+<blockquote>“We built NEYO to help Kenyan schools run fees, attendance, exams, communication and documents in one place.”</blockquote>
+<p>Ask:</p>
+<ul>
+<li>How do you track fee balances today?</li>
+<li>How long does report card preparation take?</li>
+<li>Do parents get receipts instantly?</li>
+<li>Do teachers mark attendance digitally?</li>
+<li>What is the hardest office process each term?</li>
+</ul>
+<p>Close:</p>
+<blockquote>“Can we set up your school and run one real workflow this week?”</blockquote>
+<hr/>
+<h2>Page 46 — What not to say in sales</h2>
+<p>Avoid:</p>
+<ul>
+<li>exaggerating;</li>
+<li>saying everything is fully automated if not;</li>
+<li>promising zero YouTube ads for third-party videos;</li>
+<li>promising hardware is connected before pairing;</li>
+<li>exposing internal architecture;</li>
+<li>using technical jargon;</li>
+<li>selling every module at once.</li>
+</ul>
+<p>Say what is true, specific, and useful.</p>
+<hr/>
+<h2>Page 47 — How NEYO helps Kenyan schools</h2>
+<p>NEYO helps schools by:</p>
+<ul>
+<li>reducing paper work;</li>
+<li>speeding fee follow-up;</li>
+<li>improving parent communication;</li>
+<li>making receipts traceable;</li>
+<li>organizing student records;</li>
+<li>improving attendance tracking;</li>
+<li>making reports cleaner;</li>
+<li>preserving data;</li>
+<li>reducing duplicated office work.</li>
+</ul>
+<p>For parents, NEYO should feel simple.</p>
+<p>For staff, NEYO should feel calm.</p>
+<p>For owners, NEYO should feel controlled.</p>
+<hr/>
+<h2>Page 48 — Scale confidence</h2>
+<p>NEYO can scale if the architecture is operated correctly:</p>
+<ul>
+<li>stateless app servers;</li>
+<li>Postgres with pooling;</li>
+<li>background jobs;</li>
+<li>object storage;</li>
+<li>CDN for static assets;</li>
+<li>queues for heavy tasks;</li>
+<li>observability;</li>
+<li>tenant indexes;</li>
+<li>careful permissions;</li>
+<li>no giant client bundles;</li>
+<li>no fake blocking integrations.</li>
+</ul>
+<p>Scaling is not magic. It is discipline.</p>
+<hr/>
+<h2>Page 49 — Founder weekly routine</h2>
+<p>Every week:</p>
+<p>1. Check NEYO Ops metrics.</p>
+<p>2. Review customer threads.</p>
+<p>3. Review grace/suspended accounts.</p>
+<p>4. Review payments.</p>
+<p>5. Review landing page requests/waitlist.</p>
+<p>6. Review bugs and screenshots.</p>
+<p>7. Run role tests.</p>
+<p>8. Update checklist/context anchor.</p>
+<p>9. Pick one small feature batch.</p>
+<p>10. Talk to at least five schools.</p>
+<hr/>
+<h2>Page 50 — Final founder operating rule</h2>
+<p>Never rush a feature because it “looks done.”</p>
+<p>A NEYO feature is only complete when it has:</p>
+<ul>
+<li>real database state;</li>
+<li>validation;</li>
+<li>service logic;</li>
+<li>API endpoint;</li>
+<li>UI;</li>
+<li>loading/empty/error/populated states;</li>
+<li>Kenyan context;</li>
+<li>test or audit script;</li>
+<li>screenshot if visual;</li>
+<li>checklist update;</li>
+<li>context anchor update.</li>
+</ul>
+<p>This manual is the starting operating guide. Keep expanding it as NEYO grows.</p>
+<hr/>
+<h2>Appendix A — Core commands</h2>
+<pre><code>npm install
+./node_modules/.bin/prisma generate
+./node_modules/.bin/prisma migrate deploy
+npm run db:seed
+NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck
+npm run test:roles
+npm run dev</code></pre>
+<hr/>
+<h2>Appendix B — Key documents</h2>
+<pre><code>docs/FEATURES-CHECKLIST.md
+docs/CONTEXT-ANCHOR.md
+docs/NEYO-BUSINESS-OS-ANALYSIS.md
+docs/PAYMENTS-DEVELOPER-GUIDE.md
+docs/YOUTUBE-MANAGEMENT-POSTING-STRATEGY.md
+docs/MULTI-OS-READINESS.md
+RUN-LOCALLY-FOR-FOUNDER.md</code></pre>
+<hr/>
+<h2>Appendix C — Current source of truth</h2>
+<p>The source of truth is always:</p>
+<pre><code>docs/FEATURES-CHECKLIST.md</code></pre>
+<p>The save game is:</p>
+<pre><code>docs/CONTEXT-ANCHOR.md</code></pre>
+<p>If those are not updated, the project memory becomes unreliable.</p></body></html>

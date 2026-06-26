@@ -1,0 +1,523 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Inter is loaded via next/font in layout.tsx and exposed as --font-inter */
+:root {
+  --font-inter: "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-size: 15px; /* Premium base scale for mobile devices */
+  }
+
+  /* Responsive Laptop & Desktop Scale-Up for Maximum Visibility (H.3) */
+  @media (min-width: 1024px) {
+    html {
+      font-size: 16.5px; /* Globally scales up all texts, padding, margins & icons on laptops */
+    }
+  }
+  @media (min-width: 1440px) {
+    html {
+      font-size: 17.5px; /* High-comfort upscale for larger desktop monitors */
+    }
+  }
+
+  body {
+    @apply bg-warm-100 text-navy-900 font-sans antialiased;
+  }
+  .dark body {
+    @apply bg-navy-950 text-navy-100;
+  }
+  /* Calm focus ring, Apple-style — for buttons, links and custom controls.
+     Native form fields (input/textarea/select) manage their own focus styling
+     inside their wrapper components, so we exclude them to avoid double rings. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-green-500/60 ring-offset-2 ring-offset-warm-100;
+  }
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply ring-0 ring-offset-0;
+  }
+  .dark :focus-visible {
+    @apply ring-offset-navy-950;
+  }
+}
+
+@layer utilities {
+  /* Skeleton shimmer used by loading states */
+  .skeleton {
+    /* bg via raw values (not @apply) so the G.33 glass layer may restyle
+       .bg-navy-100/.bg-navy-800 without Tailwind's circular-@apply error. */
+    @apply relative overflow-hidden rounded-md;
+    background-color: #dbe3f0; /* navy-100 */
+  }
+  .dark .skeleton {
+    background-color: #2a3a5c; /* navy-800 */
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.45) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
+  .dark .skeleton::after {
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
+}
+
+/* Print-friendly base (co-branded documents, A.10) */
+@media print {
+  /* Hide app chrome when printing a document. */
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  /* Only the .printable region shows; it fills the page. */
+  .print-only {
+    display: block !important;
+  }
+  .printable {
+    margin: 0;
+    padding: 0;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  @page {
+    margin: 16mm;
+  }
+
+  /* A.18 visitor badge: when a badge is open, print ONLY the badge. */
+  body:has(#visitor-badge) * {
+    visibility: hidden !important;
+  }
+  body:has(#visitor-badge) #visitor-badge,
+  body:has(#visitor-badge) #visitor-badge * {
+    visibility: visible !important;
+  }
+  body:has(#visitor-badge) #visitor-badge {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    width: 80mm;
+    height: fit-content;
+  }
+}
+.print-only {
+  display: none;
+}
+
+/* ===========================================================================
+   G.33 2.0 — "LIQUID GLASS" DESIGN SYSTEM (founder-APPROVED as DEFAULT,
+   2026-06-13, after WWDC25/26). Glass is now the system: it wraps BOTH the
+   light and dark appearances (html.glass + html.glass.dark).
+   - CSS-ONLY: GPU-composited backdrop blur; zero JS per frame.
+   - LIQUIDITY LEVEL is COMPANY-set (NEYO platform setting, not per-school):
+     html[data-liquid="1"] subtle · "2" standard (default) · "3" deep.
+   - EVERY element reads as glass: cards, sidebar, topbar, search palette,
+     dialogs, dropdowns, inputs, tables, pills.
+   - Sidebar is DELIBERATELY one step frostier + edge-lit so it reads apart
+     from the module content (founder: "left panel not distinguishable").
+   - Printing/PDFs always plain (founder rule). Reduced-transparency fallback.
+   - Palette rules kept: navy + green + warm white. No purple soup.
+   ======================================================================== */
+
+/* ---- Liquidity tokens (level set on <html data-liquid="1|2|3">) -------- */
+html.glass {
+  --lg-blur: 22px;
+  --lg-sat: 175%;
+  --lg-card: rgba(255, 255, 255, 0.42);
+  --lg-card-border: rgba(255, 255, 255, 0.72);
+  --lg-shell: rgba(255, 255, 255, 0.30);
+  --lg-side: rgba(244, 248, 252, 0.52);
+  --lg-side-border: rgba(28, 39, 64, 0.10);
+  --lg-input: rgba(255, 255, 255, 0.55);
+  --lg-pill: rgba(28, 39, 64, 0.07);
+  --lg-sheen: rgba(255, 255, 255, 0.85);
+}
+html.glass[data-liquid="1"] {
+  --lg-blur: 12px;
+  --lg-sat: 140%;
+  --lg-card: rgba(255, 255, 255, 0.62);
+  --lg-shell: rgba(255, 255, 255, 0.55);
+  --lg-side: rgba(244, 248, 252, 0.72);
+}
+html.glass[data-liquid="3"] {
+  --lg-blur: 32px;
+  --lg-sat: 200%;
+  --lg-card: rgba(255, 255, 255, 0.30);
+  --lg-shell: rgba(255, 255, 255, 0.20);
+  --lg-side: rgba(244, 248, 252, 0.38);
+}
+
+/* Dark glass — the dark mode INSIDE the glass system. */
+html.glass.dark {
+  --lg-card: rgba(17, 25, 43, 0.52);
+  --lg-card-border: rgba(255, 255, 255, 0.14);
+  --lg-shell: rgba(13, 20, 36, 0.45);
+  --lg-side: rgba(20, 29, 50, 0.62);
+  --lg-side-border: rgba(255, 255, 255, 0.10);
+  --lg-input: rgba(13, 20, 36, 0.55);
+  --lg-pill: rgba(255, 255, 255, 0.08);
+  --lg-sheen: rgba(255, 255, 255, 0.16);
+}
+html.glass.dark[data-liquid="1"] { --lg-card: rgba(17, 25, 43, 0.74); --lg-shell: rgba(13, 20, 36, 0.70); --lg-side: rgba(20, 29, 50, 0.80); }
+html.glass.dark[data-liquid="3"] { --lg-card: rgba(17, 25, 43, 0.38); --lg-shell: rgba(13, 20, 36, 0.30); --lg-side: rgba(20, 29, 50, 0.46); }
+
+/* ---- Ambient liquid backdrop (light) ----------------------------------- */
+html.glass body,
+html.glass .bg-warm-100 {
+  background-color: #e7edf6 !important;
+  background-image:
+    radial-gradient(1200px 600px at 8% -12%, rgba(31, 157, 95, 0.32), transparent 58%),
+    radial-gradient(1000px 560px at 92% -4%, rgba(28, 39, 64, 0.28), transparent 55%),
+    radial-gradient(860px 520px at 42% 118%, rgba(31, 157, 95, 0.22), transparent 60%),
+    radial-gradient(520px 340px at 68% 52%, rgba(255, 255, 255, 0.6), transparent 65%);
+  background-attachment: fixed;
+}
+/* Ambient liquid backdrop (dark) — deep navy water with green glow.
+   NOTE (gotcha): never target .bg-navy-950 here — base layer @apply's it,
+   and Tailwind rejects restyling an @apply'd utility (circular dependency).
+   body + .bg-warm-100 (the shell wrapper) cover the dark backdrop fully. */
+html.glass.dark body,
+html.glass.dark .bg-warm-100 {
+  background-color: #0a1120 !important;
+  background-image:
+    radial-gradient(1200px 600px at 10% -12%, rgba(31, 157, 95, 0.20), transparent 58%),
+    radial-gradient(1000px 560px at 90% -6%, rgba(59, 96, 168, 0.22), transparent 55%),
+    radial-gradient(860px 520px at 45% 120%, rgba(31, 157, 95, 0.14), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* ---- Frosted surfaces: anything white/navy-card becomes liquid glass --- */
+html.glass .bg-white {
+  background-color: var(--lg-card) !important;
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
+  backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
+  border-color: var(--lg-card-border) !important;
+}
+html.glass.dark .bg-navy-900,
+html.glass.dark .bg-navy-800 {
+  background-color: var(--lg-card) !important;
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
+  backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
+  border-color: var(--lg-card-border) !important;
+}
+
+/* Card shadow becomes a liquid drop: soft falloff + specular top edge. */
+html.glass .shadow-card,
+html.glass .shadow-pop {
+  box-shadow:
+    0 1px 1px rgba(28, 39, 64, 0.05),
+    0 12px 32px -10px rgba(28, 39, 64, 0.22),
+    inset 0 1px 0 var(--lg-sheen);
+}
+html.glass.dark .shadow-card,
+html.glass.dark .shadow-pop {
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.3),
+    0 14px 36px -10px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 var(--lg-sheen);
+}
+
+/* ---- The liquid sheen: a slow light band drifting across cards --------- */
+@keyframes lg-sheen-drift {
+  0%   { transform: translateX(-60%) rotate(8deg); }
+  100% { transform: translateX(160%) rotate(8deg); }
+}
+html.glass .rounded-2xl.bg-white,
+html.glass.dark .rounded-2xl.bg-navy-900 {
+  position: relative;
+  overflow: hidden;
+}
+html.glass .rounded-2xl.bg-white::before,
+html.glass.dark .rounded-2xl.bg-navy-900::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 45%; height: 200%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, var(--lg-sheen) 50%, transparent 70%);
+  opacity: 0.12;
+  animation: lg-sheen-drift 14s linear infinite;
+}
+/* Levels tune the sheen: subtle = off, deep = brighter. */
+html.glass[data-liquid="1"] .rounded-2xl.bg-white::before { animation: none; opacity: 0; }
+html.glass[data-liquid="3"] .rounded-2xl.bg-white::before { opacity: 0.22; }
+
+/* ---- Shell: topbar + content header get glass; SIDEBAR is distinct ----- */
+html.glass header,
+html.glass .bg-warm-50 {
+  background-color: var(--lg-shell) !important;
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur) + 4px)) saturate(var(--lg-sat));
+  backdrop-filter: blur(calc(var(--lg-blur) + 4px)) saturate(var(--lg-sat));
+  border-color: var(--lg-card-border) !important;
+}
+/* SIDEBAR FIX (founder 2026-06-13: "left panel not distinguishable"):
+   one step MORE opaque than content, a visible hairline + edge glow, and a
+   faint vertical tint so the navigation rail reads as its own pane. */
+html.glass aside {
+  background-color: var(--lg-side) !important;
+  background-image: linear-gradient(180deg, rgba(31, 157, 95, 0.06), transparent 30%);
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur) + 8px)) saturate(var(--lg-sat));
+  backdrop-filter: blur(calc(var(--lg-blur) + 8px)) saturate(var(--lg-sat));
+  border-right: 1px solid var(--lg-side-border) !important;
+  box-shadow: inset -1px 0 0 var(--lg-sheen), 6px 0 24px -12px rgba(28, 39, 64, 0.18);
+}
+html.glass.dark aside {
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06), 6px 0 24px -12px rgba(0, 0, 0, 0.55);
+}
+
+/* ---- Inputs, search, dropdowns, pills — EVERY element is liquid -------- */
+html.glass input,
+html.glass select,
+html.glass textarea {
+  background-color: var(--lg-input) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+html.glass .bg-navy-100 { background-color: var(--lg-pill) !important; }
+html.glass.dark .bg-navy-800 { background-color: var(--lg-pill) !important; }
+html.glass .bg-warm-50 { background-color: var(--lg-shell) !important; }
+
+/* Command palette (⌘K) + dialogs: heavier frost + brighter rim. */
+html.glass .fixed .rounded-2xl.bg-white,
+html.glass.dark .fixed .rounded-2xl.bg-navy-900 {
+  background-color: var(--lg-card) !important;
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur) + 10px)) saturate(var(--lg-sat));
+  backdrop-filter: blur(calc(var(--lg-blur) + 10px)) saturate(var(--lg-sat));
+  border-color: var(--lg-card-border) !important;
+}
+/* Overlay scrim becomes liquid too. */
+html.glass .bg-navy-950\/40 {
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  backdrop-filter: blur(8px) saturate(140%);
+}
+
+/* ---- Accessibility / perf fallbacks ------------------------------------ */
+@media (prefers-reduced-transparency: reduce) {
+  html.glass .bg-white,
+  html.glass aside,
+  html.glass header,
+  html.glass input, html.glass select, html.glass textarea {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background-color: rgba(255, 255, 255, 0.96) !important;
+  }
+  html.glass .rounded-2xl.bg-white::before { animation: none; opacity: 0; }
+  html.glass.dark .bg-navy-900, html.glass.dark .bg-navy-800, html.glass.dark aside {
+    background-color: rgba(17, 25, 43, 0.97) !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.glass .rounded-2xl.bg-white::before,
+  html.glass.dark .rounded-2xl.bg-navy-900::before { animation: none; }
+}
+
+/* ---- Printing always plain — never glass (founder rule) ---------------- */
+@media print {
+  html.glass body { background: #fff !important; }
+  html.glass .bg-white,
+  html.glass aside,
+  html.glass header,
+  html.glass input, html.glass select, html.glass textarea {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background-color: #fff !important;
+  }
+  html.glass .rounded-2xl.bg-white::before { display: none; }
+}
+
+/* ===========================================================================
+   CUSTOM HIGH-CRAFT SCROLLBARS (For a sleek Apple/Linear appearance on Windows)
+   Replaces default clunky, thick Windows scrollbars with thin, elegant,
+   rounded elements that blend seamlessly with Liquid Glass.
+   ======================================================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.45);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ---- Apple Dynamic Island Bloom animation ------------------------------ */
+@keyframes island-bloom {
+  0% {
+    transform: translate(-50%, -18px) scale(0.6);
+    opacity: 0;
+    filter: blur(5px);
+  }
+  30% {
+    filter: blur(0);
+  }
+  100% {
+    transform: translate(-50%, 0) scale(1);
+    opacity: 1;
+  }
+}
+.animate-island {
+  animation: island-bloom 360ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ---- Siri WWDC Glow Animation ------------------------------------------ */
+@keyframes siri-shadow-pulse {
+  0% {
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.65), 0 12px 32px -4px rgba(0, 0, 0, 0.5);
+    border-color: rgba(59, 130, 246, 0.45) !important;
+  }
+  33% {
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.65), 0 12px 32px -4px rgba(0, 0, 0, 0.5);
+    border-color: rgba(16, 185, 129, 0.45) !important;
+  }
+  66% {
+    box-shadow: 0 0 14px rgba(236, 72, 153, 0.65), 0 12px 32px -4px rgba(0, 0, 0, 0.5);
+    border-color: rgba(236, 72, 153, 0.45) !important;
+  }
+  100% {
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.65), 0 12px 32px -4px rgba(0, 0, 0, 0.5);
+    border-color: rgba(59, 130, 246, 0.45) !important;
+  }
+}
+.animate-siri {
+  animation: siri-shadow-pulse 4s linear infinite;
+}
+
+/* Global Form Fields Visibility Scale-up (F.1 / G.33) */
+input, select, textarea {
+  font-size: 14.5px !important;
+  font-weight: 500 !important;
+}
+label {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em;
+  color: #475569;
+}
+.dark label {
+  color: #94a3b8;
+}
+
+
+
+
+
+/* ---- I.81 per-device Liquid Glass intensity + green button glass -------- */
+html.glass {
+  --lg-user-blur-boost: 0px;
+  --lg-user-sheen-extra: 0;
+}
+html.glass .bg-white,
+html.glass.dark .bg-navy-900,
+html.glass.dark .bg-navy-800,
+html.glass header,
+html.glass .bg-warm-50,
+html.glass aside,
+html.glass .fixed .rounded-2xl.bg-white,
+html.glass.dark .fixed .rounded-2xl.bg-navy-900 {
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur) + var(--lg-user-blur-boost))) saturate(var(--lg-sat));
+  backdrop-filter: blur(calc(var(--lg-blur) + var(--lg-user-blur-boost))) saturate(var(--lg-sat));
+}
+html.glass .rounded-2xl.bg-white::before,
+html.glass.dark .rounded-2xl.bg-navy-900::before {
+  opacity: calc(0.12 + var(--lg-user-sheen-extra));
+}
+html.glass[data-liquid="1"] .rounded-2xl.bg-white::before { opacity: var(--lg-user-sheen-extra); }
+html.glass[data-liquid="3"] .rounded-2xl.bg-white::before { opacity: calc(0.22 + var(--lg-user-sheen-extra)); }
+
+html.glass button.bg-green-500\/80,
+html.glass button.bg-green-500,
+html.glass .bg-green-500,
+html.glass .bg-green-600 {
+  background-image:
+    linear-gradient(135deg, rgba(255,255,255,0.28), rgba(255,255,255,0.04) 38%, rgba(0,0,0,0.08)),
+    linear-gradient(90deg, rgba(31,157,95,0.88), rgba(47,185,118,0.78));
+  -webkit-backdrop-filter: blur(calc(12px + var(--lg-user-blur-boost))) saturate(170%);
+  backdrop-filter: blur(calc(12px + var(--lg-user-blur-boost))) saturate(170%);
+  border-color: rgba(255,255,255,0.42) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.45),
+    0 12px 28px -14px rgba(31,157,95,0.78),
+    0 1px 1px rgba(28,39,64,0.10);
+}
+html.glass button.bg-green-500\/80:hover,
+html.glass button.bg-green-500:hover,
+html.glass .bg-green-500:hover,
+html.glass .bg-green-600:hover {
+  background-image:
+    linear-gradient(135deg, rgba(255,255,255,0.34), rgba(255,255,255,0.08) 38%, rgba(0,0,0,0.10)),
+    linear-gradient(90deg, rgba(31,157,95,0.96), rgba(47,185,118,0.90));
+}
+
+
+/* I.20 — full-screen overlay blur reliability.
+   Any modal/drawer/backdrop using fixed inset-0 should cover the full viewport,
+   including mobile dynamic viewport changes and notched devices. */
+.fixed.inset-0 {
+  width: 100vw;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.fixed.inset-0 > .absolute.inset-0 {
+  width: 100vw;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* I.25 — dashboard metric cards: subtle depth, tiny light gradients, readable glass.
+   Reflection is intentionally low so cards do not look shiny or noisy. */
+.dashboard-metric-card {
+  background-image:
+    radial-gradient(28rem 12rem at 92% 0%, rgba(31,157,95,0.07), transparent 45%),
+    linear-gradient(135deg, rgba(255,255,255,0.72), rgba(255,255,255,0.46));
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur, 16px) + 2px)) saturate(150%);
+  backdrop-filter: blur(calc(var(--lg-blur, 16px) + 2px)) saturate(150%);
+}
+html.glass .dashboard-metric-card::before,
+html.glass.dark .dashboard-metric-card::before {
+  opacity: 0.045 !important;
+  animation-duration: 22s !important;
+}
+html.glass.dark .dashboard-metric-card {
+  background-image:
+    radial-gradient(28rem 12rem at 92% 0%, rgba(31,157,95,0.10), transparent 45%),
+    linear-gradient(135deg, rgba(15,26,45,0.78), rgba(15,26,45,0.52));
+}
+
+
+/* I.36 — desktop readability lift. Phone scale stays unchanged; laptop/desktop
+   receives a gentle type and icon lift without changing layouts. */
+@media (min-width: 1024px) {
+  html { font-size: 16.5px; }
+  .lucide { stroke-width: 1.85; }
+  input, select, textarea { font-size: 15.25px !important; }
+}

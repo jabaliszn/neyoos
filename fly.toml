@@ -1,0 +1,20 @@
+# NEYO background worker on Fly.io (A.19.3).
+# Rename `app` after `fly launch` creates your app. The worker has NO public
+# HTTP service — it just drains the BullMQ queue, so there are no [[services]].
+# Set secrets with:  fly secrets set REDIS_URL=... DATABASE_URL=...
+app = "neyo-worker"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile.worker"
+
+[env]
+  NODE_ENV = "production"
+
+# A single always-on worker machine. Scale with `fly scale count N`.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[processes]
+  worker = "npx tsx scripts/worker.ts"

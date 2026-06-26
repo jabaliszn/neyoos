@@ -1,0 +1,58 @@
+# NEYO — Deploy the web app to Vercel on push to main (A.19.2)
+# Requires repo secrets (Settings → Secrets and variables → Actions):
+#   VERCEL_TOKEN        — from https://vercel.com/account/tokens
+#   VERCEL_ORG_ID       — `vercel link` writes it to .vercel/project.json
+#   VERCEL_PROJECT_ID   — same file
+# Until those secrets exist this job is skipped (the `if` guard below), so the
+# repo stays green before you connect Vercel.
+name: Deploy Web (Vercel)
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Vercel production deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Only run once the Vercel token secret is configured.
+    if: ${{ vars.ENABLE_VERCEL_DEPLOY == 'true' }}
+
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Apply database migrations (production)
+        # A.19.5 — migrations auto-applied before the new build goes live.
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          npm ci
+          npm run migrate:deploy
+
+      - name: Build (Vercel)
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy prebuilt to production
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

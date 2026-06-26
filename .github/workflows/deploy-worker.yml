@@ -1,0 +1,39 @@
+# NEYO — Deploy the background worker to Fly.io on push to main (A.19.3)
+# Requires repo secret FLY_API_TOKEN (`fly tokens create deploy`).
+# Skipped until you enable it (repo variable ENABLE_FLY_DEPLOY=true), so the
+# repo stays green before Fly is connected.
+name: Deploy Worker (Fly.io)
+
+on:
+  push:
+    branches: [main]
+    # Only redeploy the worker when relevant files change.
+    paths:
+      - "scripts/worker.ts.example"
+      - "src/lib/jobs/**"
+      - "prisma/**"
+      - "Dockerfile.worker"
+      - "fly.toml"
+
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Fly.io worker deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ vars.ENABLE_FLY_DEPLOY == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

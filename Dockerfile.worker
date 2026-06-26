@@ -1,0 +1,25 @@
+# NEYO background worker image (A.19.3) — deployed to Fly.io as its own process,
+# separate from the Vercel-hosted web app. Drains the BullMQ "neyo-jobs" queue
+# (A.12) backed by Redis. Needs REDIS_URL + DATABASE_URL at runtime.
+FROM node:20-slim AS base
+WORKDIR /app
+
+# OpenSSL is required by Prisma's query engine on slim images.
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Install deps (incl. the queue libs the worker needs but the web app keeps optional).
+COPY package*.json ./
+RUN npm ci
+RUN npm i bullmq ioredis
+
+# App source.
+COPY . .
+
+# Promote the example worker to the runnable entrypoint + generate Prisma client.
+RUN cp scripts/worker.ts.example scripts/worker.ts
+RUN npx prisma generate
+
+ENV NODE_ENV=production
+
+# The worker is a long-running process (no HTTP port).
+CMD ["npx", "tsx", "scripts/worker.ts"]

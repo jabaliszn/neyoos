@@ -1,0 +1,64 @@
+# NEYO — Continuous Integration (A.19.1)
+# Runs on every pull request and on pushes to main. This is the gate that
+# branch protection requires (A.19.4): a PR can't merge unless "CI / build"
+# passes. No deploy here — see deploy-web.yml / deploy-worker.yml.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref (saves CI minutes).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Typecheck, tests & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # CI uses SQLite (same as dev) so no DB service is needed. Production runs
+    # Postgres; migrations are validated below and applied at deploy time.
+    env:
+      DATABASE_URL: "file:./dev.db"
+      # A.2.7 envelope encryption needs a key even in CI (any base64 32 bytes).
+      NEYO_MASTER_KEK: "Y2lDSUNJX2NpX2tleV8zMmJ5dGVzX2Zvcl9jaV9vbmx5MDA="
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Apply migrations (CI database)
+        run: npm run migrate:deploy
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Role & isolation tests
+        run: npm run test:roles
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
