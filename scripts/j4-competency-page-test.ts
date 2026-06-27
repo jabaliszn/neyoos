@@ -1,0 +1,25 @@
+import fs from "node:fs";
+function assert(condition: unknown, message: string) { if (!condition) throw new Error(message); console.log(`✓ ${message}`); }
+const page = fs.readFileSync("src/app/(app)/competencies/page.tsx", "utf8");
+const client = fs.readFileSync("src/components/competencies/competency-framework-client.tsx", "utf8");
+const nav = fs.readFileSync("src/lib/core/navigation.ts", "utf8");
+assert(page.includes("CompetenciesPage"), "competencies page exists");
+assert(page.includes("requirePageUser"), "page requires signed-in user");
+assert(page.includes("effectivePermissionsForUser"), "page uses effective permissions");
+assert(page.includes("academics.view") && page.includes("student.view"), "page allows academic/student-view readers");
+assert(page.includes("<CompetencyFrameworkClient />"), "page mounts connected competency client");
+assert(client.includes('fetch("/api/competencies"'), "client fetches real competency board API");
+assert(client.includes('heatmap=1'), "client fetches real heatmap API");
+assert(client.includes('studentId='), "client fetches real student summary API");
+assert(client.includes('method: "POST"'), "client posts real competency mutations");
+assert(client.includes("seed_defaults"), "client can seed default competency framework");
+assert(client.includes("create_group"), "client can create competency groups");
+assert(client.includes("create_competency"), "client can create competencies");
+assert(client.includes("record_evidence"), "client can record competency evidence");
+assert(client.includes("CompetencyLoadingState"), "client renders loading state");
+assert(client.includes("CompetencyErrorState"), "client renders error state");
+assert(client.includes("CompetencyEmptyState"), "client renders empty state");
+assert(client.includes("CompetencyGroupList"), "client renders populated groups");
+assert(nav.includes('label: "Competencies"') && nav.includes('href: "/competencies"'), "sidebar navigation includes Competencies link");
+assert(!/\bAI\b/.test(page + client), "page/client contain no banned product-copy word");
+console.log("\nJ.4 Chunk 6 competency page test passed.");

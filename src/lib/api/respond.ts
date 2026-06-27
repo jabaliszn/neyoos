@@ -29,6 +29,9 @@ import { AdmissionError } from "@/lib/services/admission.service";
 import { EntranceExamPaperError } from "@/lib/services/entrance-exam.service";
 import { StaffAttendanceError } from "@/lib/services/staff-attendance.service";
 import { AcademicsError } from "@/lib/services/academics.service";
+import { CurriculumError } from "@/lib/services/curriculum.service";
+import { AssessmentError } from "@/lib/services/assessment.service";
+import { CompetencyError } from "@/lib/services/competency.service";
 import { ExamError } from "@/lib/services/exam.service";
 import { CbcError } from "@/lib/services/cbc.service";
 import { FinanceError } from "@/lib/services/finance.service";
@@ -242,6 +245,34 @@ export function handleError(err: unknown) {
   // Academics (B.4).
   if (err instanceof AcademicsError) {
     const status = err.code === "NOT_FOUND" ? 404 : err.code === "DUPLICATE" ? 409 : err.code === "FORBIDDEN" ? 403 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // Part J.2 curriculum engine.
+  if (err instanceof CurriculumError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 :
+      err.code === "DUPLICATE" ? 409 :
+      err.code === "FORBIDDEN" ? 403 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // Part J.3 flexible assessment engine.
+  if (err instanceof AssessmentError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 :
+      err.code === "DUPLICATE" ? 409 :
+      err.code === "FORBIDDEN" ? 403 :
+      err.code === "STATE" ? 409 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // Part J.4 competency framework.
+  if (err instanceof CompetencyError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 :
+      err.code === "DUPLICATE" ? 409 :
+      err.code === "FORBIDDEN" ? 403 : 422;
     return fail(err.code, err.message, status);
   }
 

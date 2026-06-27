@@ -45,7 +45,7 @@ model Tenant {
   // Calendar preferences (A.17.3): opt-in to showing religious moments.
   showReligiousHolidays Boolean @default(true)
   libraryFinesEnabled   Boolean @default(true) // customizable switch for late book returns fines (H.3)
-  libraryFinePerDayKes Int     @default(10) // customizable late-return fine amount per chargeable day
+  libraryFinePerDayKes  Int     @default(10) // customizable late-return fine amount per chargeable day
 
   // School Profile & Branding (G.9). Used across receipts/reports/ID cards and
   // (later) the public subdomain landing site (G.11).
@@ -61,7 +61,7 @@ model Tenant {
   // Joining requirements MASTER list (G.9): JSON array of
   // { label, category, quantity?, mandatory } shown to new parents at admission.
   joiningRequirements String?
-  documentDesignJson String? // I.42 school-owned document/ID design defaults
+  documentDesignJson  String? // I.42 school-owned document/ID design defaults
   // G.17 geofence for GPS-verified staff clock-in (null = geofence off).
   gpsLat              Float?
   gpsLng              Float?
@@ -96,7 +96,7 @@ model Tenant {
   printStationMode String @default("AUTO")
 
   // H.5 Cafeteria Table Allocation: default number of seats per dining table.
-  cafeteriaTableSize Int @default(8)
+  cafeteriaTableSize Int    @default(8)
   cafeteriaMealModel String @default("HYBRID") // HYBRID | CARDS_ONLY | BOARDING_GROUPS | NO_CARDS
   cafeteriaMealScope String @default("ALL") // ALL | LUNCH | SUPPER
 
@@ -115,136 +115,149 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users                    User[]
-  idSequences              IdSequence[]
-  auditLogs                AuditLog[]
-  modules                  TenantModule[]
-  subscription             Subscription?
-  usageCounters            UsageCounter[]
-  paymentCredential        PaymentCredential?
-  payments                 Payment[]
-  notifications            Notification[]
-  webPushSubscriptions     WebPushSubscription[]
-  messageAcknowledgements  MessageAcknowledgement[]
-  messageDeliveryReports   MessageDeliveryReport[]
-  intercomCalls            IntercomCall[]
-  notificationTemplates    NotificationTemplate[]
-  conversations            Conversation[]
-  storedFiles              StoredFile[]
-  storageProvider          TenantStorageProvider?
-  storageUsageSnapshots    StorageUsageSnapshot[]
-  documentVerifications    DocumentVerification[]
-  apiKeys                  ApiKey[]
-  webhookSubscriptions     WebhookSubscription[]
-  webhookDeliveries        WebhookDelivery[]
-  calendarEvents           CalendarEvent[]
-  visitorLogs              VisitorLog[]
-  admissionInquiries       AdmissionInquiry[]
-  phoneMessages            PhoneMessage[]
-  schoolClasses            SchoolClass[]
-  students                 Student[]
-  guardians                Guardian[]
-  studentImports           StudentImport[]
-  studentTransfers         StudentTransfer[]
-  attendanceRecords        AttendanceRecord[]
-  principalDelegationTasks PrincipalDelegationTask[]
-  promotionRuns            PromotionRun[]
-  admissionApplications    AdmissionApplication[]
-  staffAttendance          StaffAttendance[]
-  departments              Department[]
-  subjects                 Subject[]
-  academicTerms            AcademicTerm[]
-  timetableSlots           TimetableSlot[]
-  dutyRosterEntries        DutyRosterEntry[]
-  lessonPlans              LessonPlan[]
-  homework                 Homework[]
-  classNotes               ClassNote[]
-  homeworkSubmissions      HomeworkSubmission[]
-  quizzes                  Quiz[]
-  forumThreads             ForumThread[]
-  bulkMessages             BulkMessage[]
-  teacherCommsApprovals    TeacherCommsApprovalRequest[]
-  libraryBooks             LibraryBook[]
-  bookIssues               BookIssue[]
-  hostels                  Hostel[]
-  hostelAttendance         HostelAttendance[]
-  transportRoutes          TransportRoute[]
-  drivers                  Driver[]
-  vehicles                 Vehicle[]
-  gpsBusLocations          GpsBusLocation[]
-  cctvCameras              CctvCamera[]
+  users                     User[]
+  idSequences               IdSequence[]
+  auditLogs                 AuditLog[]
+  modules                   TenantModule[]
+  subscription              Subscription?
+  usageCounters             UsageCounter[]
+  paymentCredential         PaymentCredential?
+  payments                  Payment[]
+  notifications             Notification[]
+  webPushSubscriptions      WebPushSubscription[]
+  messageAcknowledgements   MessageAcknowledgement[]
+  messageDeliveryReports    MessageDeliveryReport[]
+  intercomCalls             IntercomCall[]
+  notificationTemplates     NotificationTemplate[]
+  conversations             Conversation[]
+  storedFiles               StoredFile[]
+  storageProvider           TenantStorageProvider?
+  storageUsageSnapshots     StorageUsageSnapshot[]
+  documentVerifications     DocumentVerification[]
+  apiKeys                   ApiKey[]
+  webhookSubscriptions      WebhookSubscription[]
+  webhookDeliveries         WebhookDelivery[]
+  calendarEvents            CalendarEvent[]
+  visitorLogs               VisitorLog[]
+  admissionInquiries        AdmissionInquiry[]
+  phoneMessages             PhoneMessage[]
+  schoolClasses             SchoolClass[]
+  students                  Student[]
+  guardians                 Guardian[]
+  studentImports            StudentImport[]
+  studentTransfers          StudentTransfer[]
+  attendanceRecords         AttendanceRecord[]
+  principalDelegationTasks  PrincipalDelegationTask[]
+  promotionRuns             PromotionRun[]
+  admissionApplications     AdmissionApplication[]
+  staffAttendance           StaffAttendance[]
+  departments               Department[]
+  subjects                  Subject[]
+  academicTerms             AcademicTerm[]
+  curricula                 Curriculum[]
+  educationLevels           EducationLevel[]
+  gradeBands                GradeBand[]
+  learningAreas             LearningArea[]
+  timetableSlots            TimetableSlot[]
+  dutyRosterEntries         DutyRosterEntry[]
+  lessonPlans               LessonPlan[]
+  homework                  Homework[]
+  classNotes                ClassNote[]
+  homeworkSubmissions       HomeworkSubmission[]
+  quizzes                   Quiz[]
+  forumThreads              ForumThread[]
+  bulkMessages              BulkMessage[]
+  teacherCommsApprovals     TeacherCommsApprovalRequest[]
+  libraryBooks              LibraryBook[]
+  bookIssues                BookIssue[]
+  hostels                   Hostel[]
+  hostelAttendance          HostelAttendance[]
+  transportRoutes           TransportRoute[]
+  drivers                   Driver[]
+  vehicles                  Vehicle[]
+  gpsBusLocations           GpsBusLocation[]
+  cctvCameras               CctvCamera[]
   hardwareDeviceConnections HardwareDeviceConnection[]
-  stores                   Store[]
-  assets                   Asset[]
-  mealPlanEntries          MealPlanEntry[]
-  mealCards                MealCard[]
-  cafeteriaTables          CafeteriaTable[]
-  cafeteriaQueueEntries    CafeteriaQueueEntry[]
-  uniformOrders            UniformOrder[]
-  uniformSizes             UniformSize[]
-  assetMaintenance         AssetMaintenance[]
-  suppliers                Supplier[]
-  supplierContracts        SupplierContract[]
-  purchaseRequests         PurchaseRequest[]
-  purchaseQuotes           PurchaseQuote[]
-  purchaseOrders           PurchaseOrder[]
-  expenseCategories        ExpenseCategory[]
-  costCenters              CostCenter[]
-  expenses                 Expense[]
-  disciplineIncidents      DisciplineIncident[]
-  suspensions              Suspension[]
-  counselingNotes          CounselingNote[]
-  studentMedical           StudentMedical[]
-  clinicVisits             ClinicVisit[]
-  medicationPlans          MedicationPlan[]
-  printJobs                PrintJob[]
-  printApprovalRequests    PrintApprovalRequest[]
-  gatePasses               GatePass[]
-  pickupPersons            PickupPerson[]
-  altPickupAuthorizations  AltPickupAuthorization[]
-  ownerApprovalRequests    OwnerApprovalRequest[]
-  panicAlerts              PanicAlert[]
-  exams                    Exam[]
-  examResults              ExamResult[]
-  examReleaseApprovals     ExamReleaseApprovalRequest[]
-  cbcStrands               CbcStrand[]
-  cbcAssessments           CbcAssessment[]
-  feeStructures            FeeStructure[]
-  invoices                 Invoice[]
-  staffSalaries            StaffSalary[]
-  payrollRuns              PayrollRun[]
-  staffProfiles            StaffProfile[]
-  leaveRequests            LeaveRequest[]
-  jobPostings              JobPosting[]
-  appraisals               Appraisal[]
-  disciplinaryRecords      DisciplinaryRecord[]
-  trainingRecords          TrainingRecord[]
-  termPulses               TermPulse[]
-  savedViews               SavedView[]
-  teacherSubjects          TeacherSubject[]
-  classSubjectNeeds        ClassSubjectNeed[]
-  timetableConfigs         TimetableConfig[]
-  onlineClassSessions      OnlineClassSession[]
-  onlineClassParticipants  OnlineClassParticipant[]
-  onlineClassSignals       OnlineClassSignal[]
-  onlineClassQuestions     OnlineClassQuestion[]
-  learningVideos           LearningVideo[]
-  learningVideoSessions    LearningVideoSession[]
-  classVoiceRooms          ClassVoiceRoom[]
-  classVoiceParticipants   ClassVoiceParticipant[]
-  classVoiceSignals        ClassVoiceSignal[]
-  syllabusTopics           SyllabusTopic[]
-  examTimetableSlots       ExamTimetableSlot[]
-  examMaterialRecords      ExamMaterialRecord[]
-  promisesToPay            PromiseToPay[]
-  reportCardDayCheckIns    ReportCardDayCheckIn[]
-  newsPosts                NewsPost[]
-  publicSiteSettings       PublicSiteSettings?
-  publicSiteLeaders        PublicSiteLeader[]
-  publicSiteTestimonials   PublicSiteTestimonial[]
-  publicSiteGalleryImages  PublicSiteGalleryImage[]
-  publicSiteActivities     PublicSiteActivity[]
-  entranceExamPapers       EntranceExamPaper[] // Added for entrance exam papers (H.3)
+  stores                    Store[]
+  assets                    Asset[]
+  mealPlanEntries           MealPlanEntry[]
+  mealCards                 MealCard[]
+  cafeteriaTables           CafeteriaTable[]
+  cafeteriaQueueEntries     CafeteriaQueueEntry[]
+  uniformOrders             UniformOrder[]
+  uniformSizes              UniformSize[]
+  assetMaintenance          AssetMaintenance[]
+  suppliers                 Supplier[]
+  supplierContracts         SupplierContract[]
+  purchaseRequests          PurchaseRequest[]
+  purchaseQuotes            PurchaseQuote[]
+  purchaseOrders            PurchaseOrder[]
+  expenseCategories         ExpenseCategory[]
+  costCenters               CostCenter[]
+  expenses                  Expense[]
+  disciplineIncidents       DisciplineIncident[]
+  suspensions               Suspension[]
+  counselingNotes           CounselingNote[]
+  studentMedical            StudentMedical[]
+  clinicVisits              ClinicVisit[]
+  medicationPlans           MedicationPlan[]
+  printJobs                 PrintJob[]
+  printApprovalRequests     PrintApprovalRequest[]
+  gatePasses                GatePass[]
+  pickupPersons             PickupPerson[]
+  altPickupAuthorizations   AltPickupAuthorization[]
+  ownerApprovalRequests     OwnerApprovalRequest[]
+  panicAlerts               PanicAlert[]
+  exams                     Exam[]
+  examResults               ExamResult[]
+  examReleaseApprovals      ExamReleaseApprovalRequest[]
+  assessmentTypes           AssessmentType[]
+  assessmentPlans           AssessmentPlan[]
+  assessmentRecords         AssessmentRecord[]
+  assessmentEvidence        AssessmentEvidence[]
+  competencyGroups          CompetencyGroup[]
+  competencies              Competency[]
+  competencyEvidence        CompetencyEvidence[]
+  cbcStrands                CbcStrand[]
+  cbcAssessments            CbcAssessment[]
+  feeStructures             FeeStructure[]
+  invoices                  Invoice[]
+  staffSalaries             StaffSalary[]
+  payrollRuns               PayrollRun[]
+  staffProfiles             StaffProfile[]
+  leaveRequests             LeaveRequest[]
+  jobPostings               JobPosting[]
+  appraisals                Appraisal[]
+  disciplinaryRecords       DisciplinaryRecord[]
+  trainingRecords           TrainingRecord[]
+  termPulses                TermPulse[]
+  savedViews                SavedView[]
+  teacherSubjects           TeacherSubject[]
+  classSubjectNeeds         ClassSubjectNeed[]
+  timetableConfigs          TimetableConfig[]
+  onlineClassSessions       OnlineClassSession[]
+  onlineClassParticipants   OnlineClassParticipant[]
+  onlineClassSignals        OnlineClassSignal[]
+  onlineClassQuestions      OnlineClassQuestion[]
+  learningVideos            LearningVideo[]
+  learningVideoSessions     LearningVideoSession[]
+  classVoiceRooms           ClassVoiceRoom[]
+  classVoiceParticipants    ClassVoiceParticipant[]
+  classVoiceSignals         ClassVoiceSignal[]
+  syllabusTopics            SyllabusTopic[]
+  examTimetableSlots        ExamTimetableSlot[]
+  examMaterialRecords       ExamMaterialRecord[]
+  promisesToPay             PromiseToPay[]
+  reportCardDayCheckIns     ReportCardDayCheckIn[]
+  newsPosts                 NewsPost[]
+  publicSiteSettings        PublicSiteSettings?
+  publicSiteLeaders         PublicSiteLeader[]
+  publicSiteTestimonials    PublicSiteTestimonial[]
+  publicSiteGalleryImages   PublicSiteGalleryImage[]
+  publicSiteActivities      PublicSiteActivity[]
+  entranceExamPapers        EntranceExamPaper[] // Added for entrance exam papers (H.3)
+
+  @@index([osKey])
 }
 
 // B.9 extended staff record (User holds login/role; this holds HR facts).
@@ -491,6 +504,8 @@ model CbcStrand {
   id              String          @id @default(cuid())
   tenantId        String
   tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  learningAreaId  String?
+  learningArea    LearningArea?   @relation(fields: [learningAreaId], references: [id], onDelete: SetNull)
   subjectId       String
   name            String
   learningOutcome String?
@@ -587,6 +602,340 @@ model ExamResult {
   @@index([tenantId, examId, studentId])
 }
 
+// =============================================================================
+// PART J.3 — Flexible Assessment Engine foundation
+// =============================================================================
+
+// A configurable assessment type for a tenant. This is not a replacement for
+// B.5 Exam/CAT; it is a flexible catalog that can represent projects, practicals,
+// oral work, observations, portfolio tasks, peer/self assessment and continuous
+// assessment while still allowing formal EXAM/CAT types to coexist.
+model AssessmentType {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key                String // EXAM, CAT, PROJECT, PRACTICAL, ORAL, OBSERVATION, PORTFOLIO, PEER, SELF, CONTINUOUS, CUSTOM...
+  name               String
+  description        String?
+  category           String   @default("SCHOOL_DEFINED") // FORMAL | PRACTICAL | PORTFOLIO | OBSERVATION | SCHOOL_DEFINED
+  scoreMode          String   @default("MIXED") // MARKS | RUBRIC | NARRATIVE | MIXED
+  defaultMaxMarks    Int?
+  defaultWeight      Int      @default(0) // percentage weight suggestion; plan can override
+  evidenceAllowed    Boolean  @default(true)
+  requiresModeration Boolean  @default(true)
+  isSystem           Boolean  @default(false)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  plans AssessmentPlan[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId, active])
+  @@index([tenantId, category])
+}
+
+// A planned assessment event or continuous-assessment slot. It links to the
+// J.2 curriculum engine and existing academic records by ID instead of creating
+// a duplicate class/subject/exam module.
+model AssessmentPlan {
+  id               String         @id @default(cuid())
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assessmentTypeId String
+  assessmentType   AssessmentType @relation(fields: [assessmentTypeId], references: [id], onDelete: Cascade)
+
+  // Optional compatibility links to existing/J.2 records. Kept as scalar IDs so
+  // J.3 can evolve without forcing back-relations into every mature module.
+  curriculumId     String?
+  educationLevelId String?
+  gradeBandId      String?
+  learningAreaId   String?
+  subjectId        String?
+  classId          String?
+  academicTermId   String?
+  examId           String? // optional bridge to B.5 formal Exam when needed later
+  homeworkId       String? // optional bridge to B.12/B.13 homework
+  quizId           String? // optional bridge to B.13 quiz
+  cbcStrandId      String? // optional bridge to B.6 CBC strand
+
+  year             Int
+  term             Int
+  title            String
+  description      String?
+  instructions     String?
+  weight           Int      @default(0) // 0..100; service validation comes in Chunk 2
+  maxMarks         Int?
+  dueDate          String? // YYYY-MM-DD
+  rubricJson       String? // temporary descriptor storage until J.5 configurable Rubric model lands
+  status           String   @default("DRAFT") // DRAFT | ACTIVE | MODERATION | RELEASED | ARCHIVED
+  visibleToParents Boolean  @default(false)
+  createdById      String
+  createdByName    String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  records AssessmentRecord[]
+
+  @@index([tenantId, year, term])
+  @@index([tenantId, assessmentTypeId])
+  @@index([tenantId, classId])
+  @@index([tenantId, subjectId])
+  @@index([tenantId, learningAreaId])
+  @@index([tenantId, status])
+}
+
+// One learner's result/observation for an AssessmentPlan. Supports marks,
+// rubric levels and narrative comments in one compatible ledger. Formal
+// ExamResult remains the formal exam source of truth; this record can link back
+// via sourceModule/sourceId when a later chunk imports or syncs outcomes.
+model AssessmentRecord {
+  id              String         @id @default(cuid())
+  tenantId        String
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId          String
+  plan            AssessmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  studentId       String
+  scoreMarks      Float?
+  scorePct        Int?
+  rubricLevel     Int?
+  rubricCode      String? // e.g. EE, ME, AE, BE or a school-defined rubric code
+  narrative       String?
+  status          String         @default("DRAFT") // DRAFT | SCORED | SUBMITTED | MODERATED | RELEASED
+  sourceModule    String? // EXAM | CBC | LMS_HOMEWORK | LMS_QUIZ | MANUAL | PORTFOLIO
+  sourceId        String?
+  assessedById    String
+  assessedByName  String
+  assessedAt      DateTime       @default(now())
+  moderatedById   String?
+  moderatedByName String?
+  moderatedAt     DateTime?
+  releasedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  evidence AssessmentEvidence[]
+
+  @@unique([tenantId, planId, studentId])
+  @@index([tenantId, studentId])
+  @@index([tenantId, planId])
+  @@index([tenantId, status])
+  @@index([tenantId, sourceModule, sourceId])
+}
+
+// Evidence attached to a flexible assessment record. File uploads must use the
+// existing encrypted Storage Vault path (FileUpload -> /api/files/encrypted) in
+// later UI/service chunks; this table stores the resulting file reference.
+model AssessmentEvidence {
+  id             String           @id @default(cuid())
+  tenantId       String
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recordId       String
+  record         AssessmentRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  storedFileId   String?
+  fileUrl        String?
+  fileName       String?
+  contentType    String?
+  evidenceType   String           @default("FILE") // FILE | LINK | NOTE | PHOTO | VIDEO | CERTIFICATE
+  note           String?
+  uploadedById   String
+  uploadedByName String
+  createdAt      DateTime         @default(now())
+
+  @@index([tenantId, recordId])
+  @@index([tenantId, storedFileId])
+}
+
+// =============================================================================
+// PART J.4 — Competency Framework foundation
+// =============================================================================
+
+// A configurable competency group inside a curriculum, e.g. "Core CBC
+// Competencies" or a private-school custom group. Kept tenant-owned and
+// curriculum-linked without hardcoding CBC names.
+model CompetencyGroup {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  curriculumId String?
+  name         String
+  code         String
+  description  String?
+  sequence     Int      @default(1)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  competencies Competency[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, curriculumId])
+  @@index([tenantId, active])
+}
+
+// A configurable competency, e.g. Communication, Critical Thinking,
+// Creativity, Citizenship, Digital Literacy or a school-defined skill.
+model Competency {
+  id             String           @id @default(cuid())
+  tenantId       String
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId        String?
+  group          CompetencyGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  curriculumId   String?
+  learningAreaId String?
+  name           String
+  code           String
+  description    String?
+  sequence       Int              @default(1)
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  evidence CompetencyEvidence[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, groupId])
+  @@index([tenantId, curriculumId])
+  @@index([tenantId, learningAreaId])
+  @@index([tenantId, active])
+}
+
+// One evidence point for one learner on one competency. This can be sourced
+// from CBC observations, J.3 AssessmentRecord rows, LMS work, manual teacher
+// observation, clubs or a future portfolio item without duplicating those source
+// modules. Parent visibility/service rules come in later chunks.
+model CompetencyEvidence {
+  id                 String     @id @default(cuid())
+  tenantId           String
+  tenant             Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  competencyId       String
+  competency         Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+  studentId          String
+  sourceModule       String     @default("MANUAL") // CBC | ASSESSMENT | LMS | MANUAL | CLUB | PORTFOLIO
+  sourceId           String?
+  assessmentRecordId String?
+  cbcAssessmentId    String?
+  level              Int? // 1..4 when rubric-like
+  scorePct           Int? // 0..100 when percentage-like
+  narrative          String?
+  evidenceDate       String // YYYY-MM-DD
+  recordedById       String
+  recordedByName     String
+  approved           Boolean    @default(false)
+  visibleToParents   Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([tenantId, competencyId])
+  @@index([tenantId, studentId])
+  @@index([tenantId, sourceModule, sourceId])
+  @@index([tenantId, assessmentRecordId])
+  @@index([tenantId, cbcAssessmentId])
+  @@index([tenantId, visibleToParents])
+}
+
+// =============================================================================
+// PART J.2 — Curriculum Engine foundation
+// =============================================================================
+
+// A configurable curriculum/version for a tenant. This keeps School OS future-proof:
+// CBC, 8-4-4, Cambridge, Montessori, private-school custom frameworks, and future
+// Kenya curriculum updates are records, not hardcoded branches.
+model Curriculum {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String // e.g. "CBC Kenya", "8-4-4 Legacy", "Cambridge Lower Secondary"
+  country       String   @default("Kenya")
+  context       String? // e.g. "Junior School", "Senior School", "Private international"
+  activeVersion String   @default("v1")
+  effectiveFrom String? // YYYY-MM-DD
+  effectiveTo   String? // YYYY-MM-DD, null = still active
+  isActive      Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  educationLevels EducationLevel[]
+  gradeBands      GradeBand[]
+  learningAreas   LearningArea[]
+  subjects        Subject[]
+  classes         SchoolClass[]
+  academicTerms   AcademicTerm[]
+
+  @@unique([tenantId, name, activeVersion])
+  @@index([tenantId, isActive])
+}
+
+// A broad education stage inside a curriculum, e.g. Preschool, Primary, Junior,
+// Senior, Forms, or a custom school-defined stage. Kept configurable so NEYO is
+// not locked to CBC names only.
+model EducationLevel {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  curriculumId String
+  curriculum   Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  name         String // "Junior School", "Senior School", "Forms", "Primary"
+  levelKey     String // stable key: preschool | primary | junior | senior | custom
+  sequence     Int        @default(1)
+  description  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  gradeBands GradeBand[]
+
+  @@unique([tenantId, curriculumId, name])
+  @@index([tenantId, curriculumId, sequence])
+}
+
+// A configurable grade/class band name, e.g. PP1, Grade 7, Form 2, Year 9. This
+// maps existing SchoolClass.level values without replacing SchoolClass.
+model GradeBand {
+  id               String          @id @default(cuid())
+  tenantId         String
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  curriculumId     String
+  curriculum       Curriculum      @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  educationLevelId String?
+  educationLevel   EducationLevel? @relation(fields: [educationLevelId], references: [id], onDelete: SetNull)
+  name             String // "Grade 7", "Form 2", "Year 9"
+  shortName        String? // "G7", "F2"
+  sequence         Int             @default(1)
+  entryAge         Int?
+  exitAge          Int?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  classes SchoolClass[]
+
+  @@unique([tenantId, curriculumId, name])
+  @@index([tenantId, curriculumId, sequence])
+  @@index([tenantId, educationLevelId])
+}
+
+// A curriculum learning area. Existing Subject rows can map here, and CBC strands
+// can also point here, allowing future competencies/portfolio items to connect
+// to the curriculum without duplicating Subjects.
+model LearningArea {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  curriculumId String
+  curriculum   Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  name         String // "Mathematics", "Languages", "Integrated Science"
+  code         String // "MAT", "LANG", "ISC"
+  description  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  subjects   Subject[]
+  cbcStrands CbcStrand[]
+
+  @@unique([tenantId, curriculumId, code])
+  @@index([tenantId, curriculumId, name])
+}
+
 // B.4 departments (Languages, Sciences, Humanities...).
 model Department {
   id       String    @id @default(cuid())
@@ -607,6 +956,10 @@ model Subject {
   name           String
   code           String // "MAT", "KIS", "ENG"
   curriculum     String // "CBC" | "8-4-4" | "BOTH"
+  curriculumId   String?
+  curriculumRef  Curriculum?     @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  learningAreaId String?
+  learningArea   LearningArea?   @relation(fields: [learningAreaId], references: [id], onDelete: SetNull)
   departmentId   String?
   department     Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   archived       Boolean         @default(false)
@@ -618,20 +971,25 @@ model Subject {
 
   @@unique([tenantId, code])
   @@index([tenantId])
+  @@index([tenantId, curriculumId])
+  @@index([tenantId, learningAreaId])
 }
 
 // B.4 academic calendar — Kenyan 3-term year.
 model AcademicTerm {
-  id        String  @id @default(cuid())
-  tenantId  String
-  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  year      Int
-  term      Int // 1 | 2 | 3
-  startDate String // YYYY-MM-DD
-  endDate   String
-  current   Boolean @default(false)
+  id           String      @id @default(cuid())
+  tenantId     String
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  curriculumId String?
+  curriculum   Curriculum? @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  year         Int
+  term         Int // 1 | 2 | 3
+  startDate    String // YYYY-MM-DD
+  endDate      String
+  current      Boolean     @default(false)
 
   @@unique([tenantId, year, term])
+  @@index([tenantId, curriculumId])
 }
 
 // I.78 — generated teacher duty-roster timetable.
@@ -1054,22 +1412,21 @@ model TransportRoute {
   @@index([tenantId])
 }
 
-
 // I.47 — hardware connection registry: truthful status, never fake connected.
 model HardwareDeviceConnection {
-  id          String   @id @default(cuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deviceType  String   // GPS | BARCODE | THERMAL_PRINTER | RFID | FINGERPRINT | CCTV | FACE_CAMERA
-  label       String
-  status      String   @default("NOT_CONNECTED") // NOT_CONNECTED | READY_TO_PAIR | CONNECTED | ERROR
-  deviceName  String?
-  lastSeenAt  DateTime?
-  metadataJson String?
-  updatedById String?
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deviceType    String // GPS | BARCODE | THERMAL_PRINTER | RFID | FINGERPRINT | CCTV | FACE_CAMERA
+  label         String
+  status        String    @default("NOT_CONNECTED") // NOT_CONNECTED | READY_TO_PAIR | CONNECTED | ERROR
+  deviceName    String?
+  lastSeenAt    DateTime?
+  metadataJson  String?
+  updatedById   String?
   updatedByName String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([tenantId, deviceType, label])
   @@index([tenantId, deviceType, status])
@@ -1077,18 +1434,18 @@ model HardwareDeviceConnection {
 
 // I.47 — GPS bus tracker feed seam. Tracker hardware posts coordinates here.
 model GpsBusLocation {
-  id          String   @id @default(cuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  vehicleId   String?
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicleId    String?
   vehicleRegNo String?
-  trackerId   String
-  lat         Float
-  lng         Float
-  speedKph    Float?
-  headingDeg  Float?
-  recordedAt  DateTime @default(now())
-  createdAt   DateTime @default(now())
+  trackerId    String
+  lat          Float
+  lng          Float
+  speedKph     Float?
+  headingDeg   Float?
+  recordedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   @@index([tenantId, trackerId, recordedAt])
   @@index([tenantId, vehicleId, recordedAt])
@@ -1096,16 +1453,16 @@ model GpsBusLocation {
 
 // I.47 — CCTV connection seam. Stores camera/NVR endpoints only; no video saved by NEYO.
 model CctvCamera {
-  id          String   @id @default(cuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name        String
-  location    String
-  streamUrl   String?
-  status      String   @default("NOT_CONNECTED")
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String
+  location      String
+  streamUrl     String?
+  status        String    @default("NOT_CONNECTED")
   lastCheckedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([tenantId, name])
   @@index([tenantId, status])
@@ -1933,62 +2290,62 @@ model DocumentVerification {
 // A stored file (A.9). Tenant-owned; key is tenant-prefixed for isolation.
 
 model TenantStorageProvider {
-  id                    String   @id @default(cuid())
-  tenantId              String   @unique
-  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  provider              String   @default("NEYO_MANAGED_OBJECT_STORAGE") // NEYO_MANAGED_OBJECT_STORAGE | GOOGLE_WORKSPACE_MANAGED | GOOGLE_WORKSPACE_BYOS
-  status                String   @default("DESIGN_READY") // DESIGN_READY | READY_TO_CONNECT | CONNECTED | ERROR | DISABLED
-  accountEmail          String?
-  rootFolderId          String?
-  storageLimitBytes     BigInt   @default(16106127360) // 15 GiB starter where available
-  storageUsedBytes      BigInt   @default(0)
-  encryptionMode        String   @default("AES_256_GCM_ENVELOPE")
-  healthStatus          String   @default("NOT_CONNECTED") // NOT_CONNECTED | HEALTHY | WARNING | ERROR
-  lastHealthCheckAt     DateTime?
-  lastUpgradePromptAt   DateTime?
-  upgradePlan           String?
-  notes                 String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  tenantId            String    @unique
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider            String    @default("NEYO_MANAGED_OBJECT_STORAGE") // NEYO_MANAGED_OBJECT_STORAGE | GOOGLE_WORKSPACE_MANAGED | GOOGLE_WORKSPACE_BYOS
+  status              String    @default("DESIGN_READY") // DESIGN_READY | READY_TO_CONNECT | CONNECTED | ERROR | DISABLED
+  accountEmail        String?
+  rootFolderId        String?
+  storageLimitBytes   BigInt    @default(16106127360) // 15 GiB starter where available
+  storageUsedBytes    BigInt    @default(0)
+  encryptionMode      String    @default("AES_256_GCM_ENVELOPE")
+  healthStatus        String    @default("NOT_CONNECTED") // NOT_CONNECTED | HEALTHY | WARNING | ERROR
+  lastHealthCheckAt   DateTime?
+  lastUpgradePromptAt DateTime?
+  upgradePlan         String?
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@index([tenantId, status])
   @@index([provider, healthStatus])
 }
 
 model StorageUsageSnapshot {
-  id                String   @id @default(cuid())
-  tenantId          String
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  provider          String
-  usedBytes         BigInt
-  limitBytes        BigInt
-  percentUsed       Int
-  healthStatus      String
-  actionRequired    String?
-  createdAt         DateTime @default(now())
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider       String
+  usedBytes      BigInt
+  limitBytes     BigInt
+  percentUsed    Int
+  healthStatus   String
+  actionRequired String?
+  createdAt      DateTime @default(now())
 
   @@index([tenantId, createdAt])
   @@index([healthStatus])
 }
 
 model StoredFile {
-  id           String   @id @default(cuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  key          String   @unique // storage object key, e.g. tenants/<id>/uploads/<uuid>.jpg
-  url          String // public/served URL
-  fileName     String
-  contentType  String
-  size         Int // bytes
-  category     String   @default("general") // avatar, attachment, document...
-  provider     String   @default("LOCAL_OR_R2")
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key              String   @unique // storage object key, e.g. tenants/<id>/uploads/<uuid>.jpg
+  url              String // public/served URL
+  fileName         String
+  contentType      String
+  size             Int // bytes
+  category         String   @default("general") // avatar, attachment, document...
+  provider         String   @default("LOCAL_OR_R2")
   providerObjectId String?
-  encrypted    Boolean  @default(false)
-  encryptionMode String?
-  checksumSha256 String?
-  wrappedKeyRef String?
-  uploadedById String
-  createdAt    DateTime @default(now())
+  encrypted        Boolean  @default(false)
+  encryptionMode   String?
+  checksumSha256   String?
+  wrappedKeyRef    String?
+  uploadedById     String
+  createdAt        DateTime @default(now())
 
   @@index([tenantId])
   @@index([category])
@@ -2253,10 +2610,10 @@ model Subscription {
 
 // A payment attempt/record against a subscription (A.5/A.6).
 model SubscriptionPayment {
-  id             String       @id @default(cuid())
-  subscriptionId String
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  tenantId       String
+  id                String       @id @default(cuid())
+  subscriptionId    String
+  subscription      Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  tenantId          String
   amount            Int // KES
   status            String       @default("PENDING") // PENDING | PAID | FAILED
   method            String       @default("central_mpesa_stk")
@@ -2268,9 +2625,9 @@ model SubscriptionPayment {
   resultDesc        String?
   rawCallback       String?
   periodStart       DateTime
-  periodEnd      DateTime
-  createdAt      DateTime     @default(now())
-  paidAt         DateTime?
+  periodEnd         DateTime
+  createdAt         DateTime     @default(now())
+  paidAt            DateTime?
 
   @@index([subscriptionId])
   @@index([tenantId])
@@ -2342,8 +2699,8 @@ model User {
   magicLinks           MagicLink[]
   recoveryCodes        RecoveryCode[]
   credentials          Credential[]
-  studentProfile       Student?              @relation("StudentUser")
-  guardianProfile      Guardian?             @relation("GuardianUser")
+  studentProfile       Student?                @relation("StudentUser")
+  guardianProfile      Guardian?               @relation("GuardianUser")
   webPushSubscriptions WebPushSubscription[]
   oauthAccounts        OAuthConnectedAccount[]
 
@@ -2351,17 +2708,16 @@ model User {
   @@index([role])
 }
 
-
 model OAuthConnectedAccount {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   tenantId          String
   userId            String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider          String
   providerAccountId String
   email             String?
   displayName       String?
-  linkedAt          DateTime @default(now())
+  linkedAt          DateTime  @default(now())
   lastUsedAt        DateTime?
 
   @@unique([provider, providerAccountId])
@@ -2370,14 +2726,14 @@ model OAuthConnectedAccount {
 }
 
 model OAuthState {
-  id          String   @id @default(cuid())
-  state       String   @unique
-  tenantId    String
-  userId      String
-  provider    String
-  redirectTo  String?
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  state      String   @unique
+  tenantId   String
+  userId     String
+  provider   String
+  redirectTo String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
 
   @@index([userId, provider])
   @@index([expiresAt])
@@ -2739,22 +3095,28 @@ model PhoneMessage {
 // A class/grade with an optional stream, e.g. "Grade 4 - Blue" (CBC) or
 // "Form 2 - East" (8-4-4). curriculum distinguishes the two systems.
 model SchoolClass {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
   tenantId       String
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   level          String // "Grade 4", "Form 2", "PP1"
   stream         String? // "Blue", "East", "A" (null = single-stream)
-  curriculum     String   @default("CBC") // "CBC" | "8-4-4"
+  curriculum     String      @default("CBC") // "CBC" | "8-4-4"
+  curriculumId   String?
+  curriculumRef  Curriculum? @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  gradeBandId    String?
+  gradeBand      GradeBand?  @relation(fields: [gradeBandId], references: [id], onDelete: SetNull)
   classTeacherId String? // a User (CLASS_TEACHER/TEACHER) — row-scoping (A.3.8)
   capacity       Int?
-  archived       Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  archived       Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   students Student[]
 
   @@unique([tenantId, level, stream])
   @@index([tenantId])
+  @@index([tenantId, curriculumId])
+  @@index([tenantId, gradeBandId])
 }
 
 // A student. Tenant-owned + soft-deletable (G.6 Recycle Bin). Optionally linked
@@ -3157,7 +3519,6 @@ model ClassSubjectNeed {
   @@index([tenantId])
 }
 
-
 // I.27 — YouTube learning inside NEYO.
 model LearningVideo {
   id           String   @id @default(cuid())
@@ -3425,21 +3786,20 @@ model ExamTimetableSlot {
   @@index([tenantId, classId])
 }
 
-
 // I.21 — records for exam applications and assembled exam materials.
 model ExamMaterialRecord {
   id               String   @id @default(cuid())
   tenantId         String
   tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   examName         String
-  materialType     String   // APPLICATION | MATERIALS | KNEC_REGISTRATION | CENTER_LOGISTICS | OTHER
+  materialType     String // APPLICATION | MATERIALS | KNEC_REGISTRATION | CENTER_LOGISTICS | OTHER
   title            String
-  examDate         String?  // YYYY-MM-DD where applicable
-  deadline         String?  // YYYY-MM-DD for applications/submissions
+  examDate         String? // YYYY-MM-DD where applicable
+  deadline         String? // YYYY-MM-DD for applications/submissions
   status           String   @default("PLANNED") // PLANNED | ASSEMBLING | READY | SUBMITTED | COLLECTED
-  checklistJson    String?  // JSON checklist of required papers/materials
-  hardcopyLocation String   // required: where physical file/materials are kept
-  fileUrl          String?  // optional soft copy/proof upload
+  checklistJson    String? // JSON checklist of required papers/materials
+  hardcopyLocation String // required: where physical file/materials are kept
+  fileUrl          String? // optional soft copy/proof upload
   fileName         String?
   notes            String?
   createdById      String
@@ -3623,22 +3983,18 @@ model NewsPost {
 // the service/API layer that follows.
 // ---------------------------------------------------------------------------
 
-
-
-
-
 model NeyoIntegrationSecret {
-  id          String   @id @default(cuid())
-  key         String   @unique
-  provider    String
-  label       String
-  ciphertext  String
-  iv          String
-  tag         String
-  masked      String?
-  updatedBy   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  key        String   @unique
+  provider   String
+  label      String
+  ciphertext String
+  iv         String
+  tag        String
+  masked     String?
+  updatedBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([provider])
 }
@@ -3667,23 +4023,23 @@ model NeyoCustomerThread {
 }
 
 model NeyoCustomerMessage {
-  id          String   @id @default(cuid())
-  threadId    String
-  thread      NeyoCustomerThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  direction   String   @default("CUSTOMER") // CUSTOMER | NEYO | INTERNAL
-  body        String
-  authorId    String?
-  authorName  String
-  authorRole  String?
-  channel     String   @default("IN_APP") // IN_APP | SMS | EMAIL | WHATSAPP | CALL_NOTE
-  createdAt   DateTime @default(now())
+  id         String             @id @default(cuid())
+  threadId   String
+  thread     NeyoCustomerThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  direction  String             @default("CUSTOMER") // CUSTOMER | NEYO | INTERNAL
+  body       String
+  authorId   String?
+  authorName String
+  authorRole String?
+  channel    String             @default("IN_APP") // IN_APP | SMS | EMAIL | WHATSAPP | CALL_NOTE
+  createdAt  DateTime           @default(now())
 
   @@index([threadId, createdAt])
   @@index([direction, createdAt])
 }
 
 model NeyoContract {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   title         String
   schoolName    String
   tenantId      String?
@@ -3691,10 +4047,10 @@ model NeyoContract {
   contactRole   String?
   contactEmail  String?
   contactPhone  String?
-  templateKey   String   @default("SCHOOL_ONBOARDING")
+  templateKey   String    @default("SCHOOL_ONBOARDING")
   body          String
-  status        String   @default("DRAFT") // DRAFT | SENT | SIGNED | VOID
-  publicToken   String   @unique
+  status        String    @default("DRAFT") // DRAFT | SENT | SIGNED | VOID
+  publicToken   String    @unique
   sentAt        DateTime?
   signedAt      DateTime?
   signedByName  String?
@@ -3704,31 +4060,31 @@ model NeyoContract {
   notes         String?
   createdById   String
   createdByName String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([status, createdAt])
   @@index([tenantId])
 }
 
 model NeyoYoutubePost {
-  id              String   @id @default(cuid())
-  title           String
-  youtubeUrlOrId  String?
-  youtubeId       String?
-  caption         String
-  audience        String   @default("SCHOOLS") // SCHOOLS | PARENTS | TEACHERS | STUDENTS | PUBLIC
-  channel         String   @default("NEYO_YOUTUBE") // NEYO_YOUTUBE | SCHOOL_CHANNEL | OTHER
-  status          String   @default("DRAFT") // DRAFT | SCHEDULED | READY | POSTED | CANCELLED
-  scheduledFor    DateTime?
-  postedUrl       String?
-  ownerName       String?
-  schoolTenantId  String?
-  notes           String?
-  createdById     String
-  createdByName   String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  title          String
+  youtubeUrlOrId String?
+  youtubeId      String?
+  caption        String
+  audience       String    @default("SCHOOLS") // SCHOOLS | PARENTS | TEACHERS | STUDENTS | PUBLIC
+  channel        String    @default("NEYO_YOUTUBE") // NEYO_YOUTUBE | SCHOOL_CHANNEL | OTHER
+  status         String    @default("DRAFT") // DRAFT | SCHEDULED | READY | POSTED | CANCELLED
+  scheduledFor   DateTime?
+  postedUrl      String?
+  ownerName      String?
+  schoolTenantId String?
+  notes          String?
+  createdById    String
+  createdByName  String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([status, scheduledFor])
   @@index([createdAt])

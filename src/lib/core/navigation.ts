@@ -41,6 +41,8 @@ import {
   BriefcaseBusiness,
   Globe2,
   Youtube,
+  Compass,
+  Brain,
   type LucideIcon,
 } from "lucide-react";
 
@@ -124,6 +126,8 @@ export const NAVIGATION: NavSection[] = [
       { label: "Exams", href: "/exams", icon: ClipboardList, moduleKey: "academics", permission: "exam.view" },
       { label: "Exam Timetable", href: "/exam-timetable", icon: CalendarDays, moduleKey: "academics", permission: "exam.view" },
       { label: "CBC", href: "/cbc", icon: Layers, moduleKey: "academics", permission: "academics.view" },
+      { label: "Assessments", href: "/assessments", icon: ClipboardList, moduleKey: "academics", permission: "academics.view" },
+      { label: "Competencies", href: "/competencies", icon: Brain, moduleKey: "academics", permission: "academics.view" },
       { label: "Syllabus", href: "/syllabus", icon: BookOpen, moduleKey: "academics", permission: "academics.view" },
       { label: "Staff", href: "/staff", icon: Users, moduleKey: "staff", permission: "staff.view" },
       { label: "Payroll", href: "/payroll", icon: Banknote, moduleKey: "staff", permission: "staff.manage" },
@@ -144,6 +148,7 @@ export const NAVIGATION: NavSection[] = [
     title: "System",
     items: [
       { label: "School Profile", href: "/settings/school", icon: Building2, permission: "tenant.manage_settings" },
+      { label: "Curriculum", href: "/settings/curriculum", icon: Compass, moduleKey: "academics", permission: "academics.view" },
       { label: "Public Website", href: "/settings/public-site", icon: Globe2, permission: "tenant.manage_settings" },
       { label: "Modules", href: "/settings/modules", icon: SlidersHorizontal, permission: "tenant.manage_modules" },
       { label: "Billing", href: "/settings/billing", icon: CreditCard, permission: "owner.dashboard" },

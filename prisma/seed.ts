@@ -1696,6 +1696,29 @@ trailer<</Root 1 0 R>>
   }
   console.log("✓ Seeded B.6: English (CBC) + 3 KICD strands + 9 observations.");
 
+  // --- J.2: Future-proof Curriculum Engine migration assistant ----------------
+  // Converts existing B.4/B.6 rows (subjects, classes, terms, CBC strands) into
+  // configurable Curriculum / EducationLevel / GradeBand / LearningArea records.
+  // Idempotent: safe to run every seed; it maps existing rows, never duplicates them.
+  {
+    const { runCurriculumMigrationAssistant } = await import("../src/lib/services/curriculum.service");
+    const curriculumActor = await db.user.findFirst({ where: { tenantId: tenant.id, role: "PRINCIPAL" } });
+    if (curriculumActor) {
+      const result = await runCurriculumMigrationAssistant({
+        id: curriculumActor.id,
+        tenantId: curriculumActor.tenantId,
+        neyoLoginId: curriculumActor.neyoLoginId,
+        fullName: curriculumActor.fullName,
+        phone: curriculumActor.phone,
+        email: curriculumActor.email,
+        role: curriculumActor.role as any,
+        secondaryRole: curriculumActor.secondaryRole as any,
+        language: curriculumActor.language ?? "en",
+      });
+      console.log(`✓ Seeded J.2: Curriculum Engine migration assistant mapped ${result.mappedSubjects} subjects, ${result.mappedClasses} classes, ${result.mappedTerms} terms and ${result.mappedStrands} strands.`);
+    }
+  }
+
   // --- B.7: Finance — Form 2 fee structure + invoices w/ realistic balances ---
   let structure = await db.feeStructure.findFirst({ where: { tenantId: tenant.id, level: "Form 2", year: thisYear, term: 2 } });
   if (!structure) {

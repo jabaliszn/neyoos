@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   Building2, SlidersHorizontal, CreditCard, Smartphone, Database,
-  Trash2, Webhook, ShieldCheck, Globe2, ChevronRight, Printer, EyeOff, Users, type LucideIcon,
+  Trash2, Webhook, ShieldCheck, Globe2, ChevronRight, Printer, EyeOff, Users, Compass, type LucideIcon,
 } from "lucide-react";
 import { requirePageUser } from "@/lib/core/page-guards";
 import { effectivePermissionsForUser } from "@/lib/core/session";
@@ -20,6 +20,7 @@ interface SettingItem {
 
 const ITEMS: SettingItem[] = [
   { label: "School profile", description: "Name, motto, vision, logo, colours, contacts & joining requirements.", href: "/settings/school", icon: Building2, permission: "tenant.manage_settings" },
+  { label: "Curriculum", description: "Configure curricula, levels, grade bands and learning areas without hardcoding.", href: "/settings/curriculum", icon: Compass, permission: "academics.view" },
   { label: "Public website", description: "Hero, news, gallery, leaders, testimonials, activities, SEO and map.", href: "/settings/public-site", icon: Globe2, permission: "tenant.manage_settings" },
   { label: "Modules", description: "Turn features on or off for your school.", href: "/settings/modules", icon: SlidersHorizontal, permission: "tenant.manage_modules" },
   { label: "Billing", description: "Your NEYO subscription, plan and invoices.", href: "/settings/billing", icon: CreditCard, permission: "owner.dashboard" },
