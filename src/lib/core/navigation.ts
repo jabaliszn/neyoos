@@ -33,6 +33,7 @@ import {
   Boxes,
   UtensilsCrossed,
   ShieldAlert,
+  ListChecks,
   Stethoscope,
   Printer,
   DoorClosed,
@@ -149,6 +150,7 @@ export const NAVIGATION: NavSection[] = [
     items: [
       { label: "School Profile", href: "/settings/school", icon: Building2, permission: "tenant.manage_settings" },
       { label: "Curriculum", href: "/settings/curriculum", icon: Compass, moduleKey: "academics", permission: "academics.view" },
+      { label: "Rubrics", href: "/settings/rubrics", icon: ListChecks, moduleKey: "academics", permission: "academics.view" },
       { label: "Public Website", href: "/settings/public-site", icon: Globe2, permission: "tenant.manage_settings" },
       { label: "Modules", href: "/settings/modules", icon: SlidersHorizontal, permission: "tenant.manage_modules" },
       { label: "Billing", href: "/settings/billing", icon: CreditCard, permission: "owner.dashboard" },

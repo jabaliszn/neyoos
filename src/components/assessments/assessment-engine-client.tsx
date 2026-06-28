@@ -28,6 +28,7 @@ import {
   type AssessmentSheetView,
   type AssessmentTypeView,
 } from "@/components/assessments/assessment-engine-components";
+import { TeacherRubricScoringPanel, RubricEvidenceUploadCard, type RubricView } from "@/components/rubrics/rubric-components";
 
 const EMPTY_BOARD: AssessmentBoardView = {
   canManagePlans: false,
@@ -239,26 +240,15 @@ export function AssessmentEngineClient() {
           ) : null}
 
           {modal.type === "score" ? (
-            <AssessmentScoreForm
+            <RubricScoreWrapper
               student={modal.student}
               planId={modal.sheet.plan.id}
-              initial={modal.student.record}
               saving={saving}
               onCancel={() => setModal({ type: "sheet", plan: modal.sheet.plan })}
-              onSubmit={(draft) => post("score_record", compactPayload({
-                planId: draft.planId,
-                studentId: draft.studentId,
-                scoreMarks: draft.scoreMarks ? Number(draft.scoreMarks) : undefined,
-                scorePct: draft.scorePct ? Number(draft.scorePct) : undefined,
-                rubricLevel: draft.rubricLevel ? Number(draft.rubricLevel) : undefined,
-                rubricCode: draft.rubricCode,
-                narrative: draft.narrative,
-              }), "Assessment score saved").then(async (ok) => {
-                if (ok) {
-                  const refreshedPlan = currentBoard.plans.find((p) => p.id === modal.sheet.plan.id) ?? modal.sheet.plan;
-                  await loadSheet(refreshedPlan);
-                }
-              })}
+              onDone={async () => {
+                const refreshedPlan = currentBoard.plans.find((p) => p.id === modal.sheet.plan.id) ?? modal.sheet.plan;
+                await loadSheet(refreshedPlan);
+              }}
             />
           ) : null}
 
@@ -306,6 +296,105 @@ function AssessmentModal({ title, icon: Icon, children, onClose }: { title: stri
         </CardHeader>
         <CardContent className="max-h-[calc(min(92dvh,44rem)-6rem)] overflow-y-auto p-5 sm:p-6">{children}</CardContent>
       </Card>
+    </div>
+  );
+}
+
+function RubricScoreWrapper({ student, planId, saving, onCancel, onDone }: {
+  student: AssessmentSheetStudentView;
+  planId: string;
+  saving: boolean;
+  onCancel: () => void;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const [rubrics, setRubrics] = React.useState<RubricView[]>([]);
+  const [selectedId, setSelectedId] = React.useState<string>("");
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/rubrics")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.ok && json.data?.board?.rubrics) {
+          setRubrics(json.data.board.rubrics);
+          if (json.data.board.rubrics.length > 0) setSelectedId(json.data.board.rubrics[0].id);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const activeRubric = rubrics.find((r) => r.id === selectedId);
+
+  async function handleScore(data: { rubricLevel: number; rubricCode: string; points: number | null; narrative: string }) {
+    setBusy(true);
+    try {
+      let targetId = student.record?.id;
+      if (!targetId) {
+        const r1 = await fetch("/api/assessments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "score_record", payload: { planId, studentId: student.id, rubricLevel: data.rubricLevel, rubricCode: data.rubricCode, narrative: data.narrative } }),
+        });
+        const j1 = await r1.json();
+        if (j1.ok && j1.data?.result?.id) targetId = j1.data.result.id;
+      }
+      if (targetId) {
+        const res = await fetch("/api/rubrics", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "score_with_rubric", payload: { targetType: "assessment_record", targetId, rubricId: selectedId, rubricLevel: data.rubricLevel, rubricCode: data.rubricCode, points: data.points ?? undefined, narrative: data.narrative } }),
+        });
+        const json = await res.json();
+        if (json.ok) {
+          toast({ title: "Rubric evaluation saved", tone: "success" });
+          onDone();
+        } else {
+          toast({ title: json.error?.message || "Rubric scoring failed", tone: "error" });
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {rubrics.length > 0 && (
+        <div className="space-y-1.5 border-b border-navy-100 pb-4 dark:border-navy-800">
+          <label className="text-sm font-semibold">Evaluation Mode</label>
+          <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="w-full rounded-2xl border border-navy-200 bg-white p-2.5 text-sm dark:border-navy-700 dark:bg-navy-900">
+            <option value="">Standard manual score form</option>
+            {rubrics.map((r) => <option key={r.id} value={r.id}>Rubric: {r.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {activeRubric ? (
+        <TeacherRubricScoringPanel
+          rubric={activeRubric}
+          onScore={handleScore}
+          saving={busy || saving}
+          initialLevel={student.record?.rubricLevel ?? undefined}
+          initialCode={student.record?.rubricCode ?? undefined}
+          initialNarrative={student.record?.narrative ?? undefined}
+        />
+      ) : (
+        <AssessmentScoreForm
+          student={student}
+          planId={planId}
+          initial={student.record}
+          saving={saving}
+          onCancel={onCancel}
+          onSubmit={(draft) => {
+            fetch("/api/assessments", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "score_record", payload: { planId, studentId: student.id, scoreMarks: draft.scoreMarks ? Number(draft.scoreMarks) : undefined, scorePct: draft.scorePct ? Number(draft.scorePct) : undefined, rubricLevel: draft.rubricLevel ? Number(draft.rubricLevel) : undefined, rubricCode: draft.rubricCode, narrative: draft.narrative } }),
+            }).then(() => onDone());
+          }}
+        />
+      )}
     </div>
   );
 }

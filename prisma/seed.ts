@@ -1952,6 +1952,91 @@ trailer<</Root 1 0 R>>
     const r = await computeAndStorePulse(tenant.id);
     console.log(`✓ Seeded G.15: Term Pulse ${r.data.weekKey} — "${r.data.summary}"`);
   }
+
+  // ---- J.4 Competency Framework (Chunk 8 seed) ---------------------------
+  {
+    const { ensureDefaultCompetencyFramework, recordCompetencyEvidence } = await import("../src/lib/services/competency.service");
+    await ensureDefaultCompetencyFramework(principal as any);
+    const achiengStJ4 = await db.student.findFirst({ where: { tenantId: tenant.id, firstName: "Achieng" } });
+    if (achiengStJ4) {
+      const existingEvidence = await db.competencyEvidence.findFirst({ where: { studentId: achiengStJ4.id } });
+      if (!existingEvidence) {
+        const comm = await db.competency.findFirst({ where: { tenantId: tenant.id, code: "COMMUNICATION" } });
+        const crit = await db.competency.findFirst({ where: { tenantId: tenant.id, code: "CRITICAL_THINKING" } });
+        if (comm && crit) {
+          await recordCompetencyEvidence(principal as any, {
+            competencyId: comm.id,
+            studentId: achiengStJ4.id,
+            sourceModule: "MANUAL",
+            level: 4,
+            scorePct: 88,
+            narrative: "Explains complex ideas clearly during group assignments and actively supports peers in Form 2 East.",
+            evidenceDate: "2026-06-25",
+            approved: true,
+            visibleToParents: true,
+          });
+          await recordCompetencyEvidence(principal as any, {
+            competencyId: crit.id,
+            studentId: achiengStJ4.id,
+            sourceModule: "MANUAL",
+            level: 3,
+            scorePct: 74,
+            narrative: "Questions assumptions and compares evidence effectively during science practical observations.",
+            evidenceDate: "2026-06-26",
+            approved: true,
+            visibleToParents: true,
+          });
+        }
+      }
+    }
+    console.log("✓ Seeded J.4: Competency Framework defaults and learner evidence.");
+  }
+
+  // ---- J.5 Rubrics & Evidence (Chunk 8 seed) -----------------------------
+  {
+    const { ensureDefaultRubrics } = await import("../src/lib/services/rubric.service");
+    await ensureDefaultRubrics(principal as any);
+    console.log("✓ Seeded J.5: Rubrics & Evidence default definitions (CBC + Project).");
+  }
+
+  // ---- J.6 Skills Passport (Chunk 8 seed) --------------------------------
+  {
+    const { recordSkillRating } = await import("../src/lib/services/skills-passport.service");
+    const achiengStJ6 = await db.student.findFirst({ where: { tenantId: tenant.id, firstName: "Achieng" } });
+    if (achiengStJ6) {
+      const existingSkill = await db.skillsPassportEntry.findFirst({ where: { studentId: achiengStJ6.id } });
+      if (!existingSkill) {
+        await recordSkillRating(principal as any, {
+          studentId: achiengStJ6.id,
+          skillArea: "Leadership",
+          ratingLevel: 5,
+          evidenceSource: "CLUB",
+          narrative: "Elected as Class Prefect and leads environmental club activities effectively.",
+          evidenceDate: "2026-06-25",
+          verified: true,
+        });
+        await recordSkillRating(principal as any, {
+          studentId: achiengStJ6.id,
+          skillArea: "Coding",
+          ratingLevel: 4,
+          evidenceSource: "PORTFOLIO",
+          narrative: "Completed Python fundamentals project and deployed a simple calculator app.",
+          evidenceDate: "2026-06-26",
+          verified: true,
+        });
+        await recordSkillRating(principal as any, {
+          studentId: achiengStJ6.id,
+          skillArea: "Creativity",
+          ratingLevel: 5,
+          evidenceSource: "AWARD",
+          narrative: "Won 1st prize in the county inter-school art competition.",
+          evidenceDate: "2026-06-27",
+          verified: true,
+        });
+      }
+    }
+    console.log("✓ Seeded J.6: Skills Passport star ratings and learner talent profile.");
+  }
 }
 
 main()

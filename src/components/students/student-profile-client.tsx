@@ -16,6 +16,8 @@ import { FileUpload } from "@/components/ui/file-upload";
 import { useToast } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageButton } from "@/components/messaging/message-button";
+import { StudentCompetencySummaryCard } from "@/components/competencies/competency-framework-components";
+import { SkillsPassportCard } from "@/components/skills-passport/skills-passport-card";
 
 interface Guardian { id: string; guardianId: string; relationship: string; isPrimary: boolean; guardian: { id: string; fullName: string; phone: string; email: string | null; userId: string | null } }
 interface Doc { id: string; label: string; fileUrl: string; fileName: string | null; hardcopyLocation: string; createdAt: string }
@@ -273,6 +275,12 @@ export function StudentProfileClient({ initial, canEdit }: { initial: Student; c
 
         {/* Leaving Certificate Vault (H.3) */}
         <LeavingCertificateCard studentId={s.id} canEdit={canEdit} />
+
+        {/* J.4 Competency Framework Summary */}
+        <StudentCompetencySummaryWrapper studentId={s.id} />
+
+        {/* J.6 Skills Passport */}
+        <SkillsPassportCard studentId={s.id} />
       </div>
 
       {transferDialog && (
@@ -285,6 +293,21 @@ export function StudentProfileClient({ initial, canEdit }: { initial: Student; c
       )}
     </div>
   );
+}
+
+function StudentCompetencySummaryWrapper({ studentId }: { studentId: string }) {
+  const [summary, setSummary] = React.useState<any>(null);
+  React.useEffect(() => {
+    fetch(`/api/competencies?studentId=${studentId}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.ok && json.data?.summary) setSummary(json.data.summary);
+      })
+      .catch(() => {});
+  }, [studentId]);
+
+  if (!summary) return null;
+  return <StudentCompetencySummaryCard summary={summary} />;
 }
 
 // ---- transfer dialog (B.1.11) ----------------------------------------------

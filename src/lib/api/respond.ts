@@ -76,6 +76,8 @@ import { DutyRosterError } from "@/lib/services/duty-roster.service";
 import { DelegationError } from "@/lib/services/delegation.service";
 import { IntercomError } from "@/lib/services/intercom.service";
 import { OnlineClassError } from "@/lib/services/online-class.service";
+import { RubricError } from "@/lib/services/rubric.service";
+import { SkillsPassportError } from "@/lib/services/skills-passport.service";
 import { TenantIsolationError } from "@/lib/core/tenant-db";
 import { captureError } from "@/lib/observability/capture";
 import { RateLimitError } from "@/lib/security/rate-limit";
@@ -558,6 +560,23 @@ export function handleError(err: unknown) {
       err.code === "NOT_FOUND" ? 404 :
       err.code === "FORBIDDEN" ? 403 :
       err.code === "OFFLINE" || err.code === "BUSY" || err.code === "STATE" ? 409 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // J.5 Rubrics & Evidence.
+  if (err instanceof RubricError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 :
+      err.code === "FORBIDDEN" ? 403 :
+      err.code === "DUPLICATE" ? 409 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // J.6 Skills Passport.
+  if (err instanceof SkillsPassportError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 :
+      err.code === "FORBIDDEN" ? 403 : 422;
     return fail(err.code, err.message, status);
   }
 

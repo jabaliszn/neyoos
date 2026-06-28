@@ -24,6 +24,8 @@ import { LibraryCard, ClassChatButton } from "@/components/portal/library-card";
 import { UniformCard } from "@/components/portal/uniform-card";
 import { MessageButton } from "@/components/messaging/message-button";
 import { FileUpload, type UploadedFile } from "@/components/ui/file-upload";
+import { StudentCompetencySummaryCard } from "@/components/competencies/competency-framework-components";
+import { SkillsPassportCard } from "@/components/skills-passport/skills-passport-card";
 
 const kes = (n: number) => `KES ${n.toLocaleString("en-KE")}`;
 
@@ -202,6 +204,12 @@ function ChildView({ id, onBack }: { id: string; onBack: () => void }) {
         </CardContent>
       </Card>
 
+      {/* J.4 Competency Framework Summary */}
+      <StudentCompetencySummaryWrapper studentId={id} />
+
+      {/* J.6 Skills Passport */}
+      <SkillsPassportCard studentId={id} />
+
       {/* attendance */}
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><CalendarCheck className="h-4 w-4 text-navy-400" /> Attendance (last 60 days)</CardTitle></CardHeader>
@@ -362,6 +370,21 @@ function ChildView({ id, onBack }: { id: string; onBack: () => void }) {
       {submitHw && <SubmitWorkDialog homeworkId={submitHw.id} title={submitHw.title} onClose={() => setSubmitHw(null)} onDone={() => { setSubmitHw(null); load(); }} />}
     </div>
   );
+}
+
+function StudentCompetencySummaryWrapper({ studentId }: { studentId: string }) {
+  const [summary, setSummary] = React.useState<any>(null);
+  React.useEffect(() => {
+    fetch(`/api/competencies?studentId=${studentId}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.ok && json.data?.summary) setSummary(json.data.summary);
+      })
+      .catch(() => {});
+  }, [studentId]);
+
+  if (!summary) return null;
+  return <StudentCompetencySummaryCard summary={summary} />;
 }
 
 

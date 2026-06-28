@@ -1,0 +1,42 @@
+import { chromium } from "playwright";
+import path from "node:path";
+import { db } from "../src/lib/db";
+import type { SessionUser } from "../src/lib/core/session";
+import { ensureDefaultRubrics } from "../src/lib/services/rubric.service";
+
+const BASE = "http://localhost:3000";
+const OUT = path.join(process.cwd(), "screenshots", "j5-rubrics-engine.png");
+
+function toSessionUser(user: NonNullable<Awaited<ReturnType<typeof db.user.findFirst>>>): SessionUser {
+  return { id: user.id, tenantId: user.tenantId, neyoLoginId: user.neyoLoginId, fullName: user.fullName, phone: user.phone, email: user.email, role: user.role as SessionUser["role"], secondaryRole: (user.secondaryRole as SessionUser["secondaryRole"]) ?? null, language: user.language ?? "en" };
+}
+
+async function ensureDemoRubrics() {
+  const principalRow = await db.user.findFirstOrThrow({ where: { email: "principal@karibuhigh.ac.ke" } });
+  const principal = toSessionUser(principalRow);
+  await ensureDefaultRubrics(principal);
+}
+
+async function main() {
+  await ensureDemoRubrics();
+  await db.$disconnect();
+  const browser = await chromium.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"] });
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(700);
+  const login = await page.evaluate(async () => {
+    const res = await fetch("/api/auth/password/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "principal@karibuhigh.ac.ke", password: "Karibu2026!" }) });
+    return res.json();
+  });
+  if (!login?.ok) throw new Error(`Could not sign in for screenshot: ${JSON.stringify(login)}`);
+  await page.goto(`${BASE}/settings/rubrics`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(4500);
+  await page.getByText("Got it", { exact: true }).click({ timeout: 1200 }).catch(() => {});
+  await page.getByRole("heading", { name: "Rubrics & Evidence Engine", exact: true }).waitFor({ timeout: 10000 });
+  await page.getByText("CBC Comprehensive Rubric", { exact: true }).first().waitFor({ timeout: 10000 });
+  await page.screenshot({ path: OUT, fullPage: false });
+  console.log("✓ screenshots/j5-rubrics-engine.png");
+  await browser.close();
+}
+main().catch(async (error) => { console.error(error); await db.$disconnect().catch(() => {}); process.exit(1); });

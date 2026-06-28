@@ -218,6 +218,10 @@ model Tenant {
   competencyGroups          CompetencyGroup[]
   competencies              Competency[]
   competencyEvidence        CompetencyEvidence[]
+  rubrics                   Rubric[]
+  rubricLevels              RubricLevel[]
+  skillsPassportEntries     SkillsPassportEntry[]
+  portfolioItems            PortfolioItem[]
   cbcStrands                CbcStrand[]
   cbcAssessments            CbcAssessment[]
   feeStructures             FeeStructure[]
@@ -623,6 +627,7 @@ model AssessmentType {
   defaultWeight      Int      @default(0) // percentage weight suggestion; plan can override
   evidenceAllowed    Boolean  @default(true)
   requiresModeration Boolean  @default(true)
+  rubricId           String? // J.5 configurable Rubric bridge
   isSystem           Boolean  @default(false)
   active             Boolean  @default(true)
   createdAt          DateTime @default(now())
@@ -658,6 +663,7 @@ model AssessmentPlan {
   homeworkId       String? // optional bridge to B.12/B.13 homework
   quizId           String? // optional bridge to B.13 quiz
   cbcStrandId      String? // optional bridge to B.6 CBC strand
+  rubricId         String? // J.5 configurable Rubric bridge
 
   year             Int
   term             Int
@@ -702,6 +708,7 @@ model AssessmentRecord {
   rubricCode      String? // e.g. EE, ME, AE, BE or a school-defined rubric code
   narrative       String?
   status          String         @default("DRAFT") // DRAFT | SCORED | SUBMITTED | MODERATED | RELEASED
+  rubricId        String? // J.5 configurable Rubric bridge
   sourceModule    String? // EXAM | CBC | LMS_HOMEWORK | LMS_QUIZ | MANUAL | PORTFOLIO
   sourceId        String?
   assessedById    String
@@ -783,6 +790,7 @@ model Competency {
   group          CompetencyGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   curriculumId   String?
   learningAreaId String?
+  rubricId       String? // J.5 configurable Rubric bridge
   name           String
   code           String
   description    String?
@@ -815,6 +823,7 @@ model CompetencyEvidence {
   sourceId           String?
   assessmentRecordId String?
   cbcAssessmentId    String?
+  rubricId           String? // J.5 configurable Rubric bridge
   level              Int? // 1..4 when rubric-like
   scorePct           Int? // 0..100 when percentage-like
   narrative          String?
@@ -3167,6 +3176,8 @@ model Student {
   promisesToPay         PromiseToPay[]
   reportCardDayCheckIns ReportCardDayCheckIn[]
   leavingCertificate    LeavingCertificate? // Added for Leaving Certificate Vault (H.3)
+  skillsPassportEntries SkillsPassportEntry[]
+  portfolioItems        PortfolioItem[]
 
   @@unique([tenantId, admissionNo])
   @@index([tenantId])
@@ -4241,4 +4252,123 @@ model EntranceExamPaper {
 
   @@unique([tenantId, classId])
   @@index([tenantId, classLabel])
+}
+
+// =============================================================================
+// PART J.5 — Rubrics & Evidence foundation
+// =============================================================================
+
+// A configurable rubric definition that can be attached to assessment types,
+// assessment plans, or competencies. Replaces temporary rubricJson structures
+// with formal database definitions without duplicating exam/CBC grading.
+model Rubric {
+  id          String        @id @default(cuid())
+  tenantId    String
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  category    String        @default("GENERAL") // CBC | PROJECT | PRACTICAL | PORTFOLIO | COMPETENCY | GENERAL
+  isArchived  Boolean       @default(false)
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  levels      RubricLevel[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, category])
+  @@index([tenantId, isArchived])
+}
+
+// One level in a configurable rubric, e.g. Level 4 (Exceeding Expectation) with
+// its specific descriptor and point/percentage range.
+model RubricLevel {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rubricId    String
+  rubric      Rubric   @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  level       Int      // e.g. 1, 2, 3, 4, 5
+  code        String   // e.g. EE, ME, AE, BE or ADVANCED, PROFICIENT, BASIC
+  label       String   // e.g. Exceeding Expectation
+  descriptor  String?  // Detailed rubric descriptor
+  points      Float?   // Optional points for this level
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, rubricId, level])
+  @@unique([tenantId, rubricId, code])
+  @@index([tenantId, rubricId])
+}
+
+// =============================================================================
+// PART J.6 — Skills Passport foundation
+// =============================================================================
+
+// One rating/evidence point in a learner's Skills Passport. Tracks skill levels
+// over time across academic, competency, talent, and leadership growth areas.
+model SkillsPassportEntry {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skillArea      String    // Leadership | Communication | Coding | Music | Sports | Creativity | custom
+  ratingLevel    Int       // 1..5 stars/levels
+  evidenceSource String    // ASSESSMENT | CLUB | PORTFOLIO | AWARD | OBSERVATION
+  sourceId       String?   // optional scalar link to future club, award, or portfolio item
+  narrative      String?   // Qualitative growth description
+  evidenceDate   String    // YYYY-MM-DD
+  recordedById   String
+  recordedByName String
+  verified       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, skillArea])
+  @@index([tenantId, evidenceSource])
+}
+
+// =============================================================================
+// PART J.7 — Student Portfolio System foundation
+// =============================================================================
+
+// One item in a student's digital portfolio: project, video, photo, art, coding
+// work, certificate, teacher observation, or community activity. Uploads must
+// use the encrypted Storage Vault path (StoredFile).
+model PortfolioItem {
+  id               String      @id @default(cuid())
+  tenantId         String
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId        String
+  student          Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  title            String
+  category         String      // PROJECT | VIDEO | PHOTO | ART | CODING | CERTIFICATE | OBSERVATION | COMMUNITY
+  description      String?
+  storedFileId     String?     // Link to encrypted StoredFile in Storage Vault
+  fileUrl          String?
+  fileName         String?
+  fileSizeBytes    Int?        // For media size controls and storage usage warnings
+  externalLink     String?     // e.g., GitHub repo or external video link
+  status           String      @default("SUBMITTED") // DRAFT | SUBMITTED | APPROVED | REJECTED
+  approvedById     String?
+  approvedByName   String?
+  approvedAt       DateTime?
+  visibleToParents Boolean     @default(false)
+  
+  // Optional scalar links to existing/J modules
+  competencyId     String?
+  subjectId        String?
+  clubId           String?
+  awardId          String?
+
+  createdById      String
+  createdByName    String
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, category])
+  @@index([tenantId, status])
 }
