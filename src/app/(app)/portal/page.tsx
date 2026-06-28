@@ -1,10 +1,12 @@
 import { requirePagePermission } from "@/lib/core/page-guards";
 import { ParentPortalClient } from "@/components/portal/parent-portal-client";
+import { isCurriculumEngineEnabled } from "@/lib/services/launch-control.service";
 
 export const dynamic = "force-dynamic";
 
 /** B.10 Parent Portal — My Children: fees, results, attendance, messaging. */
 export default async function PortalPage() {
+  const isCurriculumEngineEnabledFlag = await isCurriculumEngineEnabled();
   await requirePagePermission("portal.parent");
 
   return (
@@ -15,7 +17,7 @@ export default async function PortalPage() {
           Fees, results, attendance and a direct line to the school.
         </p>
       </div>
-      <ParentPortalClient />
+      <ParentPortalClient isCurriculumEngineEnabled={isCurriculumEngineEnabledFlag} />
     </div>
   );
 }

@@ -38,7 +38,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { formatKES } from "@/lib/utils";
 
-const TABS = ["Overview", "Build log", "Metrics", "Cadence", "Interviews", "Platform Flags", "Business Operations"] as const;
+const TABS = ["Overview", "Build log", "Metrics", "Cadence", "Interviews", "Platform Flags", "Business Operations", "Ecosystem Trends"] as const;
 type Tab = (typeof TABS)[number];
 
 type Dashboard = {

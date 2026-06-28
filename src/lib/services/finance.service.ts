@@ -88,8 +88,24 @@ export async function batchInvoice(user: SessionUser, structureId: string, dueDa
     const classes = await tenantDb().schoolClass.findMany({ where: structure.classId ? { id: structure.classId, archived: false } : { level: structure.level, archived: false } });
     const students = await tenantDb().student.findMany({
       where: { classId: { in: classes.map((c) => c.id) }, status: "ACTIVE" },
-      select: { id: true },
+      select: { id: true, guardians: { include: { guardian: true } } },
     });
+
+    const isSiblingDiscountEnabled = (await db.platformSetting.findUnique({ where: { key: "enable_sibling_discount" } }))?.value === "true";
+    let siblingMap = new Map();
+    if (isSiblingDiscountEnabled) {
+      // Build a map of primary guardian ID to count of active students
+      const allActive = await tenantDb().student.findMany({
+        where: { status: "ACTIVE" },
+        select: { id: true, guardians: { where: { isPrimary: true }, select: { guardianId: true } } }
+      });
+      allActive.forEach(s => {
+        if (s.guardians[0]) {
+          const gId = s.guardians[0].guardianId;
+          siblingMap.set(gId, (siblingMap.get(gId) || 0) + 1);
+        }
+      });
+    }
     if (students.length === 0) throw new FinanceError("EMPTY", `No active students in ${structure.level}.`);
 
     // Skip students already invoiced from this structure (idempotent batch).
@@ -102,6 +118,17 @@ export async function batchInvoice(user: SessionUser, structureId: string, dueDa
     let created = 0;
     for (const st of students) {
       if (skip.has(st.id)) continue;
+      
+      let discountKes = 0;
+      let notes = null;
+      if (isSiblingDiscountEnabled && st.guardians[0]?.isPrimary) {
+         const count = siblingMap.get(st.guardians[0].guardianId) || 1;
+         if (count > 1) {
+            // Apply a flat 10% discount for families with multiple kids for K.13
+            discountKes = Math.round(total * 0.1);
+            notes = `Applied 10% Sibling Discount (${count} siblings enrolled).`;
+         }
+      }
 
       // Calculate previous outstanding term arrears/balances (H.3)
       const pastInvoices = await tenantDb().invoice.findMany({
@@ -186,6 +213,13 @@ export async function applyPaymentToInvoice(user: SessionUser, invoiceId: string
     try {
       const { queueInvoiceAfterPayment } = await import("@/lib/services/print-queue.service");
       await queueInvoiceAfterPayment(user.tenantId, invoiceId, `System (payment by ${user.fullName})`);
+    } catch { /* best-effort */ }
+
+
+    // M.1 Trigger Referral Rewards on payment
+    try {
+      const { processReferralRewards } = await import("./referral.service");
+      await processReferralRewards(user.tenantId);
     } catch { /* best-effort */ }
 
     return updated;

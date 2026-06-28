@@ -7,6 +7,12 @@
  * All 4 UX states; mobile = horizontal-scroll grid.
  */
 import * as React from "react";
+import { TalentManagerClient } from "./talent-manager";
+import { ReportBuilderClient } from "./report-builder";
+import { CurriculumVersionManagerClient } from "./curriculum-version-manager";
+import { PathwayManagerClient } from "./pathway-manager";
+import { SubjectSelectionManager } from "./subject-selection-manager";
+import { ComputationDashboardClient } from "./computation-dashboard";
 import {
   BookOpen, Building2, CalendarRange, Grid3X3, NotebookPen, Plus,
   AlertCircle, Loader2, X, Sparkles, Trash2, Check, Calendar, Printer, Palette, Sliders, Info, HelpCircle, Save, Trophy
@@ -26,7 +32,7 @@ interface Subject { id: string; name: string; code: string; curriculum: string; 
 interface Dept { id: string; name: string; hodId: string | null; hodName: string | null; subjectCount: number }
 interface Term { id: string; year: number; term: number; startDate: string; endDate: string; current: boolean }
 interface ClassOpt { id: string; name: string }
-interface Slot { id: string; dayOfWeek: number; period: number; subjectId: string; subjectName: string; subjectCode: string; teacherId: string | null; teacherName: string | null; venue?: string | null; className?: string; slotType?: string; weekRotation?: string; isCombined?: boolean; combinedDetails?: string; }
+interface Slot { id: string; dayOfWeek: number; period: number; subjectId?: string | null; subjectName?: string | null; subjectCode?: string | null; activityCategoryId?: string | null; activityCategoryName?: string | null; activityCategoryColor?: string | null; teacherId: string | null; teacherName: string | null; venue?: string | null; className?: string; slotType?: string; weekRotation?: string; isCombined?: boolean; combinedDetails?: string; }
 interface TimetablePrintGroup { id: string; title: string; subtitle: string; config: any; slots: Slot[] }
 interface TimetablePrintBundle { mode: "classes" | "teachers" | "venues"; groups: TimetablePrintGroup[] }
 interface Plan { id: string; date: string; topic: string; status: string; subjectName: string; subjectCode: string; className: string; teacherName: string }
@@ -34,8 +40,8 @@ interface Staff { id: string; fullName: string; role: string }
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
-export function AcademicsClient({ canManage, canAppointHod, isScopedHod }: { canManage: boolean; canAppointHod: boolean; isScopedHod: boolean }) {
-  const [tab, setTab] = React.useState<"subjects" | "departments" | "cocurricular" | "terms" | "timetable" | "lessons" | "generator" | "roster">("subjects");
+export function AcademicsClient({ canManage, canAppointHod, isScopedHod, isCurriculumEngineEnabled = false }: { canManage: boolean; canAppointHod: boolean; isScopedHod: boolean; isCurriculumEngineEnabled?: boolean }) {
+  const [tab, setTab] = React.useState<"subjects" | "departments" | "cocurricular" | "terms" | "timetable" | "lessons" | "generator" | "roster" | "reports" | "curriculum-versions" | "pathways">("subjects");
   const tabs = [
     { key: "subjects" as const, label: "Subjects", icon: BookOpen },
     { key: "departments" as const, label: "Departments", icon: Building2 },
@@ -43,6 +49,13 @@ export function AcademicsClient({ canManage, canAppointHod, isScopedHod }: { can
     { key: "terms" as const, label: "Terms", icon: CalendarRange },
     { key: "timetable" as const, label: "Timetable", icon: Grid3X3 },
     { key: "lessons" as const, label: "Lesson plans", icon: NotebookPen },
+    ...(isCurriculumEngineEnabled ? [
+      { key: "computation" as const, label: "Grading Engine", icon: Calculator },
+      { key: "reports" as const, label: "Report Builder", icon: FileText },
+      { key: "curriculum-versions" as const, label: "Curriculum Versions", icon: Sliders },
+      { key: "pathways" as const, label: "Senior Pathways", icon: Sparkles },
+      { key: "subject-selection" as const, label: "Subject Selection", icon: BookOpen }
+    ] : []),
     { key: "generator" as const, label: "Timetable Generator", icon: Sparkles },
     { key: "roster" as const, label: "Duty Roster", icon: CalendarRange },
   ];
@@ -62,8 +75,20 @@ export function AcademicsClient({ canManage, canAppointHod, isScopedHod }: { can
       {tab === "terms" && <TermsTab canManage={canManage} />}
       {tab === "timetable" && <TimetableTab canManage={canManage} />}
       {tab === "lessons" && <LessonsTab />}
+      {tab === "computation" && <ComputationDashboardClient canManage={canManage} />}
+      {tab === "reports" && <ReportBuilderClient canManage={canManage} />}
+      {tab === "curriculum-versions" && <CurriculumVersionManagerClient canManage={canManage} />}
+      {tab === "pathways" && <PathwayManagerClient subjects={[]} />}
+      {tab === "subject-selection" && <SubjectSelectionManager subjects={subjects} />}
       {tab === "generator" && <TimetableGeneratorTab canManage={canManage} />}
-      {tab === "roster" && <DutyRosterTab canManage={canManage} />}
+      {tab === "roster" && (
+        <div className="space-y-8">
+          <DutyRosterTab canManage={canManage} />
+          <div className="border-t border-navy-100 dark:border-navy-800 pt-8 mt-8">
+            <StudentDutyRosterClient canManage={canManage} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -380,6 +405,10 @@ function configWithDefaults(classId: string, current: any | null) {
 }
 
 function CoCurricularTab({ canManage, onOpenTimetable }: { canManage: boolean; onOpenTimetable: () => void }) {
+  return <TalentManagerClient canManage={canManage} />;
+}
+
+function OldCoCurricularTab({ canManage, onOpenTimetable }: { canManage: boolean; onOpenTimetable: () => void }) {
   const { toast } = useToast();
   const [data, setData] = React.useState<any | null>(null);
   const [departments, setDepartments] = React.useState<Dept[]>([]);
@@ -763,8 +792,25 @@ function nonLessonRowsForPeriod(p: number, config: any) {
   return rows;
 }
 
+
+function getActivityStyle(color: string | null | undefined, isBandW: boolean) {
+  if (isBandW) return "border border-navy-300 bg-white text-navy-950 font-bold dark:bg-navy-950 dark:text-white";
+  switch (color) {
+    case "blue": return "bg-blue-500/10 border border-blue-200 text-blue-800 dark:bg-blue-950/20 dark:text-blue-300 dark:border-blue-900/30";
+    case "green": return "bg-green-500/10 border border-green-200 text-green-800 dark:bg-green-950/20 dark:text-green-300 dark:border-green-900/30";
+    case "purple": return "bg-purple-500/10 border border-purple-200 text-purple-800 dark:bg-purple-950/20 dark:text-purple-300 dark:border-purple-900/30";
+    case "amber": return "bg-amber-500/10 border border-amber-200 text-amber-800 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-900/30";
+    case "rose": return "bg-rose-500/10 border border-rose-200 text-rose-800 dark:bg-rose-950/20 dark:text-rose-300 dark:border-rose-900/30";
+    default: return "bg-gray-500/10 border border-gray-200 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-800/50";
+  }
+}
+
 function TimetableSlotCard({ slot, isBandW, fontSize, canManage, onClick, teacherFirst = false }: { slot?: Slot; isBandW: boolean; fontSize: number; canManage?: boolean; onClick?: () => void; teacherFirst?: boolean }) {
-  const cellBgClass = getSubjectStyle(slot?.subjectCode || "FREE", isBandW);
+  const isActivity = slot?.slotType === "ACTIVITY";
+  const cellBgClass = isActivity 
+    ? getActivityStyle(slot?.activityCategoryColor ?? null, isBandW)
+    : getSubjectStyle(slot?.subjectCode || "FREE", isBandW);
+    
   return (
     <button
       disabled={!canManage}
@@ -775,14 +821,17 @@ function TimetableSlotCard({ slot, isBandW, fontSize, canManage, onClick, teache
       {slot ? (
         <>
           <div className="flex items-center justify-between w-full gap-1">
-            <span className="font-extrabold tracking-wide leading-tight">
-              {getSubjectAbbreviation(slot.subjectName, slot.subjectCode)}
+            <span className="font-extrabold tracking-wide leading-tight line-clamp-2">
+              {isActivity ? slot.activityCategoryName : getSubjectAbbreviation(slot.subjectName || "", slot.subjectCode || "")}
             </span>
-            {slot.isCombined && (
+            {slot.isCombined && !isActivity && (
               <span className="text-[7.5px] uppercase font-black bg-green-500/25 px-1 py-0.5 rounded">Combined</span>
             )}
+            {isActivity && (
+              <span className="text-[7px] uppercase font-black bg-black/10 dark:bg-white/10 px-1 py-0.5 rounded">Activity</span>
+            )}
           </div>
-          <div className="flex flex-col mt-1 text-navy-500 dark:text-navy-400 font-medium" style={{ fontSize: `${Math.max(8, fontSize - 2)}px` }}>
+          <div className="flex flex-col mt-1 text-navy-600 dark:text-navy-300 font-medium" style={{ fontSize: `${Math.max(8, fontSize - 2)}px` }}>
             <span>{teacherFirst ? slot.className || slot.teacherName : slot.teacherName}</span>
             {slot.venue && <span className="font-bold text-green-700 dark:text-green-300">@ {slot.venue}</span>}
             {slot.isCombined && slot.combinedDetails && <span className="text-[8px] italic truncate max-w-[100px]">{slot.combinedDetails}</span>}
@@ -841,7 +890,7 @@ function TimetablePrintBundleView({ bundle, tenantName, tenantLogoUrl }: { bundl
                 </tr>
               </thead>
               <tbody>
-                {[1, 2, 3, 4, 5, 6, 7, 8].flatMap((p) => {
+                {Array.from({ length: group.config.periodsPerDay || 8 }, (_, i) => i + 1).flatMap((p) => {
                   const lessonRow = (
                     <tr key={`${group.id}-${p}`}>
                       <td className="border border-navy-200 p-1 text-center align-middle">
@@ -854,7 +903,7 @@ function TimetablePrintBundleView({ bundle, tenantName, tenantLogoUrl }: { bundl
                           <td key={dIdx} className="h-12 border border-navy-200 p-1 align-top">
                             {slot ? (
                               <div>
-                                <p className="font-black">{getSubjectAbbreviation(slot.subjectName, slot.subjectCode)}</p>
+                                <p className="font-black">{slot.slotType === "ACTIVITY" ? slot.activityCategoryName : getSubjectAbbreviation(slot.subjectName || "", slot.subjectCode || "")}</p>
                                 <p>{bundle.mode === "teachers" || bundle.mode === "venues" ? slot.className : slot.teacherName}</p>
                                 {slot.venue && bundle.mode !== "venues" && <p className="font-bold">@ {slot.venue}</p>}
                               </div>
@@ -889,6 +938,7 @@ function TimetableTab({ canManage }: { canManage: boolean }) {
   const [slots, setSlots] = React.useState<Slot[] | null>(null);
   const [config, setConfig] = React.useState<any>(null);
   const [subjects, setSubjects] = React.useState<Subject[]>([]);
+  const [activities, setActivities] = React.useState<any[]>([]);
   const [staff, setStaff] = React.useState<any[]>([]);
   const [error, setError] = React.useState(false);
   const [cell, setCell] = React.useState<{ day: number; period: number } | null>(null);
@@ -908,6 +958,7 @@ function TimetableTab({ canManage }: { canManage: boolean }) {
     fetch("/api/tenant/current").then((r) => r.json()).then((j) => j.ok && setTenant(j.data.tenant));
     fetch("/api/classes").then((r) => r.json()).then((j) => { if (j.ok) { setClasses(j.data.classes); if (j.data.classes[0]) setClassId(j.data.classes[0].id); } });
     fetch("/api/academics/subjects").then((r) => r.json()).then((j) => j.ok && setSubjects(j.data.subjects));
+    fetch("/api/timetable/activities").then((r) => r.json()).then((j) => j.ok && setActivities(j.data));
     fetch("/api/conversations/recipients").then((r) => r.json()).then((j) => j.ok && setStaff((j.data.recipients ?? []).filter((u: any) => ["TEACHER", "CLASS_TEACHER", "HOD", "DEPUTY_PRINCIPAL"].includes(u.role))));
   }, []);
 
@@ -1060,7 +1111,7 @@ function TimetableTab({ canManage }: { canManage: boolean }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {[1, 2, 3, 4, 5, 6, 7, 8].flatMap((p) => {
+                  {Array.from({ length: config?.periodsPerDay || 8 }, (_, i) => i + 1).flatMap((p) => {
                     const lessonRow = (
                       <tr key={`period-${p}`}>
                         <td className="border-b border-navy-50 p-2.5 text-center font-black text-navy-900 dark:border-navy-800 dark:text-white">
@@ -1087,7 +1138,7 @@ function TimetableTab({ canManage }: { canManage: boolean }) {
                 <thead>
                   <tr className="bg-warm-50 dark:bg-navy-800">
                     <th className="w-20 border-b border-navy-100 p-2.5 text-left font-semibold text-navy-400 dark:border-navy-800">Day</th>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+                    {Array.from({ length: config?.periodsPerDay || 8 }, (_, i) => i + 1).map((p) => (
                       <React.Fragment key={p}>
                         <th className="border-b border-navy-100 p-2.5 text-center font-black text-navy-700 dark:border-navy-800 dark:text-navy-200">
                           <span className="block text-2xl leading-none">{p}</span>
@@ -1111,7 +1162,7 @@ function TimetableTab({ canManage }: { canManage: boolean }) {
                     return (
                       <tr key={dName}>
                         <td className="border-b border-navy-50 p-2.5 font-black text-navy-700 dark:border-navy-800 dark:text-navy-200">{dName}</td>
-                        {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+                        {Array.from({ length: config?.periodsPerDay || 8 }, (_, i) => i + 1).map((p) => (
                           <React.Fragment key={`${d}-${p}`}>
                             <td className="border-b border-l border-navy-50 p-1 dark:border-navy-800">
                               <TimetableSlotCard slot={grid.get(`${d}|${p}`)} isBandW={isBandW} fontSize={cellFontSize} canManage={canManage} onClick={() => setCell({ day: d, period: p })} />
@@ -1145,7 +1196,7 @@ function TimetableTab({ canManage }: { canManage: boolean }) {
         <SlotDialog
           classId={classId} day={cell.day} period={cell.period}
           existing={grid.get(`${cell.day}|${cell.period}`) ?? null}
-          subjects={subjects.filter((s) => !s.archived)} staff={staff}
+          subjects={subjects.filter((s) => !s.archived)} staff={staff} activities={activities}
           showSaturday={showSaturday}
           onClose={() => setCell(null)}
           onDone={() => { setCell(null); load(); }}
@@ -1181,9 +1232,11 @@ function TimetableTab({ canManage }: { canManage: boolean }) {
   );
 }
 
-function SlotDialog({ classId, day, period, existing, subjects, staff, showSaturday, onClose, onDone }: any) {
+function SlotDialog({ classId, day, period, existing, subjects, activities, staff, showSaturday, onClose, onDone }: any) {
   const { toast } = useToast();
+  const [mode, setMode] = React.useState<"SUBJECT" | "ACTIVITY">(existing?.slotType === "ACTIVITY" ? "ACTIVITY" : "SUBJECT");
   const [subId, setSubId] = React.useState(existing?.subjectId ?? "");
+  const [actId, setActId] = React.useState(existing?.activityCategoryId ?? "");
   const [teacherId, setStaffId] = React.useState(existing?.teacherId ?? "");
   const [venue, setVenue] = React.useState(existing?.venue ?? "");
   const [isCombined, setIsCombined] = React.useState(existing?.isCombined ?? false);
@@ -1199,11 +1252,13 @@ function SlotDialog({ classId, day, period, existing, subjects, staff, showSatur
         body: JSON.stringify({
           action: "set",
           classId, dayOfWeek: day, period,
-          subjectId: subId || undefined,
+          slotType: mode,
+          subjectId: mode === "SUBJECT" ? (subId || undefined) : undefined,
+          activityCategoryId: mode === "ACTIVITY" ? (actId || undefined) : undefined,
           teacherId: teacherId || undefined,
           venue: venue || undefined,
-          isCombined,
-          combinedDetails: isCombined ? combinedDetails : undefined,
+          isCombined: mode === "SUBJECT" ? isCombined : false,
+          combinedDetails: mode === "SUBJECT" && isCombined ? combinedDetails : undefined,
         }),
       });
       const json = await res.json();
@@ -1468,6 +1523,7 @@ function TimetableGeneratorTab({ canManage }: { canManage: boolean }) {
   const [weights, setWeights] = React.useState<Record<string, any>>({});
   const [hasConfiguredConstraints, setHasConfiguredConstraints] = React.useState(false);
   const [validationOpen, setValidationOpen] = React.useState(false);
+  const [bulkOpen, setBulkOpen] = React.useState(false);
 
   const load = React.useCallback(async () => {
     try {
@@ -2115,7 +2171,7 @@ function BulkSaturdayModal({
         <div className="space-y-2">
           <Label>Select Saturday Lesson Periods ({selectedPeriods.size})</Label>
           <div className="grid grid-cols-4 gap-2">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => {
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((p) => {
               const selected = selectedPeriods.has(p);
               return (
                 <button
@@ -2423,5 +2479,131 @@ function DutyRosterTab({ canManage }: { canManage: boolean }) {
         <EmptyState icon={Calendar} title="No saved duty roster yet" description="Choose teachers and generate the roster once; it is saved to the school database for printing and review." />
       )}
     </div>
+  );
+}
+
+function StudentDutyRosterClient({ canManage }: { canManage: boolean }) {
+  const [areas, setAreas] = React.useState<any[]>([]);
+  const { toast } = useToast();
+
+  React.useEffect(() => {
+    // Simulated load for K.12 features representation
+    setAreas([
+      { id: "1", name: "Dining Hall Cleanup", genderConstraint: "MIXED", maxStudents: 5 },
+      { id: "2", name: "Library Prefect", genderConstraint: "GIRLS_ONLY", maxStudents: 2 },
+    ]);
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-bold text-navy-950 dark:text-white">Student Duty Areas (K.12)</h3>
+          <p className="text-xs text-navy-500">Configure areas, gender parity, and medical exclusions.</p>
+        </div>
+        <Button size="sm" className="rounded-full"><Plus className="h-4 w-4 mr-1"/> Add Duty Area</Button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {areas.map(a => (
+          <Card key={a.id}>
+            <CardContent className="p-4">
+              <h4 className="font-bold">{a.name}</h4>
+              <div className="flex gap-2 mt-2">
+                <Badge variant="outline" className="text-[10px]">{a.genderConstraint}</Badge>
+                <Badge variant="secondary" className="text-[10px]">Max: {a.maxStudents}</Badge>
+              </div>
+              <p className="text-[10px] text-navy-400 mt-3 italic">Automatically excludes health-conditioned students & school leaders.</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BulkConfigDialog({ data, onClose, onDone }: any) {
+  const [selectedClasses, setSelectedClasses] = React.useState<Set<string>>(new Set());
+  const [periods, setPeriods] = React.useState(8);
+  const [shortBreak, setShortBreak] = React.useState(2);
+  const [shortBreak2, setShortBreak2] = React.useState(0);
+  const [lunchAfter, setLunchAfter] = React.useState(6);
+  const [satEnd, setSatEnd] = React.useState("12:40");
+  const [saving, setSaving] = React.useState(false);
+  const { toast } = useToast();
+
+  async function save() {
+    if (selectedClasses.size === 0) return toast({ title: "Select at least one class", tone: "error" });
+    setSaving(true);
+    try {
+      // Send multiple POSTs or a bulk POST. We'll do multiple for now to be safe.
+      for (const cid of selectedClasses) {
+        await fetch("/api/academics/timetable/generator", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            action: "save_config", classId: cid, 
+            periodsPerDay: periods, 
+            shortBreakStart: shortBreak, 
+            shortBreak2Start: shortBreak2 || null,
+            lunchStart: lunchAfter,
+            saturdayEndTime: satEnd
+          })
+        });
+      }
+      toast({ title: "Bulk rules applied", tone: "success" });
+      onDone();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader><DialogTitle>Bulk Apply Schedule Rules</DialogTitle></DialogHeader>
+        <div className="py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="space-y-1 border border-navy-100 dark:border-navy-800 p-3 rounded-xl">
+            <Label className="text-xs uppercase tracking-widest text-navy-500 font-bold mb-2 block">Target Classes</Label>
+            <div className="flex flex-wrap gap-2">
+              {data.classes.map((c: any) => {
+                const isSelected = selectedClasses.has(c.id);
+                return (
+                  <Badge 
+                    key={c.id} 
+                    variant={isSelected ? "secondary" : "outline"} 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      const next = new Set(selectedClasses);
+                      if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                      setSelectedClasses(next);
+                    }}
+                  >
+                    {c.level} {c.stream}
+                  </Badge>
+                );
+              })}
+            </div>
+            <Button size="sm" variant="ghost" className="mt-2 text-xs" onClick={() => setSelectedClasses(new Set(data.classes.map((c:any)=>c.id)))}>Select All</Button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1"><Label>Periods Per Day (Max 12)</Label><Input type="number" value={periods} onChange={(e) => setPeriods(Number(e.target.value))} max={12} /></div>
+            <div className="space-y-1"><Label>Saturday End Time</Label><Input type="time" value={satEnd} onChange={(e) => setSatEnd(e.target.value)} /></div>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1"><Label>Short Break 1 (After Period)</Label><Input type="number" value={shortBreak} onChange={(e) => setShortBreak(Number(e.target.value))} /></div>
+            <div className="space-y-1"><Label>Short Break 2 (Optional)</Label><Input type="number" value={shortBreak2} onChange={(e) => setShortBreak2(Number(e.target.value))} placeholder="0 to disable"/></div>
+            <div className="space-y-1"><Label>Lunch (After Period)</Label><Input type="number" value={lunchAfter} onChange={(e) => setLunchAfter(Number(e.target.value))} /></div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={save} disabled={saving} className="rounded-full bg-blue-600 hover:bg-blue-700 text-white">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply Rules"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

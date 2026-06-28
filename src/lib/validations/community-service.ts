@@ -1,0 +1,19 @@
+import { z } from "zod";
+import { dateYmd } from "./date";
+
+export const SERVICE_CATEGORIES = ["ENVIRONMENT", "CHARITY", "SCHOOL_SERVICE", "COMMUNITY", "OTHER"] as const;
+
+export const communityServiceSchema = z.object({
+  studentId: z.string().cuid(),
+  title: z.string().min(2, "Title is required").max(100),
+  category: z.enum(SERVICE_CATEGORIES),
+  date: dateYmd,
+  hours: z.number().int().min(1, "Must log at least 1 hour").max(100),
+  location: z.string().max(100).optional().nullable(),
+  supervisorName: z.string().max(100).optional().nullable(),
+  supervisorPhone: z.string().max(20).optional().nullable(),
+  studentReflection: z.string().max(1000).optional().nullable(),
+  status: z.enum(["PENDING", "APPROVED", "REJECTED"]).default("APPROVED"),
+});
+
+export type CommunityServiceInput = z.infer<typeof communityServiceSchema>;

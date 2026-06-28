@@ -51,6 +51,20 @@ export async function sendSms(to: string, message: string, options?: SendSmsOpti
 
   if (!config.apiKey) {
     console.log(`\n[SMS → ${to}]\n${finalMessage}\n`);
+    if (options?.tenantId) {
+      const costPerSms = 0.8;
+      const pricePerSms = 1.2;
+      await db.smsMarginLedger.create({
+        data: {
+          tenantId: options.tenantId,
+          messageCount: 1,
+          costPerSmsKes: costPerSms,
+          pricePerSmsKes: pricePerSms,
+          marginKes: (pricePerSms - costPerSms) * 1,
+          status: "UNBILLED"
+        }
+      });
+    }
     return {
       ok: process.env.NODE_ENV !== "production",
       provider: "dev-console",

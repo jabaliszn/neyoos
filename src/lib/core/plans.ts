@@ -46,6 +46,12 @@ export const ADD_ONS: AddOnDef[] = [
   { key: "transport_module", name: "Transport module", pricePerTerm: 2500, description: "Routes, fleet compliance, transport fees." },
   { key: "inventory_module", name: "Inventory & cafeteria", pricePerTerm: 2000, description: "Stores, stock, meal cards, uniform catalogue." },
   { key: "priority_support", name: "Priority support", pricePerTerm: 3000, description: "Same-day responses, onboarding help." },
+  
+  // PART J.23 Premium Add-ons
+  { key: "skills_passport", name: "Skills Passport & Portfolio", pricePerTerm: 3500, description: "Premium tracking of learner talents and digital evidence." },
+  { key: "custom_reports", name: "Modular Report Builder", pricePerTerm: 1500, description: "Design infinite custom no-code report card layouts." },
+  { key: "advanced_analytics", name: "Advanced School Analytics", pricePerTerm: 5000, description: "Systemic insights, attendance-performance correlations, and intervention alerts." },
+  { key: "pathway_guidance", name: "Career Discovery & Pathways", pricePerTerm: 2000, description: "Track student interests and map Senior School pathways." },
 ];
 
 const CORE = ["students", "attendance", "finance", "academics", "staff"];
@@ -109,8 +115,9 @@ export const PLANS: PlanDef[] = [
     pricePerTerm: 22000,
     perStudentPerTerm: 0,
     limits: { students: 5000, staff: 500, smsPerTerm: 0 },
-    includedModules: [...CORE, "library", "lms", "hostel", "transport", "inventory", "cafeteria"],
-    maxAddOns: 10,
+    // Elite implicitly unlocks premium Part J features
+    includedModules: [...CORE, "library", "lms", "hostel", "transport", "inventory", "cafeteria", "skills_passport", "custom_reports", "advanced_analytics", "pathway_guidance"],
+    maxAddOns: 15,
     overageAllowance: 1.25,
     support: "Priority support + onboarding",
     highlights: [

@@ -9,7 +9,7 @@ import * as React from "react";
 import {
   GraduationCap, AlertCircle, Loader2, ArrowLeft, FileText, Wallet,
   CalendarCheck, MessageSquare, Smartphone, X, BookOpen, Download, Calendar,
-  UserCheck, ShieldCheck, KeyRound, Trash2, Camera, FolderOpen,
+  UserCheck, ShieldCheck, KeyRound, Trash2, Camera, FolderOpen, ShoppingBag, Book, CalendarDays, CheckCircle2,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { FileUpload, type UploadedFile } from "@/components/ui/file-upload";
 import { StudentCompetencySummaryCard } from "@/components/competencies/competency-framework-components";
 import { SkillsPassportCard } from "@/components/skills-passport/skills-passport-card";
 import { LearnerJourneyCard } from "@/components/learner-journey/learner-journey-card";
+import { ParentGrowthTab } from "./parent-growth-tab";
 
 const kes = (n: number) => `KES ${n.toLocaleString("en-KE")}`;
 
@@ -47,7 +48,7 @@ interface ChildDetail {
 const ATT_TONE: Record<string, "green" | "red" | "amber" | "neutral"> = { P: "green", A: "red", L: "amber", E: "neutral" };
 const ATT_LABEL: Record<string, string> = { P: "Present", A: "Absent", L: "Late", E: "Excused" };
 
-export function ParentPortalClient() {
+export function ParentPortalClient({ isCurriculumEngineEnabled = false }: { isCurriculumEngineEnabled?: boolean }) {
   const [children, setChildren] = React.useState<ChildCard[] | null>(null);
   const [error, setError] = React.useState(false);
   const [openChild, setOpenChild] = React.useState<string | null>(null);
@@ -217,7 +218,7 @@ function ChildView({ id, onBack }: { id: string; onBack: () => void }) {
       <SkillsPassportCard studentId={id} />
 
       {/* J.8 Learning Journey Timeline */}
-      <LearnerJourneyCard studentId={id} mode="parent" />
+      {isCurriculumEngineEnabled && <LearnerJourneyCard studentId={id} mode="parent" />}
 
       {/* attendance */}
       <Card>

@@ -501,7 +501,14 @@ export async function listLessonPlans(user: SessionUser, filters: { classId?: st
     if (filters.classId) where.classId = filters.classId;
     if (filters.from || filters.to) where.date = { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) };
     const rows = await tenantDb().lessonPlan.findMany({
-      where, orderBy: { date: "desc" }, take: 200, include: { subject: true },
+      where, orderBy: { date: "desc" }, take: 200, 
+      include: { 
+        subject: true,
+        strand: { select: { id: true, name: true } },
+        competency: { select: { id: true, name: true } },
+        assessmentPlan: { select: { id: true, title: true } },
+        resources: true,
+      },
     });
     const classIds = [...new Set(rows.map((r) => r.classId))];
     const classes = classIds.length ? await tenantDb().schoolClass.findMany({ where: { id: { in: classIds } } }) : [];
@@ -512,11 +519,20 @@ export async function listLessonPlans(user: SessionUser, filters: { classId?: st
       className: cMap.get(r.classId) ?? "—", classId: r.classId,
       teacherName: r.teacherName, teacherId: r.teacherId,
       objectives: r.objectives, activities: r.activities, notes: r.notes,
+      strand: r.strand,
+      competency: r.competency,
+      assessmentPlan: r.assessmentPlan,
+      resources: r.resources,
     }));
   });
 }
 
-export async function createLessonPlan(user: SessionUser, input: { subjectId: string; classId: string; date: string; topic: string; objectives?: string; activities?: string; notes?: string }) {
+export async function createLessonPlan(user: SessionUser, input: { 
+  subjectId: string; classId: string; date: string; topic: string; 
+  objectives?: string | null; activities?: string | null; notes?: string | null;
+  strandId?: string | null; competencyId?: string | null; assessmentPlanId?: string | null;
+  resources?: { fileUrl: string; fileName?: string }[];
+}) {
   return withTenant(user.tenantId, async () => {
     const plan = await tenantDb().lessonPlan.create({
       data: {
@@ -524,6 +540,12 @@ export async function createLessonPlan(user: SessionUser, input: { subjectId: st
         subjectId: input.subjectId, classId: input.classId, date: input.date,
         topic: input.topic, objectives: input.objectives || null,
         activities: input.activities || null, notes: input.notes || null,
+        strandId: input.strandId || null,
+        competencyId: input.competencyId || null,
+        assessmentPlanId: input.assessmentPlanId || null,
+        resources: input.resources && input.resources.length > 0 ? {
+          create: input.resources.map(r => ({ tenantId: user.tenantId, fileUrl: r.fileUrl, fileName: r.fileName || null }))
+        } : undefined,
       } as never,
     });
     await audit(user, "academics.lesson_planned", "lessonPlan", plan.id, { topic: input.topic, date: input.date });
@@ -659,5 +681,41 @@ export async function fairSaturdaySchedule(
       createdCount,
     });
     return { success: true, createdCount, skippedClasses: classIds.length - eligibleClassIds.length, placements };
+  });
+}
+
+export async function getLessonPlanningAnalytics(user: SessionUser, classId: string, subjectId: string) {
+  return withTenant(user.tenantId, async () => {
+    const tDb = tenantDb();
+    
+    // 1. How many lesson plans exist
+    const totalPlans = await tDb.lessonPlan.count({ where: { classId, subjectId } });
+    
+    // 2. How many are TAUGHT
+    const taughtPlans = await tDb.lessonPlan.count({ where: { classId, subjectId, status: "TAUGHT" } });
+    
+    // 3. How many unique strands mapped
+    const strandPlans = await tDb.lessonPlan.findMany({
+      where: { classId, subjectId, strandId: { not: null } },
+      select: { strandId: true }
+    });
+    const uniqueStrandsCovered = new Set(strandPlans.map(p => p.strandId)).size;
+    
+    const totalStrands = await tDb.cbcStrand.count({ where: { subjectId } });
+
+    // 4. How many unique competencies mapped
+    const compPlans = await tDb.lessonPlan.findMany({
+      where: { classId, subjectId, competencyId: { not: null } },
+      select: { competencyId: true }
+    });
+    const uniqueCompetenciesTaught = new Set(compPlans.map(p => p.competencyId)).size;
+
+    return {
+      totalPlans,
+      taughtPlans,
+      uniqueStrandsCovered,
+      totalStrands,
+      uniqueCompetenciesTaught,
+    };
   });
 }

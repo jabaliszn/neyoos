@@ -19,6 +19,11 @@ import { MessageButton } from "@/components/messaging/message-button";
 import { StudentCompetencySummaryCard } from "@/components/competencies/competency-framework-components";
 import { SkillsPassportCard } from "@/components/skills-passport/skills-passport-card";
 import { LearnerJourneyCard } from "@/components/learner-journey/learner-journey-card";
+import { StudentPathwayTab } from "@/components/students/student-pathway-tab";
+import { StudentIdentityTab } from "@/components/students/student-identity-tab";
+import { StudentServiceTab } from "@/components/students/student-service-tab";
+import { StudentCareerTab } from "@/components/students/student-career-tab";
+import { StudentTalentTab } from "@/components/students/student-talent-tab";
 
 interface Guardian { id: string; guardianId: string; relationship: string; isPrimary: boolean; guardian: { id: string; fullName: string; phone: string; email: string | null; userId: string | null } }
 interface Doc { id: string; label: string; fileUrl: string; fileName: string | null; hardcopyLocation: string; createdAt: string }
@@ -40,7 +45,7 @@ const STATUS_TONE: Record<string, "green"|"neutral"|"amber"|"blue"|"red"> = {
 };
 const STATUSES = ["ACTIVE","INACTIVE","GRADUATED","TRANSFERRED","SUSPENDED"];
 
-export function StudentProfileClient({ initial, canEdit }: { initial: Student; canEdit: boolean }) {
+export function StudentProfileClient({ initial, canEdit, isCurriculumEngineEnabled = false }: { initial: Student; canEdit: boolean; isCurriculumEngineEnabled?: boolean }) {
   const { toast } = useToast();
   const [s, setS] = React.useState<Student>(initial);
   const [busy, setBusy] = React.useState(false);
@@ -290,6 +295,14 @@ export function StudentProfileClient({ initial, canEdit }: { initial: Student; c
 
         {/* J.8 Learning Journey Timeline */}
         <div className="lg:col-span-2">
+          
+          
+          {/* Talent Tracking */}
+          <StudentTalentTab studentId={s.id} />
+          
+          {/* Senior School Pathway */}
+          <StudentPathwayTab studentId={s.id} />
+          
           <LearnerJourneyCard studentId={s.id} mode="staff" />
         </div>
       </div>

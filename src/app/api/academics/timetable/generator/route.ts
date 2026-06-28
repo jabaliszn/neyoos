@@ -8,7 +8,7 @@ import { requirePermission } from "@/lib/core/session";
 import { ok, handleError, fail } from "@/lib/api/respond";
 import {
   getTimetableInputs, saveClassSubjectNeed, saveTimetableConfig,
-  saveTeacherSubjects, generateWholeSchoolTimetable,
+  saveTeacherSubjects, generateWholeSchoolTimetable, autoAssignTeachersToClasses,
 } from "@/lib/services/timetable-solver.service";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "save_teacher_subject") {
-      const result = await saveTeacherSubjects(user, body.teacherId, body.subjectIds as string[]);
+      const result = await saveTeacherSubjects(user, body.teacherId, (body.subjectIds as any[]).map(s => typeof s === "string" ? { id: s, isStrong: false } : s));
       return ok(result);
     }
 

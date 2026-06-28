@@ -2,11 +2,15 @@ import { requirePagePermission } from "@/lib/core/page-guards";
 import { can } from "@/lib/core/permissions";
 import { ExamsClient } from "@/components/exams/exams-client";
 import { ExamAnalyticsClient } from "@/components/exams/exam-analytics-client";
+import { ExamPrintClient } from "@/components/exams/exam-print-client";
+import { AdvancedAnalyticsClient } from "@/components/exams/advanced-analytics-client";
+import { isCurriculumEngineEnabled } from "@/lib/services/launch-control.service";
 
 export const dynamic = "force-dynamic";
 
 /** B.5 Examination — exams, marks entry, positions, report cards. */
 export default async function ExamsPage() {
+  const isCurriculumEngineEnabledFlag = await isCurriculumEngineEnabled();
   const user = await requirePagePermission("exam.view");
 
   const has = (permission: Parameters<typeof can>[1]) => can(user.role, permission) || (user.secondaryRole ? can(user.secondaryRole, permission) : false);

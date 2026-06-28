@@ -30,9 +30,19 @@ model Tenant {
   osKey  String  @default("school") // I.50: school | business | farm | creator
 
   // Onboarding (G.3)
-  curriculum           String? // "CBC" | "8-4-4" | "BOTH"
-  onboardedAt          DateTime?
+  principalSignatureUrl String? // K.14 Digital Signature
+  schoolStampUrl        String? // K.14 Digital Stamp
+  curriculum            String? // "CBC" | "8-4-4" | "BOTH"
+  onboardedAt           DateTime?
   // G.14 Day-One Demo Mode: a sandboxed, time-boxed tenant that auto-expires.
+
+  // PART M.1 — NEYO Referral Engine
+  referralCode       String?  @unique
+  referredByTenantId String?
+  referredBy         Tenant?  @relation("TenantReferrals", fields: [referredByTenantId], references: [id], onDelete: SetNull)
+  referrals          Tenant[] @relation("TenantReferrals")
+  hasClaimedReferral Boolean  @default(false)
+
   isDemo               Boolean   @default(false)
   demoExpiresAt        DateTime? // when the demo tenant is purged (null = not a demo / kept)
   // G.21 (founder 2026-06-12): DAY | BOARDING | DAY_AND_BOARDING — gates the
@@ -115,151 +125,176 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users                     User[]
-  idSequences               IdSequence[]
-  auditLogs                 AuditLog[]
-  modules                   TenantModule[]
-  subscription              Subscription?
-  usageCounters             UsageCounter[]
-  paymentCredential         PaymentCredential?
-  payments                  Payment[]
-  notifications             Notification[]
-  webPushSubscriptions      WebPushSubscription[]
-  messageAcknowledgements   MessageAcknowledgement[]
-  messageDeliveryReports    MessageDeliveryReport[]
-  intercomCalls             IntercomCall[]
-  notificationTemplates     NotificationTemplate[]
-  conversations             Conversation[]
-  storedFiles               StoredFile[]
-  storageProvider           TenantStorageProvider?
-  storageUsageSnapshots     StorageUsageSnapshot[]
-  documentVerifications     DocumentVerification[]
-  apiKeys                   ApiKey[]
-  webhookSubscriptions      WebhookSubscription[]
-  webhookDeliveries         WebhookDelivery[]
-  calendarEvents            CalendarEvent[]
-  visitorLogs               VisitorLog[]
-  admissionInquiries        AdmissionInquiry[]
-  phoneMessages             PhoneMessage[]
-  schoolClasses             SchoolClass[]
-  students                  Student[]
-  guardians                 Guardian[]
-  studentImports            StudentImport[]
-  studentTransfers          StudentTransfer[]
-  attendanceRecords         AttendanceRecord[]
-  principalDelegationTasks  PrincipalDelegationTask[]
-  promotionRuns             PromotionRun[]
-  admissionApplications     AdmissionApplication[]
-  staffAttendance           StaffAttendance[]
-  departments               Department[]
-  subjects                  Subject[]
-  academicTerms             AcademicTerm[]
-  curricula                 Curriculum[]
-  educationLevels           EducationLevel[]
-  gradeBands                GradeBand[]
-  learningAreas             LearningArea[]
-  timetableSlots            TimetableSlot[]
-  dutyRosterEntries         DutyRosterEntry[]
-  lessonPlans               LessonPlan[]
-  homework                  Homework[]
-  classNotes                ClassNote[]
-  homeworkSubmissions       HomeworkSubmission[]
-  quizzes                   Quiz[]
-  forumThreads              ForumThread[]
-  bulkMessages              BulkMessage[]
-  teacherCommsApprovals     TeacherCommsApprovalRequest[]
-  libraryBooks              LibraryBook[]
-  bookIssues                BookIssue[]
-  hostels                   Hostel[]
-  hostelAttendance          HostelAttendance[]
-  transportRoutes           TransportRoute[]
-  drivers                   Driver[]
-  vehicles                  Vehicle[]
-  gpsBusLocations           GpsBusLocation[]
-  cctvCameras               CctvCamera[]
-  hardwareDeviceConnections HardwareDeviceConnection[]
-  stores                    Store[]
-  assets                    Asset[]
-  mealPlanEntries           MealPlanEntry[]
-  mealCards                 MealCard[]
-  cafeteriaTables           CafeteriaTable[]
-  cafeteriaQueueEntries     CafeteriaQueueEntry[]
-  uniformOrders             UniformOrder[]
-  uniformSizes              UniformSize[]
-  assetMaintenance          AssetMaintenance[]
-  suppliers                 Supplier[]
-  supplierContracts         SupplierContract[]
-  purchaseRequests          PurchaseRequest[]
-  purchaseQuotes            PurchaseQuote[]
-  purchaseOrders            PurchaseOrder[]
-  expenseCategories         ExpenseCategory[]
-  costCenters               CostCenter[]
-  expenses                  Expense[]
-  disciplineIncidents       DisciplineIncident[]
-  suspensions               Suspension[]
-  counselingNotes           CounselingNote[]
-  studentMedical            StudentMedical[]
-  clinicVisits              ClinicVisit[]
-  medicationPlans           MedicationPlan[]
-  printJobs                 PrintJob[]
-  printApprovalRequests     PrintApprovalRequest[]
-  gatePasses                GatePass[]
-  pickupPersons             PickupPerson[]
-  altPickupAuthorizations   AltPickupAuthorization[]
-  ownerApprovalRequests     OwnerApprovalRequest[]
-  panicAlerts               PanicAlert[]
-  exams                     Exam[]
-  examResults               ExamResult[]
-  examReleaseApprovals      ExamReleaseApprovalRequest[]
-  assessmentTypes           AssessmentType[]
-  assessmentPlans           AssessmentPlan[]
-  assessmentRecords         AssessmentRecord[]
-  assessmentEvidence        AssessmentEvidence[]
-  competencyGroups          CompetencyGroup[]
-  competencies              Competency[]
-  competencyEvidence        CompetencyEvidence[]
-  rubrics                   Rubric[]
-  rubricLevels              RubricLevel[]
-  skillsPassportEntries     SkillsPassportEntry[]
-  portfolioItems            PortfolioItem[]
-  cbcStrands                CbcStrand[]
-  cbcAssessments            CbcAssessment[]
-  feeStructures             FeeStructure[]
-  invoices                  Invoice[]
-  staffSalaries             StaffSalary[]
-  payrollRuns               PayrollRun[]
-  staffProfiles             StaffProfile[]
-  leaveRequests             LeaveRequest[]
-  jobPostings               JobPosting[]
-  appraisals                Appraisal[]
-  disciplinaryRecords       DisciplinaryRecord[]
-  trainingRecords           TrainingRecord[]
-  termPulses                TermPulse[]
-  savedViews                SavedView[]
-  teacherSubjects           TeacherSubject[]
-  classSubjectNeeds         ClassSubjectNeed[]
-  timetableConfigs          TimetableConfig[]
-  onlineClassSessions       OnlineClassSession[]
-  onlineClassParticipants   OnlineClassParticipant[]
-  onlineClassSignals        OnlineClassSignal[]
-  onlineClassQuestions      OnlineClassQuestion[]
-  learningVideos            LearningVideo[]
-  learningVideoSessions     LearningVideoSession[]
-  classVoiceRooms           ClassVoiceRoom[]
-  classVoiceParticipants    ClassVoiceParticipant[]
-  classVoiceSignals         ClassVoiceSignal[]
-  syllabusTopics            SyllabusTopic[]
-  examTimetableSlots        ExamTimetableSlot[]
-  examMaterialRecords       ExamMaterialRecord[]
-  promisesToPay             PromiseToPay[]
-  reportCardDayCheckIns     ReportCardDayCheckIn[]
-  newsPosts                 NewsPost[]
-  publicSiteSettings        PublicSiteSettings?
-  publicSiteLeaders         PublicSiteLeader[]
-  publicSiteTestimonials    PublicSiteTestimonial[]
-  publicSiteGalleryImages   PublicSiteGalleryImage[]
-  publicSiteActivities      PublicSiteActivity[]
-  entranceExamPapers        EntranceExamPaper[] // Added for entrance exam papers (H.3)
+  users                      User[]
+  idSequences                IdSequence[]
+  auditLogs                  AuditLog[]
+  modules                    TenantModule[]
+  subscription               Subscription?
+  usageCounters              UsageCounter[]
+  paymentCredential          PaymentCredential?
+  payments                   Payment[]
+  notifications              Notification[]
+  webPushSubscriptions       WebPushSubscription[]
+  messageAcknowledgements    MessageAcknowledgement[]
+  messageDeliveryReports     MessageDeliveryReport[]
+  intercomCalls              IntercomCall[]
+  notificationTemplates      NotificationTemplate[]
+  conversations              Conversation[]
+  storedFiles                StoredFile[]
+  storageProvider            TenantStorageProvider?
+  storageUsageSnapshots      StorageUsageSnapshot[]
+  documentVerifications      DocumentVerification[]
+  apiKeys                    ApiKey[]
+  webhookSubscriptions       WebhookSubscription[]
+  webhookDeliveries          WebhookDelivery[]
+  calendarEvents             CalendarEvent[]
+  visitorLogs                VisitorLog[]
+  admissionInquiries         AdmissionInquiry[]
+  phoneMessages              PhoneMessage[]
+  schoolClasses              SchoolClass[]
+  students                   Student[]
+  guardians                  Guardian[]
+  studentImports             StudentImport[]
+  studentTransfers           StudentTransfer[]
+  attendanceRecords          AttendanceRecord[]
+  principalDelegationTasks   PrincipalDelegationTask[]
+  promotionRuns              PromotionRun[]
+  admissionApplications      AdmissionApplication[]
+  staffAttendance            StaffAttendance[]
+  departments                Department[]
+  subjects                   Subject[]
+  academicTerms              AcademicTerm[]
+  curricula                  Curriculum[]
+  educationLevels            EducationLevel[]
+  gradeBands                 GradeBand[]
+  learningAreas              LearningArea[]
+  timetableSlots             TimetableSlot[]
+  dutyRosterEntries          DutyRosterEntry[]
+  lessonPlans                LessonPlan[]
+  homework                   Homework[]
+  classNotes                 ClassNote[]
+  homeworkSubmissions        HomeworkSubmission[]
+  quizzes                    Quiz[]
+  forumThreads               ForumThread[]
+  bulkMessages               BulkMessage[]
+  teacherCommsApprovals      TeacherCommsApprovalRequest[]
+  libraryBooks               LibraryBook[]
+  bookIssues                 BookIssue[]
+  hostels                    Hostel[]
+  hostelAttendance           HostelAttendance[]
+  transportRoutes            TransportRoute[]
+  drivers                    Driver[]
+  vehicles                   Vehicle[]
+  gpsBusLocations            GpsBusLocation[]
+  cctvCameras                CctvCamera[]
+  hardwareDeviceConnections  HardwareDeviceConnection[]
+  stores                     Store[]
+  assets                     Asset[]
+  mealPlanEntries            MealPlanEntry[]
+  mealCards                  MealCard[]
+  cafeteriaTables            CafeteriaTable[]
+  cafeteriaQueueEntries      CafeteriaQueueEntry[]
+  uniformOrders              UniformOrder[]
+  uniformSizes               UniformSize[]
+  assetMaintenance           AssetMaintenance[]
+  suppliers                  Supplier[]
+  supplierContracts          SupplierContract[]
+  purchaseRequests           PurchaseRequest[]
+  purchaseQuotes             PurchaseQuote[]
+  purchaseOrders             PurchaseOrder[]
+  expenseCategories          ExpenseCategory[]
+  costCenters                CostCenter[]
+  expenses                   Expense[]
+  disciplineIncidents        DisciplineIncident[]
+  suspensions                Suspension[]
+  counselingNotes            CounselingNote[]
+  studentMedical             StudentMedical[]
+  clinicVisits               ClinicVisit[]
+  medicationPlans            MedicationPlan[]
+  printJobs                  PrintJob[]
+  printApprovalRequests      PrintApprovalRequest[]
+  gatePasses                 GatePass[]
+  pickupPersons              PickupPerson[]
+  altPickupAuthorizations    AltPickupAuthorization[]
+  ownerApprovalRequests      OwnerApprovalRequest[]
+  panicAlerts                PanicAlert[]
+  exams                      Exam[]
+  examResults                ExamResult[]
+  examReleaseApprovals       ExamReleaseApprovalRequest[]
+  assessmentTypes            AssessmentType[]
+  assessmentPlans            AssessmentPlan[]
+  assessmentRecords          AssessmentRecord[]
+  assessmentEvidence         AssessmentEvidence[]
+  competencyGroups           CompetencyGroup[]
+  competencies               Competency[]
+  competencyEvidence         CompetencyEvidence[]
+  rubrics                    Rubric[]
+  rubricLevels               RubricLevel[]
+  skillsPassportEntries      SkillsPassportEntry[]
+  pathwayPreferences         StudentPathwayPreference[]
+  talentRecords              TalentRecord[]
+  goals                      StudentGoal[]
+  portfolioItems             PortfolioItem[]
+  cbcStrands                 CbcStrand[]
+  cbcAssessments             CbcAssessment[]
+  feeStructures              FeeStructure[]
+  invoices                   Invoice[]
+  staffSalaries              StaffSalary[]
+  payrollRuns                PayrollRun[]
+  staffProfiles              StaffProfile[]
+  leaveRequests              LeaveRequest[]
+  jobPostings                JobPosting[]
+  appraisals                 Appraisal[]
+  disciplinaryRecords        DisciplinaryRecord[]
+  trainingRecords            TrainingRecord[]
+  termPulses                 TermPulse[]
+  savedViews                 SavedView[]
+  teacherSubjects            TeacherSubject[]
+  classSubjectNeeds          ClassSubjectNeed[]
+  timetableConfigs           TimetableConfig[]
+  onlineClassSessions        OnlineClassSession[]
+  onlineClassParticipants    OnlineClassParticipant[]
+  onlineClassSignals         OnlineClassSignal[]
+  onlineClassQuestions       OnlineClassQuestion[]
+  learningVideos             LearningVideo[]
+  learningVideoSessions      LearningVideoSession[]
+  classVoiceRooms            ClassVoiceRoom[]
+  classVoiceParticipants     ClassVoiceParticipant[]
+  classVoiceSignals          ClassVoiceSignal[]
+  syllabusTopics             SyllabusTopic[]
+  examTimetableSlots         ExamTimetableSlot[]
+  examMaterialRecords        ExamMaterialRecord[]
+  promisesToPay              PromiseToPay[]
+  reportCardDayCheckIns      ReportCardDayCheckIn[]
+  newsPosts                  NewsPost[]
+  publicSiteSettings         PublicSiteSettings?
+  publicSiteLeaders          PublicSiteLeader[]
+  publicSiteTestimonials     PublicSiteTestimonial[]
+  publicSiteGalleryImages    PublicSiteGalleryImage[]
+  publicSiteActivities       PublicSiteActivity[]
+  entranceExamPapers         EntranceExamPaper[] // Added for entrance exam papers (H.3)
+  ActivityCategory           ActivityCategory[]
+  Pathway                    Pathway[]
+  PathwaySubjectRequirement  PathwaySubjectRequirement[]
+  TalentArea                 TalentArea[]
+  LessonResource             LessonResource[]
+  reportTemplates            ReportTemplate[]
+  communityServiceActivities CommunityServiceActivity[]
+  careerDiscoveryRecords     CareerDiscoveryRecord[]
+  outgoingPassports          TransferPassportRequest[]     @relation("SourceTenant")
+  incomingPassports          TransferPassportRequest[]     @relation("DestinationTenant")
+  MarksPortal                MarksPortal[]
+  TermAggregationRule        TermAggregationRule[]
+  SubjectPaperConfig         SubjectPaperConfig[]
+  PaperResult                PaperResult[]
+  StudentApprovalRequest     StudentApprovalRequest[]
+  StudentDutyArea            StudentDutyArea[]
+  StudentDutyAssignment      StudentDutyAssignment[]
+  SubjectSelectionPortal     SubjectSelectionPortal[]
+  StudentSubjectSelection    StudentSubjectSelection[]
+  PromotionRequest           PromotionRequest[]
+  SmsMarginLedger            SmsMarginLedger[]
+  KnecExportBatch            KnecExportBatch[]
 
   @@index([osKey])
 }
@@ -514,6 +549,7 @@ model CbcStrand {
   name            String
   learningOutcome String?
   assessments     CbcAssessment[]
+  lessonPlans     LessonPlan[]
 
   @@unique([tenantId, subjectId, name])
   @@index([tenantId, subjectId])
@@ -591,16 +627,17 @@ model ExamSubject {
 
 // One student's mark in one subject of one exam. Idempotent upsert target.
 model ExamResult {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   examId      String
-  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  exam        Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
   studentId   String
   subjectId   String
   marks       Int // raw marks out of exam.maxMarks
   enteredById String
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime      @updatedAt
+  PaperResult PaperResult[]
 
   @@unique([examId, studentId, subjectId])
   @@index([tenantId, examId, studentId])
@@ -681,7 +718,8 @@ model AssessmentPlan {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  records AssessmentRecord[]
+  records     AssessmentRecord[]
+  lessonPlans LessonPlan[]
 
   @@index([tenantId, year, term])
   @@index([tenantId, assessmentTypeId])
@@ -799,7 +837,8 @@ model Competency {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  evidence CompetencyEvidence[]
+  evidence   CompetencyEvidence[]
+  LessonPlan LessonPlan[]
 
   @@unique([tenantId, code])
   @@index([tenantId, groupId])
@@ -851,19 +890,25 @@ model CompetencyEvidence {
 // CBC, 8-4-4, Cambridge, Montessori, private-school custom frameworks, and future
 // Kenya curriculum updates are records, not hardcoded branches.
 model Curriculum {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name          String // e.g. "CBC Kenya", "8-4-4 Legacy", "Cambridge Lower Secondary"
-  country       String   @default("Kenya")
+  country       String  @default("Kenya")
   context       String? // e.g. "Junior School", "Senior School", "Private international"
-  activeVersion String   @default("v1")
+  activeVersion String  @default("v1")
   effectiveFrom String? // YYYY-MM-DD
   effectiveTo   String? // YYYY-MM-DD, null = still active
-  isActive      Boolean  @default(true)
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isActive      Boolean @default(true)
+
+  status            String       @default("ACTIVE") // DRAFT | ACTIVE | ARCHIVED
+  previousVersionId String?
+  previousVersion   Curriculum?  @relation("CurriculumHistory", fields: [previousVersionId], references: [id], onDelete: SetNull)
+  nextVersions      Curriculum[] @relation("CurriculumHistory")
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   educationLevels EducationLevel[]
   gradeBands      GradeBand[]
@@ -946,6 +991,25 @@ model LearningArea {
 }
 
 // B.4 departments (Languages, Sciences, Humanities...).
+
+// PART J.9 — Activity-Aware Timetable
+// Configurable non-academic activity categories (Clubs, STEM, Music, Sports).
+model ActivityCategory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String // e.g., "STEM Lab", "Drama Club", "Community Service"
+  color       String   @default("gray") // Tailwind color stem (blue, green, purple, amber, rose)
+  description String?
+  maxPerWeek  Int? // Optional constraint (e.g., max 2 STEM labs per class per week)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  timetableSlots TimetableSlot[]
+
+  @@unique([tenantId, name])
+}
+
 model Department {
   id       String    @id @default(cuid())
   tenantId String
@@ -959,24 +1023,26 @@ model Department {
 
 // B.4 subjects (Mathematics, Kiswahili, Integrated Science...).
 model Subject {
-  id             String          @id @default(cuid())
-  tenantId       String
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name           String
-  code           String // "MAT", "KIS", "ENG"
-  curriculum     String // "CBC" | "8-4-4" | "BOTH"
-  curriculumId   String?
-  curriculumRef  Curriculum?     @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
-  learningAreaId String?
-  learningArea   LearningArea?   @relation(fields: [learningAreaId], references: [id], onDelete: SetNull)
-  departmentId   String?
-  department     Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  archived       Boolean         @default(false)
-  timetableSlots TimetableSlot[]
-  lessonPlans    LessonPlan[]
-  homework       Homework[]
-  classNotes     ClassNote[]
-  quizzes        Quiz[]
+  id                        String                      @id @default(cuid())
+  tenantId                  String
+  tenant                    Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                      String
+  code                      String // "MAT", "KIS", "ENG"
+  curriculum                String // "CBC" | "8-4-4" | "BOTH"
+  curriculumId              String?
+  curriculumRef             Curriculum?                 @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  learningAreaId            String?
+  learningArea              LearningArea?               @relation(fields: [learningAreaId], references: [id], onDelete: SetNull)
+  departmentId              String?
+  department                Department?                 @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  archived                  Boolean                     @default(false)
+  timetableSlots            TimetableSlot[]
+  lessonPlans               LessonPlan[]
+  homework                  Homework[]
+  classNotes                ClassNote[]
+  quizzes                   Quiz[]
+  PathwaySubjectRequirement PathwaySubjectRequirement[]
+  SubjectPaperConfig        SubjectPaperConfig[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -986,16 +1052,20 @@ model Subject {
 
 // B.4 academic calendar — Kenyan 3-term year.
 model AcademicTerm {
-  id           String      @id @default(cuid())
-  tenantId     String
-  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  curriculumId String?
-  curriculum   Curriculum? @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
-  year         Int
-  term         Int // 1 | 2 | 3
-  startDate    String // YYYY-MM-DD
-  endDate      String
-  current      Boolean     @default(false)
+  talentRecords         TalentRecord[]
+  id                    String                  @id @default(cuid())
+  tenantId              String
+  tenant                Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  curriculumId          String?
+  curriculum            Curriculum?             @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  year                  Int
+  term                  Int // 1 | 2 | 3
+  startDate             String // YYYY-MM-DD
+  endDate               String
+  current               Boolean                 @default(false)
+  StudentGoal           StudentGoal[]
+  MarksPortal           MarksPortal[]
+  StudentDutyAssignment StudentDutyAssignment[]
 
   @@unique([tenantId, year, term])
   @@index([tenantId, curriculumId])
@@ -1030,18 +1100,20 @@ model DutyRosterEntry {
 
 // B.4 timetable — one subject slot per class/day/period.
 model TimetableSlot {
-  id           String  @id @default(cuid())
-  tenantId     String
-  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  classId      String
-  subjectId    String
-  subject      Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacherId    String? // User
-  dayOfWeek    Int // 1=Mon .. 5=Fri
-  period       Int // 1..8
-  slotType     String  @default("ACADEMIC") // ACADEMIC | REMEDIAL | PREP
-  weekRotation String  @default("ALL") // ALL | WEEK_A | WEEK_B for alternating Saturdays
-  venue        String? // classroom/lab/hall for venue printing
+  id                 String            @id @default(cuid())
+  tenantId           String
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId            String
+  subjectId          String?
+  subject            Subject?          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  activityCategoryId String?
+  activityCategory   ActivityCategory? @relation(fields: [activityCategoryId], references: [id], onDelete: SetNull)
+  teacherId          String? // User
+  dayOfWeek          Int // 1=Mon .. 5=Fri
+  period             Int // 1..8
+  slotType           String            @default("ACADEMIC") // ACADEMIC | REMEDIAL | PREP | ACTIVITY
+  weekRotation       String            @default("ALL") // ALL | WEEK_A | WEEK_B for alternating Saturdays
+  venue              String? // classroom/lab/hall for venue printing
 
   @@unique([tenantId, classId, dayOfWeek, period, slotType])
   @@index([tenantId, teacherId, dayOfWeek, period])
@@ -1049,22 +1121,30 @@ model TimetableSlot {
 
 // B.4 lesson plans (teacher-owned; AI assist comes at B.23).
 model LessonPlan {
-  id          String   @id @default(cuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  teacherId   String
-  teacherName String
-  subjectId   String
-  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  classId     String
-  date        String // YYYY-MM-DD
-  topic       String
-  objectives  String?
-  activities  String?
-  notes       String?
-  status      String   @default("PLANNED") // PLANNED | TAUGHT | SKIPPED
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String          @id @default(cuid())
+  tenantId         String
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacherId        String
+  teacherName      String
+  subjectId        String
+  subject          Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  classId          String
+  date             String // YYYY-MM-DD
+  topic            String
+  objectives       String?
+  strandId         String?
+  strand           CbcStrand?      @relation(fields: [strandId], references: [id], onDelete: SetNull)
+  competencyId     String?
+  competency       Competency?     @relation(fields: [competencyId], references: [id], onDelete: SetNull)
+  assessmentPlanId String?
+  assessmentPlan   AssessmentPlan? @relation(fields: [assessmentPlanId], references: [id], onDelete: SetNull)
+
+  resources  LessonResource[]
+  activities String?
+  notes      String?
+  status     String           @default("PLANNED") // PLANNED | TAUGHT | SKIPPED
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 
   @@index([tenantId, teacherId, date])
   @@index([tenantId, classId, date])
@@ -2712,6 +2792,8 @@ model User {
   guardianProfile      Guardian?               @relation("GuardianUser")
   webPushSubscriptions WebPushSubscription[]
   oauthAccounts        OAuthConnectedAccount[]
+  TalentRecord         TalentRecord[]
+  StudentGoal          StudentGoal[]
 
   @@index([tenantId])
   @@index([role])
@@ -3168,16 +3250,26 @@ model Student {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  guardians             StudentGuardian[]
-  documents             StudentDocument[]
-  requirements          StudentRequirement[]
-  transfers             StudentTransfer[]
-  attendance            AttendanceRecord[]
-  promisesToPay         PromiseToPay[]
-  reportCardDayCheckIns ReportCardDayCheckIn[]
-  leavingCertificate    LeavingCertificate? // Added for Leaving Certificate Vault (H.3)
-  skillsPassportEntries SkillsPassportEntry[]
-  portfolioItems        PortfolioItem[]
+  guardians                StudentGuardian[]
+  documents                StudentDocument[]
+  requirements             StudentRequirement[]
+  transfers                StudentTransfer[]
+  attendance               AttendanceRecord[]
+  promisesToPay            PromiseToPay[]
+  reportCardDayCheckIns    ReportCardDayCheckIn[]
+  leavingCertificate       LeavingCertificate? // Added for Leaving Certificate Vault (H.3)
+  skillsPassportEntries    SkillsPassportEntry[]
+  portfolioItems           PortfolioItem[]
+  StudentPathwayPreference StudentPathwayPreference[]
+  TalentRecord             TalentRecord[]
+  StudentGoal              StudentGoal[]
+  passportRequests         TransferPassportRequest[]
+  CommunityServiceActivity CommunityServiceActivity[]
+  CareerDiscoveryRecord    CareerDiscoveryRecord[]
+  StudentApprovalRequest   StudentApprovalRequest[]
+  StudentDutyAssignment    StudentDutyAssignment[]
+  StudentSubjectSelection  StudentSubjectSelection[]
+  PromotionRequest         PromotionRequest[]
 
   @@unique([tenantId, admissionNo])
   @@index([tenantId])
@@ -3507,11 +3599,12 @@ model SavedView {
 }
 
 model TeacherSubject {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   tenantId  String
-  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   teacherId String // User.id
   subjectId String // Subject.id
+  isStrong  Boolean @default(false) // L.3 Strong area preference
 
   @@unique([tenantId, teacherId, subjectId])
   @@index([tenantId])
@@ -3673,14 +3766,19 @@ model TimetableConfig {
   lessonDurationMins Int     @default(40)
   shortBreakStart    Int     @default(2) // after Period 2
   shortBreakMins     Int     @default(15)
-  longBreakStart     Int     @default(4) // after Period 4
-  longBreakMins      Int     @default(30)
-  lunchStart         Int     @default(6) // after Period 6
-  lunchMins          Int     @default(60)
-  hasRemedials       Boolean @default(false)
-  hasPreps           Boolean @default(false)
-  lunchShift         Int     @default(1)
-  hasSaturday        Boolean @default(true) // class-level Saturday toggle
+  shortBreak2Start   Int? // Optional 2nd short break (e.g. afternoon)
+  shortBreak2Mins    Int?
+  gamesPeriodTarget  String? // JSON array of class IDs targeted for specific PE/Games
+  saturdayEarlyHome  Boolean @default(true) // Automatically schedule "HOME" blocks for free periods
+
+  longBreakStart Int     @default(4) // after Period 4
+  longBreakMins  Int     @default(30)
+  lunchStart     Int     @default(6) // after Period 6
+  lunchMins      Int     @default(60)
+  hasRemedials   Boolean @default(false)
+  hasPreps       Boolean @default(false)
+  lunchShift     Int     @default(1)
+  hasSaturday    Boolean @default(true) // class-level Saturday toggle
 }
 
 // I.97 — syllabus coverage / scope tracking per class + subject + term.
@@ -4262,18 +4360,18 @@ model EntranceExamPaper {
 // assessment plans, or competencies. Replaces temporary rubricJson structures
 // with formal database definitions without duplicating exam/CBC grading.
 model Rubric {
-  id          String        @id @default(cuid())
+  id          String   @id @default(cuid())
   tenantId    String
-  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  category    String        @default("GENERAL") // CBC | PROJECT | PRACTICAL | PORTFOLIO | COMPETENCY | GENERAL
-  isArchived  Boolean       @default(false)
+  category    String   @default("GENERAL") // CBC | PROJECT | PRACTICAL | PORTFOLIO | COMPETENCY | GENERAL
+  isArchived  Boolean  @default(false)
   createdById String
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  levels      RubricLevel[]
+  levels RubricLevel[]
 
   @@unique([tenantId, name])
   @@index([tenantId, category])
@@ -4283,18 +4381,18 @@ model Rubric {
 // One level in a configurable rubric, e.g. Level 4 (Exceeding Expectation) with
 // its specific descriptor and point/percentage range.
 model RubricLevel {
-  id          String   @id @default(cuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  rubricId    String
-  rubric      Rubric   @relation(fields: [rubricId], references: [id], onDelete: Cascade)
-  level       Int      // e.g. 1, 2, 3, 4, 5
-  code        String   // e.g. EE, ME, AE, BE or ADVANCED, PROFICIENT, BASIC
-  label       String   // e.g. Exceeding Expectation
-  descriptor  String?  // Detailed rubric descriptor
-  points      Float?   // Optional points for this level
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rubricId   String
+  rubric     Rubric   @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  level      Int // e.g. 1, 2, 3, 4, 5
+  code       String // e.g. EE, ME, AE, BE or ADVANCED, PROFICIENT, BASIC
+  label      String // e.g. Exceeding Expectation
+  descriptor String? // Detailed rubric descriptor
+  points     Float? // Optional points for this level
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@unique([tenantId, rubricId, level])
   @@unique([tenantId, rubricId, code])
@@ -4308,22 +4406,22 @@ model RubricLevel {
 // One rating/evidence point in a learner's Skills Passport. Tracks skill levels
 // over time across academic, competency, talent, and leadership growth areas.
 model SkillsPassportEntry {
-  id             String    @id @default(cuid())
+  id             String   @id @default(cuid())
   tenantId       String
-  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   studentId      String
-  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  skillArea      String    // Leadership | Communication | Coding | Music | Sports | Creativity | custom
-  ratingLevel    Int       // 1..5 stars/levels
-  evidenceSource String    // ASSESSMENT | CLUB | PORTFOLIO | AWARD | OBSERVATION
-  sourceId       String?   // optional scalar link to future club, award, or portfolio item
-  narrative      String?   // Qualitative growth description
-  evidenceDate   String    // YYYY-MM-DD
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skillArea      String // Leadership | Communication | Coding | Music | Sports | Creativity | custom
+  ratingLevel    Int // 1..5 stars/levels
+  evidenceSource String // ASSESSMENT | CLUB | PORTFOLIO | AWARD | OBSERVATION
+  sourceId       String? // optional scalar link to future club, award, or portfolio item
+  narrative      String? // Qualitative growth description
+  evidenceDate   String // YYYY-MM-DD
   recordedById   String
   recordedByName String
-  verified       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  verified       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([tenantId, studentId])
   @@index([tenantId, skillArea])
@@ -4338,37 +4436,573 @@ model SkillsPassportEntry {
 // work, certificate, teacher observation, or community activity. Uploads must
 // use the encrypted Storage Vault path (StoredFile).
 model PortfolioItem {
-  id               String      @id @default(cuid())
+  id               String    @id @default(cuid())
   tenantId         String
-  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   studentId        String
-  student          Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student          Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   title            String
-  category         String      // PROJECT | VIDEO | PHOTO | ART | CODING | CERTIFICATE | OBSERVATION | COMMUNITY
+  category         String // PROJECT | VIDEO | PHOTO | ART | CODING | CERTIFICATE | OBSERVATION | COMMUNITY
   description      String?
-  storedFileId     String?     // Link to encrypted StoredFile in Storage Vault
+  storedFileId     String? // Link to encrypted StoredFile in Storage Vault
   fileUrl          String?
   fileName         String?
-  fileSizeBytes    Int?        // For media size controls and storage usage warnings
-  externalLink     String?     // e.g., GitHub repo or external video link
-  status           String      @default("SUBMITTED") // DRAFT | SUBMITTED | APPROVED | REJECTED
+  fileSizeBytes    Int? // For media size controls and storage usage warnings
+  externalLink     String? // e.g., GitHub repo or external video link
+  status           String    @default("SUBMITTED") // DRAFT | SUBMITTED | APPROVED | REJECTED
   approvedById     String?
   approvedByName   String?
   approvedAt       DateTime?
-  visibleToParents Boolean     @default(false)
-  
-  // Optional scalar links to existing/J modules
-  competencyId     String?
-  subjectId        String?
-  clubId           String?
-  awardId          String?
+  visibleToParents Boolean   @default(false)
 
-  createdById      String
-  createdByName    String
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  // Optional scalar links to existing/J modules
+  competencyId String?
+  subjectId    String?
+  clubId       String?
+  awardId      String?
+
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([tenantId, studentId])
   @@index([tenantId, category])
   @@index([tenantId, status])
+}
+
+// PART J.10 — Senior School Pathway Management
+// =============================================================================
+
+model Pathway {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String // e.g. "STEM", "Creative Arts & Sports", "Social Sciences"
+  code        String // e.g. "STEM", "ARTS"
+  description String?
+  capacity    Int? // Max students allowed in this pathway per cohort
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subjectRequirements PathwaySubjectRequirement[]
+  studentPreferences  StudentPathwayPreference[]
+
+  @@unique([tenantId, code])
+}
+
+model PathwaySubjectRequirement {
+  id          String  @id @default(cuid())
+  tenantId    String
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pathwayId   String
+  pathway     Pathway @relation(fields: [pathwayId], references: [id], onDelete: Cascade)
+  subjectId   String
+  subject     Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  isCore      Boolean @default(true) // Core vs Elective in this pathway
+  minScorePct Int? // e.g. Requires 70% in Math to join STEM
+
+  @@unique([tenantId, pathwayId, subjectId])
+}
+
+model StudentPathwayPreference {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  pathwayId     String
+  pathway       Pathway  @relation(fields: [pathwayId], references: [id], onDelete: Cascade)
+  choiceOrder   Int      @default(1) // 1st choice, 2nd choice
+  teacherNotes  String? // Recommendation/Notes from teacher/counselor
+  isRecommended Boolean  @default(false)
+  isAllocated   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, studentId, pathwayId])
+}
+
+// PART J.11 — Talent Tracking & Co-Curricular Growth
+// =============================================================================
+
+model TalentArea {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String // e.g., "Football", "Piano", "Public Speaking", "Coding"
+  category    String // e.g., "SPORTS", "ARTS", "STEM", "LEADERSHIP"
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  records TalentRecord[]
+
+  @@unique([tenantId, name])
+}
+
+model TalentRecord {
+  id           String        @id @default(cuid())
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  talentAreaId String
+  talentArea   TalentArea    @relation(fields: [talentAreaId], references: [id], onDelete: Cascade)
+  termId       String?
+  term         AcademicTerm? @relation(fields: [termId], references: [id], onDelete: SetNull)
+  coachId      String
+  coach        User          @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  score        Int? // e.g. 1-10 or 1-100 depending on school preference
+  notes        String? // Coach/Teacher qualitative feedback
+  dateRecorded DateTime @default(now())
+
+  portfolioItemId String? // Optional link to J.7 Portfolio evidence
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, talentAreaId])
+}
+
+model LessonResource {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lessonPlanId String
+  lessonPlan   LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  fileUrl      String
+  fileName     String?
+  createdAt    DateTime   @default(now())
+
+  @@index([tenantId, lessonPlanId])
+}
+
+// PART J.13 — Parent Growth Dashboard (Student Goals)
+// =============================================================================
+
+model StudentGoal {
+  id        String        @id @default(cuid())
+  tenantId  String
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  termId    String?
+  term      AcademicTerm? @relation(fields: [termId], references: [id], onDelete: SetNull)
+  teacherId String
+  teacher   User          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  category    String // e.g. "ACADEMIC", "SOCIAL", "TALENT", "BEHAVIOR"
+  title       String
+  description String?
+  targetDate  String? // YYYY-MM-DD
+
+  acknowledgedByParent Boolean   @default(false)
+  acknowledgedAt       DateTime?
+  status               String    @default("ACTIVE") // ACTIVE | ACHIEVED | MISSED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, studentId])
+}
+
+// PART J.14 — Student Digital Identity & Transfer Passport
+// =============================================================================
+
+model TransferPassportRequest {
+  id                  String  @id @default(cuid())
+  sourceTenantId      String
+  sourceTenant        Tenant  @relation("SourceTenant", fields: [sourceTenantId], references: [id], onDelete: Cascade)
+  destinationTenantId String?
+  destinationTenant   Tenant? @relation("DestinationTenant", fields: [destinationTenantId], references: [id], onDelete: SetNull)
+  destinationEmail    String? // For transfers to non-NEYO schools
+
+  studentId   String
+  student     Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentName String
+
+  accessCode String   @unique // Secure pin/code required to unlock the passport
+  expiresAt  DateTime
+  status     String   @default("PENDING") // PENDING | COMPLETED | CANCELLED | EXPIRED
+
+  includedModules String // JSON array: ["ACADEMIC", "ATTENDANCE", "DISCIPLINE", "PORTFOLIO", "MEDICAL"]
+  consentBy       String // Name of parent/guardian who gave legal consent
+  consentDate     DateTime @default(now())
+
+  payloadJson String? // The actual aggregated digital identity snapshot
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sourceTenantId])
+  @@index([destinationTenantId])
+  @@index([studentId])
+}
+
+// PART J.15 — Modular Report Builder
+// =============================================================================
+
+model ReportTemplate {
+  id          String  @id @default(cuid())
+  tenantId    String
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String // e.g. "CBC Comprehensive Report", "Standard 8-4-4 End of Term"
+  description String?
+  isDefault   Boolean @default(false)
+
+  // JSON array of section objects, e.g. [{ type: "HEADER" }, { type: "MARKS_TABLE", showPosition: false }, { type: "TALENT" }]
+  sectionsJson String @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, name])
+}
+
+// PART J.17 — Community Service Module
+// =============================================================================
+
+model CommunityServiceActivity {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  title           String // e.g. "Tree Planting", "Orphanage Visit"
+  category        String // e.g. "ENVIRONMENT", "CHARITY", "SCHOOL_SERVICE"
+  date            String // YYYY-MM-DD
+  hours           Int // Number of hours volunteered
+  location        String?
+  supervisorName  String?
+  supervisorPhone String?
+
+  studentReflection String? // Qualitative note on what they learned
+  status            String  @default("APPROVED") // PENDING | APPROVED | REJECTED
+
+  proofFileId String? // Links to StoredFile if evidence uploaded
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, studentId])
+}
+
+// PART J.18 — Career Discovery & Pathway Guidance
+// =============================================================================
+
+model CareerDiscoveryRecord {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  recordType String // "STUDENT_INTEREST" | "TEACHER_RECOMMENDATION" | "PARENT_CONVERSATION"
+  careerArea String? // e.g. "Engineering", "Medicine", "ICT"
+  notes      String // Narrative/Reasoning
+
+  recordedById   String
+  recordedByName String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, studentId])
+}
+
+// PART J.21 — NEYO Ops Curriculum Template Library
+// =============================================================================
+
+model GlobalCurriculumTemplate {
+  id          String  @id @default(cuid())
+  name        String // e.g. "CBC Kenya Junior School"
+  country     String  @default("Kenya")
+  context     String? // e.g. "Grade 7-9"
+  version     String  @default("v1")
+  description String?
+  status      String  @default("DRAFT") // DRAFT | PUBLISHED
+
+  // JSON array of learning areas: [{ name, code, description }]
+  learningAreasJson String @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// PART K — Advanced Grading & Computation Engine
+// =============================================================================
+
+// Controls the window for teachers to enter marks.
+model MarksPortal {
+  id       String        @id @default(cuid())
+  tenantId String
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  termId   String? // Links to AcademicTerm
+  term     AcademicTerm? @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  name      String // "Term 2 2026 Marks Entry"
+  openDate  DateTime // When teachers can start entering
+  closeDate DateTime // When the portal locks
+
+  // OPEN | CLOSED | COMPUTING | PENDING_RELEASE | RELEASED
+  status String @default("OPEN")
+
+  // Computation tracking
+  computationStartedAt DateTime?
+  computationEndedAt   DateTime?
+  computationProgress  Int       @default(0) // 0 to 100 percentage
+  computationTotalRows Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// Hierarchical configuration for term weighting (Global -> Class -> Subject)
+model TermAggregationRule {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // If classId and subjectId are null, it's the GLOBAL school rule.
+  classId   String?
+  subjectId String?
+
+  isTraditional Boolean @default(false) // If true, ignore weights and use standard average
+
+  // JSON array mapping Assessment types to Weights
+  // e.g., [{ "sourceType": "EXAM", "sourceId": "cat1_id", "weightPct": 25 }]
+  weightingsJson String @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, classId, subjectId])
+}
+
+// Configures PP1, PP2, Practicals for a specific subject
+model SubjectPaperConfig {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  classId   String? // If papers differ per class level
+
+  name       String // e.g. "Paper 1", "Practical"
+  outOfMarks Int    @default(100) // The raw marks limit (e.g., out of 40)
+  weightPct  Int // How much this paper contributes to the final Subject mark (e.g., 40%)
+
+  paperResults PaperResult[]
+
+  @@unique([tenantId, subjectId, classId, name])
+}
+
+// The raw marks scored in a specific paper
+model PaperResult {
+  id            String             @id @default(cuid())
+  tenantId      String
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  examResultId  String
+  examResult    ExamResult         @relation(fields: [examResultId], references: [id], onDelete: Cascade)
+  paperConfigId String
+  paperConfig   SubjectPaperConfig @relation(fields: [paperConfigId], references: [id], onDelete: Cascade)
+
+  marksScored Float? // The raw entry (e.g., 35 out of 40)
+
+  @@unique([tenantId, examResultId, paperConfigId])
+}
+
+// PART K.10 — Parent Uploads & Approval Workflows
+// =============================================================================
+
+model StudentApprovalRequest {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  requestedByRole String // "PARENT" | "TEACHER"
+  requestedById   String // User ID
+  requestedByName String
+
+  requestType String // "PHOTO_UPDATE" | "DOCUMENT_UPLOAD"
+
+  // Details
+  documentLabel String?
+  fileUrl       String
+  fileName      String?
+
+  status String @default("PENDING") // PENDING | APPROVED | REJECTED
+
+  reviewedById    String?
+  reviewedByName  String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, studentId])
+}
+
+// PART K.12 — Advanced Student Duty Roster Engine
+// =============================================================================
+
+model StudentDutyArea {
+  id               String  @id @default(cuid())
+  tenantId         String
+  tenant           Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String // e.g. "Dining Hall Cleanup", "Library Prefect"
+  description      String?
+  genderConstraint String  @default("MIXED") // MIXED | BOYS_ONLY | GIRLS_ONLY
+  targetClassIds   String  @default("[]") // JSON array of class IDs allowed to do this
+  maxStudents      Int     @default(5)
+  isActive         Boolean @default(true)
+
+  assignments StudentDutyAssignment[]
+
+  @@unique([tenantId, name])
+}
+
+model StudentDutyAssignment {
+  id         String          @id @default(cuid())
+  tenantId   String
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  dutyAreaId String
+  dutyArea   StudentDutyArea @relation(fields: [dutyAreaId], references: [id], onDelete: Cascade)
+  termId     String?
+  term       AcademicTerm?   @relation(fields: [termId], references: [id], onDelete: SetNull)
+
+  assignedById   String
+  assignedByName String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, studentId, termId]) // Strict K.12 rule: 1 duty per student per term/time
+}
+
+// PART L.4 — Student Subject Selection (Electives)
+// =============================================================================
+
+model SubjectSelectionPortal {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name        String // e.g. "Form 3 Subject Selection 2026"
+  targetLevel String // e.g. "Form 3"
+
+  openDate  DateTime
+  closeDate DateTime
+  status    String   @default("OPEN") // OPEN | CLOSED | FINALIZED
+
+  // JSON defining the rules: { "minElectives": 2, "maxElectives": 3, "compulsory": ["ENG", "MAT"] }
+  rulesJson String @default("{}")
+
+  selections StudentSubjectSelection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model StudentSubjectSelection {
+  id        String                 @id @default(cuid())
+  tenantId  String
+  tenant    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  portalId  String
+  portal    SubjectSelectionPortal @relation(fields: [portalId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  // JSON array of subject IDs the student selected
+  selectedSubjectIds String @default("[]")
+
+  isConfirmed Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, portalId, studentId])
+}
+
+// PART L.5 — Term Promotions & Repeats
+// =============================================================================
+
+model PromotionRequest {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  requestedById   String
+  requestedByName String
+
+  action String @default("REPEAT") // REPEAT | ACCELERATE
+  reason String
+
+  status String @default("PENDING") // PENDING | APPROVED | REJECTED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, studentId])
+}
+
+// PART M.2 — SMS Margin Revenue (NEYO Ops)
+// =============================================================================
+
+model SmsMarginLedger {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  messageCount   Int
+  costPerSmsKes  Float // What NEYO pays Africa's Talking (e.g. 0.8)
+  pricePerSmsKes Float // What NEYO charges the school (e.g. 1.2)
+  marginKes      Float // Computed profit (e.g. 0.4)
+
+  status String @default("UNBILLED") // UNBILLED | INVOICED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+}
+
+// PART K.16 — KNEC Document Aggregation
+// =============================================================================
+
+model KnecExportBatch {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name   String // e.g. "2026 KCSE Candidates Batch"
+  status String @default("DRAFT") // DRAFT | EXPORTED
+
+  targetClassId  String? // The specific class/stream this targets
+  documentLabels String // JSON Array of required labels e.g. ["Birth Certificate", "KNEC Registration Form"]
+
+  // A snapshot payload containing the generated zip/pdf URL if exported
+  exportUrl String?
+
+  createdById   String
+  createdByName String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
 }

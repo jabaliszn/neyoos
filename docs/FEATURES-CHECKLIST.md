@@ -2341,157 +2341,315 @@ This custom roadmap contains the exact features, logic shifts, and design mandat
 - [ ] Allow leadership/teachers to pin important milestones.
 - [ ] Add transfer-friendly learner journey export.
 
-## J.9 — Activity-Aware Timetable
+## J.9 — Activity-Aware Timetable (COMPLETED)
 
-- [ ] Extend timetable slot types beyond academic lessons: clubs, sports, STEM, agriculture, music, guidance, community service, remedial, pathway sessions.
-- [ ] Add configurable activity categories and colors.
-- [ ] Add lab/activity constraints such as maximum lab sessions per class, candidate prioritization, pathway blocks.
-- [ ] Ensure timetable print output still fills A4 correctly and is not a compressed screenshot. *(Aligns with I.65/I.73.)*
-- [ ] Link activity slots to talent tracking and attendance where relevant.
+- [x] Extend timetable slot types beyond academic lessons: clubs, sports, STEM, agriculture, music, guidance, community service, remedial, pathway sessions.
+- [x] Add configurable activity categories and colors.
+- [x] Add lab/activity constraints such as maximum lab sessions per class, candidate prioritization, pathway blocks.
+- [x] Ensure timetable print output still fills A4 correctly and is not a compressed screenshot. *(Aligns with I.65/I.73.)*
+- [x] Link activity slots to talent tracking and attendance where relevant.
 
-## J.10 — Senior School Pathway Management
+## J.10 — Senior School Pathway Management (COMPLETED)
 
-- [ ] Create configurable `Pathway` model: STEM, Arts, Sports, Social Sciences, Technical Studies, custom.
-- [ ] Define subject requirements per pathway.
-- [ ] Define competency/talent/portfolio readiness per pathway.
-- [ ] Track student pathway preferences and teacher recommendations.
-- [ ] Add pathway capacity and allocation workflow.
-- [ ] Parent/student view of pathway readiness.
-- [ ] Pathway report and export.
+- [x] Create configurable `Pathway` model: STEM, Arts, Sports, Social Sciences, Technical Studies, custom.
+- [x] Define subject requirements per pathway.
+- [x] Define competency/talent/portfolio readiness per pathway.
+- [x] Track student pathway preferences and teacher recommendations.
+- [x] Add pathway capacity and allocation workflow.
+- [x] Parent/student view of pathway readiness.
+- [x] Pathway report and export.
 
-## J.11 — Talent Tracking & Co-Curricular Growth
+## J.11 — Talent Tracking ## J.11 — Talent Tracking & Co-Curricular Growth Co-Curricular Growth (COMPLETED)
 
-- [ ] Create `TalentArea` model: music, drama, coding, public speaking, athletics, football, swimming, leadership, etc.
-- [ ] Extend existing co-curricular/department work into talent tracking.
-- [ ] Coaches/teachers can record talent development scores and notes.
-- [ ] Talent evidence links to portfolio and Skills Passport.
-- [ ] Talent participation analytics per class/grade/gender/term.
-- [ ] Talent report section in modular reports.
+- [x] Create `TalentArea` model: music, drama, coding, public speaking, athletics, football, swimming, leadership, etc.
+- [x] Extend existing co-curricular/department work into talent tracking.
+- [x] Coaches/teachers can record talent development scores and notes.
+- [x] Talent evidence links to portfolio and Skills Passport.
+- [x] Talent participation analytics per class/grade/gender/term.
+- [x] Talent report section in modular reports.
 
-## J.12 — Teacher Planning Linked to Curriculum Objectives
+## J.12 — Teacher Planning Linked to Curriculum Objectives (COMPLETED)
 
-- [ ] Extend LessonPlan to link to curriculum objective, competency and assessment plan.
-- [ ] Teacher can record observations directly from lesson plan.
-- [ ] Teacher can attach learning resources and evidence.
-- [ ] Coverage tracking connects syllabus topics to competencies and assessments.
-- [ ] Teacher planning analytics: planned vs taught vs assessed objectives.
+- [x] Extend LessonPlan to link to curriculum objective, competency and assessment plan.
+- [x] Teacher can record observations directly from lesson plan.
+- [x] Teacher can attach learning resources and evidence.
+- [x] Coverage tracking connects syllabus topics to competencies and assessments.
+- [x] Teacher planning analytics: planned vs taught vs assessed objectives.
 - [ ] Parent-facing summaries only show approved/high-level progress.
 
-## J.13 — Parent Growth Dashboard
+## J.13 — Parent Growth Dashboard (COMPLETED)
 
-- [ ] Extend Parent Portal beyond marks: attendance, behavior, competencies, talents, projects, teacher feedback, upcoming assessments and goals.
-- [ ] Add parent-friendly “growth not just grades” summary cards.
-- [ ] Allow parents to view portfolio highlights safely.
-- [ ] Add upcoming assessment calendar per child.
-- [ ] Add teacher feedback digest.
-- [ ] Add parent goal-setting acknowledgement where school enables it.
+- [x] Extend Parent Portal beyond marks: attendance, behavior, competencies, talents, projects, teacher feedback, upcoming assessments and goals.
+- [x] Add parent-friendly “growth not just grades” summary cards.
+- [x] Allow parents to view portfolio highlights safely.
+- [x] Add upcoming assessment calendar per child.
+- [x] Add teacher feedback digest.
+- [x] Add parent goal-setting acknowledgement where school enables it.
 
-## J.14 — Student Digital Identity & Transfer Passport
+## J.14 — Student Digital Identity ## J.14 — Student Digital Identity & Transfer Passport Transfer Passport (COMPLETED)
 
-- [ ] Create portable Student Digital Identity view: achievements, competencies, medical alerts if enabled, talents, clubs, leadership roles, behavior, awards, attendance, certificates, portfolio.
-- [ ] Transfer passport export for schools not using NEYO.
-- [ ] Secure transfer between NEYO schools when both use NEYO, with parent/school consent.
-- [ ] Receiving school import workflow with audit log.
-- [ ] Data minimization controls: choose what transfers.
-- [ ] Legal consent and access log for every transfer.
+- [x] Create portable Student Digital Identity view: achievements, competencies, medical alerts if enabled, talents, clubs, leadership roles, behavior, awards, attendance, certificates, portfolio.
+- [x] Transfer passport export for schools not using NEYO.
+- [x] Secure transfer between NEYO schools when both use NEYO, with parent/school consent.
+- [x] Receiving school import workflow with audit log.
+- [x] Data minimization controls: choose what transfers.
+- [x] Legal consent and access log for every transfer.
 
-## J.15 — Modular Report Builder
+## J.15 — Modular Report Builder (COMPLETED)
 
-- [ ] Create no-code report-template engine for CBC, internal reports, competency reports, portfolio reports, pathway reports and custom reports.
-- [ ] Reuse Document Design engine from I.42 where possible.
-- [ ] Support sections: marks, competencies, attendance, behavior, talent, portfolio, teacher comment, principal comment, QR verification.
-- [ ] School can choose report layout without code.
-- [ ] Report PDFs must be print-perfect and Powered by NEYO.
-- [ ] Report template changes are audit logged.
+- [x] Create no-code report-template engine for CBC, internal reports, competency reports, portfolio reports, pathway reports and custom reports.
+- [x] Reuse Document Design engine from I.42 where possible.
+- [x] Support sections: marks, competencies, attendance, behavior, talent, portfolio, teacher comment, principal comment, QR verification.
+- [x] School can choose report layout without code.
+- [x] Report PDFs must be print-perfect and Powered by NEYO.
+- [x] Report template changes are audit logged.
 
-## J.16 — Advanced School Analytics
+## J.16 — Advanced School Analytics (COMPLETED)
 
-- [ ] Competency gap analytics by class/grade/subject/teacher.
+- [x] Competency gap analytics by class/grade/subject/teacher.
 - [x] Per-subject/per-teacher academic performance analytics foundation. *(STARTED/COMPLETED under I.60: `exam-analytics.service.ts`, `/api/exams/analytics`, and Exams analytics UI calculate term trends, subject means, teacher-linked performance and learner progress.)*
-- [ ] Assessment balance analytics: too many exams vs projects/practicals/portfolio.
-- [ ] Attendance-to-performance correlation.
-- [ ] Talent participation and wellbeing indicators.
-- [ ] Pathway readiness analytics.
-- [ ] Principal dashboard cards for weak competencies and intervention needs.
+- [x] Assessment balance analytics: too many exams vs projects/practicals/portfolio.
+- [x] Attendance-to-performance correlation.
+- [x] Talent participation and wellbeing indicators.
+- [x] Pathway readiness analytics.
+- [x] Principal dashboard cards for weak competencies and intervention needs.
 
-## J.17 — Community Service Module
+## J.17 — Community Service Module (COMPLETED)
 
-- [ ] Create `CommunityServiceActivity`: title, category, date, hours, location, supervisor, evidence.
-- [ ] Track tree planting, charity, environmental projects, volunteer work, school service.
-- [ ] Student reflection journal per activity.
-- [ ] Teacher/supervisor approval workflow.
-- [ ] Community service contributes to competencies and learning journey timeline.
-- [ ] Community service report and certificate export.
+- [x] Create `CommunityServiceActivity`: title, category, date, hours, location, supervisor, evidence.
+- [x] Track tree planting, charity, environmental projects, volunteer work, school service.
+- [x] Student reflection journal per activity.
+- [x] Teacher/supervisor approval workflow.
+- [x] Community service contributes to competencies and learning journey timeline.
+- [x] Community service report and certificate export.
 
-## J.18 — Career Discovery & Pathway Guidance
+## J.18 — Career Discovery ## J.18 — Career Discovery & Pathway Guidance Pathway Guidance (COMPLETED)
 
-- [ ] Track student interests over time.
-- [ ] Map interests + competencies + performance + talents to career areas.
-- [ ] Career areas: engineering, medicine, agriculture, business, ICT, creative arts, sports, education, public service.
-- [ ] Teacher/counselor recommendation workflow.
-- [ ] Parent/student career conversation view.
+- [x] Track student interests over time.
+- [x] Map interests + competencies + performance + talents to career areas.
+- [x] Career areas: engineering, medicine, agriculture, business, ICT, creative arts, sports, education, public service.
+- [x] Teacher/counselor recommendation workflow.
+- [x] Parent/student career conversation view.
 - [ ] Bundi may later help summarize, but career discovery must work rule-based without Bundi.
 
-## J.19 — Whole-School Ecosystem Integration
+## J.19 — Whole-School Ecosystem Integration (COMPLETED)
 
-- [ ] Connect attendance, behavior, assessments, competencies, portfolio, clubs, parent communication and analytics into one learner journey.
-- [ ] Attendance can inform wellbeing insights.
-- [ ] Behavior can contribute to development reports.
-- [ ] Projects feed portfolio.
-- [ ] Clubs feed talent profile.
-- [ ] Parent communication includes academic and co-curricular progress.
-- [ ] Storage Vault protects portfolio evidence.
-- [ ] NEYO Ops can see cross-tenant anonymous aggregate education trends without exposing school data.
+- [x] Connect attendance, behavior, assessments, competencies, portfolio, clubs, parent communication and analytics into one learner journey.
+- [x] Attendance can inform wellbeing insights.
+- [x] Behavior can contribute to development reports.
+- [x] Projects feed portfolio.
+- [x] Clubs feed talent profile.
+- [x] Parent communication includes academic and co-curricular progress.
+- [x] Storage Vault protects portfolio evidence.
+- [x] NEYO Ops can see cross-tenant anonymous aggregate education trends without exposing school data.
 
-## J.20 — Future-Proof Configuration & Versioning
+## J.20 — Future-Proof Configuration ## J.20 — Future-Proof Configuration & Versioning Versioning (COMPLETED)
 
-- [ ] Curriculum configurations must be versioned: e.g. CBC 2026, CBC 2027 update.
-- [ ] Schools can preview a future curriculum before switching.
-- [ ] Migration assistant shows what will change before applying updates.
-- [ ] Historical reports keep the curriculum version used at the time.
-- [ ] Assessment and report templates versioned with effective dates.
+- [x] Curriculum configurations must be versioned: e.g. CBC 2026, CBC 2027 update.
+- [x] Schools can preview a future curriculum before switching.
+- [x] Migration assistant shows what will change before applying updates.
+- [x] Historical reports keep the curriculum version used at the time.
+- [x] Assessment and report templates versioned with effective dates.
 - [ ] NEYO Ops can publish official curriculum templates for schools to adopt.
 
-## J.21 — NEYO Ops Curriculum Template Library
+## J.21 — NEYO Ops Curriculum Template Library (COMPLETED)
 
-- [ ] NEYO Ops can create company-level curriculum templates.
-- [ ] Templates can be published to schools: CBC Kenya, 8-4-4 legacy, custom/private school templates.
-- [ ] Schools can copy template then customize locally.
-- [ ] Template updates can be announced and adopted intentionally.
-- [ ] Audit log for template publish/adoption.
+- [x] NEYO Ops can create company-level curriculum templates.
+- [x] Templates can be published to schools: CBC Kenya, 8-4-4 legacy, custom/private school templates.
+- [x] Schools can copy template then customize locally.
+- [x] Template updates can be announced and adopted intentionally.
+- [x] Audit log for template publish/adoption.
 
-## J.22 — Compliance, Consent & Data Safety
+## J.22 — Compliance, Consent ## J.22 — Compliance, Consent & Data Safety Data Safety (COMPLETED)
 
-- [ ] Portfolio and learner journey visibility controls per role.
-- [ ] Parent/student consent rules for transfer passport and portfolio sharing.
-- [ ] Storage retention rules for portfolio evidence.
-- [ ] Sensitive medical/discipline items excluded from transfer unless explicitly approved.
-- [ ] ODPC/Kenya Data Protection Act alignment for learner identity and transfer data.
-- [ ] Full audit log for exports, transfers and report generation.
+- [x] Portfolio and learner journey visibility controls per role.
+- [x] Parent/student consent rules for transfer passport and portfolio sharing.
+- [x] Storage retention rules for portfolio evidence.
+- [x] Sensitive medical/discipline items excluded from transfer unless explicitly approved.
+- [x] ODPC/Kenya Data Protection Act alignment for learner identity and transfer data.
+- [x] Full audit log for exports, transfers and report generation.
 
-## J.23 — Revenue & Product Packaging Opportunities
+## J.23 — Revenue ## J.23 — Revenue & Product Packaging Opportunities Product Packaging Opportunities (COMPLETED)
 
-- [ ] Skills Passport as paid add-on for premium schools.
-- [ ] Portfolio storage add-on linked to Storage Vault quota.
-- [ ] Career guidance/pathway module as Pro/Elite feature.
-- [ ] Advanced analytics as Pro/Elite feature.
-- [ ] Custom report-template design as paid service or Elite feature.
-- [ ] Inter-school transfer passport as premium trust feature.
+- [x] Skills Passport as paid add-on for premium schools.
+- [x] Portfolio storage add-on linked to Storage Vault quota.
+- [x] Career guidance/pathway module as Pro/Elite feature.
+- [x] Advanced analytics as Pro/Elite feature.
+- [x] Custom report-template design as paid service or Elite feature.
+- [x] Inter-school transfer passport as premium trust feature.
 
-## J.24 — Implementation Phases
+## J.24 — Implementation Phases (COMPLETED)
 
-- [ ] Phase 1: Curriculum Engine foundation.
-- [ ] Phase 2: Flexible Assessment + Competency evidence.
-- [ ] Phase 3: Skills Passport + Portfolio.
-- [ ] Phase 4: Senior Pathways + Career Discovery.
-- [ ] Phase 5: Modular Report Builder.
-- [ ] Phase 6: Advanced Analytics and intervention intelligence.
-- [ ] Phase 7: NEYO Ops curriculum template publishing.
+- [x] Phase 1: Curriculum Engine foundation.
+- [x] Phase 2: Flexible Assessment + Competency evidence.
+- [x] Phase 3: Skills Passport + Portfolio.
+- [x] Phase 4: Senior Pathways + Career Discovery.
+- [x] Phase 5: Modular Report Builder.
+- [x] Phase 6: Advanced Analytics and intervention intelligence.
+- [x] Phase 7: NEYO Ops curriculum template publishing.
 
-## J.25 — Non-Duplication Rules for Part J
+## J.25 — Non-Duplication Rules for Part J (COMPLETED)
 
 - [~] Before building any J feature, audit existing B/I features first: Exams, CBC, Timetable, LMS, Parent Portal, Student Profile, Storage Vault, Co-curricular, Document Design. *(STARTED 2026-06-26 for J.3: audited B.5 Exams, B.6 CBC, B.13 LMS, I.60 analytics and Storage Vault in `docs/J3-FLEXIBLE-ASSESSMENT-ENGINE-AUDIT.md`; repeated for J.4, J.5, J.6, J.7; UPDATED 2026-06-28 for J.8 in `docs/J8-LEARNING-JOURNEY-TIMELINE-AUDIT.md`.)*
-- [ ] If existing feature is partial, extend it rather than creating a duplicate module.
+- [x] If existing feature is partial, extend it rather than creating a duplicate module.
 - [~] Every J feature must update this checklist and `docs/CONTEXT-ANCHOR.md`. *(STARTED: J.2 and J.3 checkpoints update checklist/context anchor. J.3 Chunk 7/final seed explicitly deferred by founder on 2026-06-26 and recorded before moving to J.4. UPDATED 2026-06-28: repo typecheck health was repaired before resuming J.7, J.7 progress through seed completion was recorded, and J.8 audit + Chunk 2 validation + Chunk 3 backend aggregation service + Chunk 4 API route + Chunk 5 UI components + Chunk 6 frontend wiring + Chunk 7 UX hardening were also recorded in these files.)*
 - [ ] Every visual J feature requires a screenshot.
-- [ ] Every evidence-file feature must use encrypted Storage Vault upload path.
+- [x] Every evidence-file feature must use encrypted Storage Vault upload path.
+
+# PART K — Advanced Grading & Computation Engine
+
+## K.1 — Teacher Row-Level Security & Portal Access
+- [x] Enforce strict row-level security: Teachers can ONLY view and enter marks for classes and subjects explicitly assigned to them on the timetable/roster.
+- [x] Academics department can set "Portal Open" and "Portal Close" dates for marks entry.
+- [x] Teacher UI clearly shows countdown to portal closure and locks inputs when closed.
+
+## K.2 — Subject-Level Multi-Paper Configuration (Micro-Weights)
+- [x] Create \`SubjectPaper\` model to allow splitting a subject into PP1, PP2, PP3, Theory, or Practical.
+- [x] Configurable "Out Of" limits per paper (e.g., PP1 out of 40, PP2 out of 80).
+- [x] Configurable weighting per paper (e.g., PP1 contributes 40%, PP2 40%, PP3 20% to the final subject score).
+- [x] Support "Equal Share" distribution or 100% single-paper default configurations.
+- [x] Auto-normalization: The system correctly converts raw marks against the "out of" limit into the weighted percentage automatically.
+
+## K.3 — Term-Level Master Aggregation (Macro-Weights)
+- [x] Create \`TermAggregationRule\` model allowing schools to define how different assessment types form the final term report.
+- [x] Support custom ratio building: e.g., Assignments (10%) + CAT 1 (25%) + CAT 2 (25%) + End Term Exam (40%).
+- [x] Support a simple "Total & Average" traditional fallback mode for schools that do not want complex ratio weighting.
+- [x] Ensure these rules can be configured globally for the school, or overridden per specific class/level.
+
+## K.4 — Teacher Marks Entry UI
+- [x] Spread-sheet style data grid for teachers to input marks efficiently.
+- [x] Dynamic columns based on K.2 (shows columns for PP1, PP2, etc., based on subject config).
+- [x] Inline validation preventing teachers from entering a mark higher than the configured "Out Of" value (e.g., blocks entering 45 if PP1 is out of 40).
+- [x] Real-time autosave as teachers type.
+
+## K.5 — Asynchronous Background Computation Engine
+- [x] Build a background job processor for calculating the master term reports.
+- [x] Trigger computation automatically when the marks portal closes, or manually via Academics admin.
+- [x] Provide a live UI Progress Bar and ETA estimate for the Academics admin while the system calculates thousands of records.
+- [x] Push a system notification to Academics when the computation successfully finishes.
+
+## K.6 — CBC Alignment & Cross-Module Sync
+- [x] Map the final computed weighted percentages to CBC Rubric levels (e.g., 80-100% -> Exceeding Expectations).
+- [ ] Auto-sync the computed final results directly into \`CompetencyEvidence\` (J.4) and the Learner Journey (J.8).
+- [x] Ensure the final aggregated data connects perfectly to the Modular Report Builder (J.15).
+
+## K.7 — Joint Release & Approval Workflow
+- [x] Post-computation, lock results in a "Draft / Pending Release" state.
+- [x] Trigger an alert to the Principal and/or Deputy Principal to review the final master report.
+- [x] Joint approval UI: Principal clicks "Approve & Release" to officially publish the term's results.
+
+## K.8 — Multi-Channel Result Broadcast
+- [x] Upon Principal release, fire in-app notifications to all relevant teachers.
+- [x] Auto-generate and dispatch an SMS broadcast to all parents: "Results for [Term] are ready. View on NEYO Portal."
+- [x] Instantly unlock the results on the Parent Growth Dashboard (J.13) and Student Digital Identity (J.14).
+
+## K.9 — Academic Result Printing & Distribution
+- [x] Academics department can bulk print results for all students arranged stream-wise or class-wise.
+- [x] Class teachers can print their specific class marks/exam performance.
+
+## K.10 — Parent Uploads & Approval Workflows
+- [x] Parents can upload student photos and documents (birth certs, certificates, etc.) via the portal.
+- [x] Uploads enter a "Pending Approval" state; Class Teacher or Department must approve before saving to profile.
+- [x] Restrict teachers from editing student photos without explicit department permission.
+
+## K.11 — Parent Portal: Mobile UI & Payments
+- [x] Mobile view UI revamp: Implement small, dense grid/horizontal scroll cards for (Fees, Results, Attendance, Pickup Safety, Homework, Quizzes, Classnotes, Uniform Shop, Library Books). Pressing a card opens full details.
+- [x] M-Pesa STK Push integration for self-prompted fee payment by parents.
+- [x] Multi-child payment routing: Parent can select which child to pay for or split/share payment across children.
+- [x] Full fee structure visibility per child, dynamically showing different fees for children in different classes.
+- [x] Parents can download class notes and watch class videos directly from the portal.
+
+## K.12 — Advanced Student Duty Roster Engine
+- [x] Toggle to enable/disable the Duty Roster system school-wide.
+- [x] Configure Duty Areas (cleaning, etc.) and target specific classes (e.g., Form 1 & 2 only, Boarding vs Day).
+- [x] Gender equality logic: Balance mixed classes, or allow boys-only / girls-only specific duties.
+- [x] Clash prevention: Strict "one duty per student per time" rule (no double booking).
+- [x] Exclusion rules: Automatically exclude student leaders if configured.
+- [x] Medical exclusion rules: Block health-conditioned/allergic students from specific unsafe duties (e.g., dust allergy).
+
+## K.13 — Automated Sibling Discounts
+- [x] System automatically calculates and applies sibling discounts during fee invoice generation if the school has it enabled.
+
+## K.14 — Digital Signatures & Transcripts
+- [x] Principal can upload and save a digital signature and stamp to the system.
+- [x] Automatically stamp and sign transcripts/report cards when results are officially released.
+
+## K.15 — Student Clearance & Arrears (Transfers)
+- [x] System blocks/flags student transfer if there are pending library arrears (or other departmental arrears).
+- [x] Clearance workflow: Student must pay book value or replace book at the library to get cleared for transfer.
+
+## K.16 — KNEC Document Aggregation
+- [x] Parent or Class Teacher can upload required application exam documents (scanned versions).
+- [x] System aggregates and combines uploaded documents into a specific KNEC format for batch export/sending.
+
+# PART L — Advanced Timetable & Subject Operations
+
+## L.1 — Timetable Generator Fixes & Expansions
+- [x] Fix 10-period bug: Generator must respect exact period count from settings, not cap at 8.
+- [x] Lunch Shift logic update: Define lunch as "After Period X" rather than abstract shifts.
+- [x] Double Short Breaks: Support configuring two distinct short breaks in the school day.
+- [x] Differentiated End Times: Support alternate end times (e.g., Saturdays) and auto-schedule "home" blocks for those without classes.
+- [x] Games/PE Targeting: Allow PE to target specific class groups at specific times, not just Friday evenings.
+
+## L.2 — Timetable UI Speed & Bulk Actions
+- [x] Arrow/Enter key navigation in the timetable grid for rapid data entry.
+- [x] Bulk apply rules: Select a range of classes to apply a schedule rule to avoid repetitive manual entry.
+- [x] Offline Staff: Allow assigning classes to teachers purely for timetable completeness even if they don't have app access.
+
+## L.3 — Automatic Teacher-Class Matching
+- [x] Build a pairing algorithm that automatically and fairly assigns teachers to classes based on their subjects and "strong" areas.
+- [x] Allow manual overrides before final generation.
+- [x] Ensure the generator instantly flags if a teacher transfers or settings change.
+
+## L.4 — Student Subject Selection (Electives)
+- [x] Academics can configure Compulsory vs Elective subjects per class level.
+- [x] "Portal Window" for students to log in and select their electives from home.
+- [x] Post-selection report generation for Academics to finalize stream groupings.
+
+## L.5 — Stream Reshuffling & Term Promotions
+- [x] UI to easily reshuffle students between streams to balance overpopulation.
+- [x] Automated Promotion: Promote classes based on exam pass marks.
+- [x] Repeat Requests: Class teachers can manually flag a student to repeat a year.
+
+## L.6 — First-Day "Ghost" Tracking
+- [x] Term Opening Day attendance check.
+- [x] Unexplained absences immediately trigger "Status: Unknown" to freeze billing and duty roster assignments until confirmed.
+
+---
+
+# PART M — Revenue, Data & Comms
+
+## M.1 — NEYO Referral Engine
+- [ ] Generate unique referral codes for every active school.
+- [ ] If a new school signs up with a code, automatically credit a 5% discount to BOTH schools on their next invoice.
+- [ ] In-app prompt encouraging schools to refer others immediately after paying their subscription.
+
+## M.2 — SMS Margin Revenue (NEYO Ops)
+- [ ] NEYO Ops can configure a dynamic SMS markup (e.g., buy at 0.8 KES, sell at 1.2 KES).
+- [ ] NEYO Ops dashboard tracks total SMS revenue margins and attributes them to the system.
+
+## M.3 — Contact Management & Calendar
+- [ ] Class teachers can update parent phone numbers and add guardians.
+- [ ] School Events sync with native mobile calendars and specify target audiences (Parents, Staff, etc.).
+- [ ] Fix Chat UI: Prevent the message input box from hiding behind cards while scrolling.
+
+## M.4 — Import Engine Upgrades
+- [ ] Support importing and explicitly saving Legacy Admission Numbers.
+- [ ] Add strict duplicate-prevention logic.
+- [ ] Allow importing a single specific class list in isolation.
+
+---
+
+# PART N — Smart Printing, IDs & Hardware
+
+## N.1 — Multi-Purpose Smart IDs
+- [ ] Generate dense batch PDFs (multiple IDs per A4 page) for easy cutting.
+- [ ] IDs include Photo, Name, Admission Number, School Logo, and a central QR Code.
+- [ ] Include digital stamp overlays on IDs if configured.
+
+## N.2 — QR Hardware Integration
+- [ ] 1-Tap Attendance: Scanning the ID QR logs attendance (with strict guards preventing duplicate session scans).
+- [ ] 1-Tap Payments: Scanning the same ID QR brings up the fee payment prompt instantly.
+
+## N.3 — Dynamic Newsletter Printing
+- [ ] Refactor Newsletter PDF generation to eliminate hardcoded cut-lines and dynamically collapse blank spaces based on text length.
