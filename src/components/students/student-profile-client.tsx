@@ -5,7 +5,7 @@ import {
   Phone, Mail, Hash, CalendarDays, GraduationCap,
   FileText, CheckCircle2, Circle, Plus, ShieldCheck,
   ArrowRightLeft, Download, Undo2, Loader2, X,
-  Users, Wallet, Percent, CreditCard, Award,
+  Users, Wallet, Percent, CreditCard, Award, FolderOpen,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MessageButton } from "@/components/messaging/message-button";
 import { StudentCompetencySummaryCard } from "@/components/competencies/competency-framework-components";
 import { SkillsPassportCard } from "@/components/skills-passport/skills-passport-card";
+import { LearnerJourneyCard } from "@/components/learner-journey/learner-journey-card";
 
 interface Guardian { id: string; guardianId: string; relationship: string; isPrimary: boolean; guardian: { id: string; fullName: string; phone: string; email: string | null; userId: string | null } }
 interface Doc { id: string; label: string; fileUrl: string; fileName: string | null; hardcopyLocation: string; createdAt: string }
@@ -159,6 +160,9 @@ export function StudentProfileClient({ initial, canEdit }: { initial: Student; c
                 <Button variant="secondary" size="sm"><CreditCard className="h-3.5 w-3.5" /> Mzazi card</Button>
               </a>
             )}
+            <a href={`/portfolio?studentId=${s.id}`}>
+              <Button variant="secondary" size="sm"><FolderOpen className="h-3.5 w-3.5" /> Portfolio</Button>
+            </a>
             {canEdit && (
               <select value={s.status} onChange={(e)=>setStatus(e.target.value)} disabled={busy} className="rounded-full border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900">
                 {STATUSES.map((st)=><option key={st} value={st}>{st[0]+st.slice(1).toLowerCase()}</option>)}
@@ -280,7 +284,14 @@ export function StudentProfileClient({ initial, canEdit }: { initial: Student; c
         <StudentCompetencySummaryWrapper studentId={s.id} />
 
         {/* J.6 Skills Passport */}
-        <SkillsPassportCard studentId={s.id} />
+        <div className="lg:col-span-2">
+          <SkillsPassportCard studentId={s.id} />
+        </div>
+
+        {/* J.8 Learning Journey Timeline */}
+        <div className="lg:col-span-2">
+          <LearnerJourneyCard studentId={s.id} mode="staff" />
+        </div>
       </div>
 
       {transferDialog && (

@@ -2037,6 +2037,112 @@ trailer<</Root 1 0 R>>
     }
     console.log("✓ Seeded J.6: Skills Passport star ratings and learner talent profile.");
   }
+
+  // ---- J.7 Student Portfolio System (Chunk 8 seed) -----------------------
+  {
+    const {
+      submitPortfolioItem,
+      approvePortfolioItem,
+    } = await import("../src/lib/services/portfolio.service");
+
+    const achiengStudentUser = await db.user.findFirst({ where: { tenantId: tenant.id, email: "achieng@karibuhigh.ac.ke" } });
+    const achiengLearner = achiengStudentUser
+      ? await db.student.findFirst({ where: { tenantId: tenant.id, userId: achiengStudentUser.id } })
+      : null;
+    const atienoLearner = await db.student.findFirst({ where: { tenantId: tenant.id, firstName: "Atieno" } });
+    const mathSubject = await db.subject.findFirst({ where: { tenantId: tenant.id, code: "MAT" } });
+    const cocurricularSubject = await db.subject.findFirst({ where: { tenantId: tenant.id, code: "GAC" } });
+    const communicationCompetency = await db.competency.findFirst({ where: { tenantId: tenant.id, code: "COMMUNICATION" } });
+    const digitalLiteracyCompetency = await db.competency.findFirst({ where: { tenantId: tenant.id, code: "DIGITAL_LITERACY" } });
+    const creativityCompetency = await db.competency.findFirst({ where: { tenantId: tenant.id, code: "CREATIVITY" } });
+
+    if (achiengLearner) {
+      const approvedTitle = "Nairobi River clean-up reflection";
+      let approvedItem = await db.portfolioItem.findFirst({ where: { tenantId: tenant.id, studentId: achiengLearner.id, title: approvedTitle } });
+      if (!approvedItem) {
+        approvedItem = await submitPortfolioItem(principal as any, {
+          studentId: achiengLearner.id,
+          title: approvedTitle,
+          category: "COMMUNITY",
+          description: "Achieng documented the Saturday school-community clean-up, reflected on teamwork and explained how learners kept the riverbank safe and tidy.",
+          externalLink: "https://example.org/karibu-community-cleanup",
+          status: "SUBMITTED",
+          visibleToParents: false,
+          competencyId: communicationCompetency?.id,
+          subjectId: cocurricularSubject?.id,
+          clubId: "environment-club",
+          awardId: "community-service-term-2-2026",
+        } as any);
+      }
+      if (approvedItem.status !== "APPROVED" || !approvedItem.visibleToParents) {
+        await approvePortfolioItem(principal as any, {
+          itemId: approvedItem.id,
+          status: "APPROVED",
+          visibleToParents: true,
+          note: "Clear learner reflection and strong community-service evidence.",
+        });
+      }
+
+      const submittedTitle = "Scratch coding fractions animation";
+      const existingSubmitted = await db.portfolioItem.findFirst({ where: { tenantId: tenant.id, studentId: achiengLearner.id, title: submittedTitle } });
+      if (!existingSubmitted && achiengStudentUser) {
+        await submitPortfolioItem({
+          id: achiengStudentUser.id,
+          tenantId: achiengStudentUser.tenantId,
+          neyoLoginId: achiengStudentUser.neyoLoginId,
+          fullName: achiengStudentUser.fullName,
+          phone: achiengStudentUser.phone,
+          email: achiengStudentUser.email,
+          role: achiengStudentUser.role as any,
+          secondaryRole: achiengStudentUser.secondaryRole as any,
+          language: achiengStudentUser.language ?? "en",
+        }, {
+          studentId: achiengLearner.id,
+          title: submittedTitle,
+          category: "CODING",
+          description: "A short coding project showing fraction addition with animated blocks and learner voice notes for revision.",
+          externalLink: "https://example.org/karibu-fractions-scratch",
+          fileSizeBytes: 8 * 1024 * 1024,
+          status: "DRAFT",
+          visibleToParents: false,
+          competencyId: digitalLiteracyCompetency?.id,
+          subjectId: mathSubject?.id,
+          clubId: "coding-club",
+        } as any);
+      }
+    }
+
+    if (atienoLearner) {
+      const certificateTitle = "County music festival certificate";
+      let certificateItem = await db.portfolioItem.findFirst({ where: { tenantId: tenant.id, studentId: atienoLearner.id, title: certificateTitle } });
+      if (!certificateItem) {
+        certificateItem = await submitPortfolioItem(principal as any, {
+          studentId: atienoLearner.id,
+          title: certificateTitle,
+          category: "CERTIFICATE",
+          description: "Atieno received a county-level certificate after representing the school in the girls' folk song category during the music festival.",
+          externalLink: "https://example.org/karibu-county-music-certificate",
+          fileSizeBytes: 4 * 1024 * 1024,
+          status: "SUBMITTED",
+          visibleToParents: false,
+          competencyId: creativityCompetency?.id,
+          subjectId: cocurricularSubject?.id,
+          clubId: "music-club",
+          awardId: "county-music-festival-2026",
+        } as any);
+      }
+      if (certificateItem.status !== "APPROVED" || !certificateItem.visibleToParents) {
+        await approvePortfolioItem(principal as any, {
+          itemId: certificateItem.id,
+          status: "APPROVED",
+          visibleToParents: true,
+          note: "Approved for family portfolio and transfer pack.",
+        });
+      }
+    }
+
+    console.log("✓ Seeded J.7: portfolio timeline items for Achieng and Atieno (approved + submitted, linked to competencies/subjects, export-ready).");
+  }
 }
 
 main()

@@ -78,6 +78,8 @@ import { IntercomError } from "@/lib/services/intercom.service";
 import { OnlineClassError } from "@/lib/services/online-class.service";
 import { RubricError } from "@/lib/services/rubric.service";
 import { SkillsPassportError } from "@/lib/services/skills-passport.service";
+import { PortfolioError } from "@/lib/services/portfolio.service";
+import { LearnerJourneyError } from "@/lib/services/learner-journey.service";
 import { TenantIsolationError } from "@/lib/core/tenant-db";
 import { captureError } from "@/lib/observability/capture";
 import { RateLimitError } from "@/lib/security/rate-limit";
@@ -574,6 +576,23 @@ export function handleError(err: unknown) {
 
   // J.6 Skills Passport.
   if (err instanceof SkillsPassportError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 :
+      err.code === "FORBIDDEN" ? 403 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // J.7 Student Portfolio System.
+  if (err instanceof PortfolioError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 :
+      err.code === "FORBIDDEN" ? 403 :
+      err.code === "TOO_LARGE" ? 413 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // J.8 Learning Journey Timeline.
+  if (err instanceof LearnerJourneyError) {
     const status =
       err.code === "NOT_FOUND" ? 404 :
       err.code === "FORBIDDEN" ? 403 : 422;

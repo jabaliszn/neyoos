@@ -121,7 +121,7 @@ async function main() {
       rubricCode: "EXPERT",
       narrative: "Excellent technique during dissection, handled scalpel safely.",
     });
-    if (scoredRecord.rubricLevel !== 3 || scoredRecord.scoreMarks !== 30 || scoredRecord.status !== "SCORED") {
+    if (!("status" in scoredRecord) || scoredRecord.rubricLevel !== 3 || scoredRecord.scoreMarks !== 30 || scoredRecord.status !== "SCORED") {
       throw new Error("Scoring did not apply level, calculated points or status correctly.");
     }
     console.log("✓ teacher scored assessment record with rubric successfully (Level 3 EXPERT -> 30 marks auto-calculated)");

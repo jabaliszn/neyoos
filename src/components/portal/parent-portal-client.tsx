@@ -9,7 +9,7 @@ import * as React from "react";
 import {
   GraduationCap, AlertCircle, Loader2, ArrowLeft, FileText, Wallet,
   CalendarCheck, MessageSquare, Smartphone, X, BookOpen, Download, Calendar,
-  UserCheck, ShieldCheck, KeyRound, Trash2, Camera,
+  UserCheck, ShieldCheck, KeyRound, Trash2, Camera, FolderOpen,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import { MessageButton } from "@/components/messaging/message-button";
 import { FileUpload, type UploadedFile } from "@/components/ui/file-upload";
 import { StudentCompetencySummaryCard } from "@/components/competencies/competency-framework-components";
 import { SkillsPassportCard } from "@/components/skills-passport/skills-passport-card";
+import { LearnerJourneyCard } from "@/components/learner-journey/learner-journey-card";
 
 const kes = (n: number) => `KES ${n.toLocaleString("en-KE")}`;
 
@@ -143,7 +144,12 @@ function ChildView({ id, onBack }: { id: string; onBack: () => void }) {
             <p className="text-xs text-navy-400">{data.child.className ?? "—"} · <span className="font-mono">{data.child.admissionNo}</span></p>
           </div>
         </div>
-        {data.child.classId && <ClassChatButton classId={data.child.classId} />}
+        <div className="flex flex-wrap items-center gap-2">
+          <a href={`/portfolio?studentId=${data.child.id}`}>
+            <Button size="sm" variant="secondary"><FolderOpen className="h-3.5 w-3.5" /> Portfolio</Button>
+          </a>
+          {data.child.classId && <ClassChatButton classId={data.child.classId} />}
+        </div>
       </div>
 
       {/* fees first — what parents check most */}
@@ -209,6 +215,9 @@ function ChildView({ id, onBack }: { id: string; onBack: () => void }) {
 
       {/* J.6 Skills Passport */}
       <SkillsPassportCard studentId={id} />
+
+      {/* J.8 Learning Journey Timeline */}
+      <LearnerJourneyCard studentId={id} mode="parent" />
 
       {/* attendance */}
       <Card>

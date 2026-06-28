@@ -8,6 +8,7 @@ export interface UploadedFile {
   id: string;
   url: string;
   fileName: string;
+  contentType?: string;
   encrypted?: boolean;
   encryptionMode?: string | null;
 }

@@ -44,6 +44,7 @@ import {
   Youtube,
   Compass,
   Brain,
+  FolderOpen,
   type LucideIcon,
 } from "lucide-react";
 
@@ -129,6 +130,7 @@ export const NAVIGATION: NavSection[] = [
       { label: "CBC", href: "/cbc", icon: Layers, moduleKey: "academics", permission: "academics.view" },
       { label: "Assessments", href: "/assessments", icon: ClipboardList, moduleKey: "academics", permission: "academics.view" },
       { label: "Competencies", href: "/competencies", icon: Brain, moduleKey: "academics", permission: "academics.view" },
+      { label: "Portfolio", href: "/portfolio", icon: FolderOpen, permission: "academics.view" },
       { label: "Syllabus", href: "/syllabus", icon: BookOpen, moduleKey: "academics", permission: "academics.view" },
       { label: "Staff", href: "/staff", icon: Users, moduleKey: "staff", permission: "staff.view" },
       { label: "Payroll", href: "/payroll", icon: Banknote, moduleKey: "staff", permission: "staff.manage" },

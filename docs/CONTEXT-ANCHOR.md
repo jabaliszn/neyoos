@@ -1,5 +1,235 @@
 # 🧠 NEYO — CONTEXT ANCHOR ("Save Game")
 
+## 🔁 PART J BATCH 52 — J.8 LEARNING JOURNEY TIMELINE CHUNK 7 UX HARDENING COMPLETED; SCREENSHOT STILL BLOCKED (2026-06-28)
+- Completed J.8 Chunk 7 — UX hardening on the connected learner journey card.
+- Updated `src/components/learner-journey/learner-journey-components.tsx` with two new UX support components:
+  - `LearnerJourneyModeNotice`
+  - `LearnerJourneyRefreshToolbar`
+- Updated `src/components/learner-journey/learner-journey-card.tsx` to harden live behavior:
+  - first-load `loading` state separated from non-blocking `refreshing`
+  - soft refresh when source filters change while existing data is already on screen
+  - last-refreshed timestamp
+  - explicit refresh CTA
+  - source filters disabled during refresh to avoid noisy double reloads
+  - clearer mode-specific privacy guidance:
+    - staff mode explains internal milestones can appear but counseling notes still stay out
+    - parent mode explains only family-safe released milestones appear
+- Added `scripts/j8-learning-journey-ux-test.ts`, verifying:
+  - separate loading vs refreshing states
+  - last-refresh tracking
+  - soft refresh behavior
+  - disable-during-refresh source filters
+  - mode notice / privacy copy
+  - refresh feedback copy
+  - Bundi copy-law compliance
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `scripts/j8-learning-journey-ux-test.ts` ✓, `scripts/j8-learning-journey-page-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- Screenshot attempt was re-checked truthfully and is still blocked in this sandbox. Playwright is installed, but Chromium launch fails because required Linux browser libraries are missing; they cannot be installed here without elevated permissions. No fake screenshot was produced.
+- NEXT = J.8 visual founder confirmation remains pending; the next real build step can be either a screenshot retry in a fuller environment or the next founder-approved Part J item after J.8 review.
+
+## 🔁 PART J BATCH 51 — J.8 LEARNING JOURNEY TIMELINE CHUNK 6 FRONTEND WIRING COMPLETED (2026-06-28)
+- Completed J.8 Chunk 6 — Frontend Wiring into existing learner surfaces. Added connected wrapper `src/components/learner-journey/learner-journey-card.tsx`.
+- The new connected card fetches the real signed-in J.8 API (`GET /api/learner-journey`) using:
+  - `mode="staff"` for staff/internal learner story
+  - `mode="parent"` for parent-safe learner story
+- Connected card behavior:
+  - calls the real backend API with `studentId`, `mode`, `limit`, and optional source filter
+  - uses the reusable J.8 components from Chunk 5
+  - supports all 4 mandatory UX states: loading, error, empty, populated
+  - reloads cleanly when the source filter changes
+  - stays mobile-first for 360px screens
+- Mounted into existing learner-facing surfaces instead of creating a duplicate page:
+  - `src/components/students/student-profile-client.tsx` now mounts `LearnerJourneyCard studentId={s.id} mode="staff"`
+  - `src/components/portal/parent-portal-client.tsx` now mounts `LearnerJourneyCard studentId={id} mode="parent"`
+- This keeps J.8 aligned with the audit decision: extend Student Profile and Parent Portal rather than building a disconnected learner-history subsystem.
+- Added `scripts/j8-learning-journey-page-test.ts`, verifying:
+  - connected wrapper fetches real `/api/learner-journey`
+  - forwards real mode/source/limit controls
+  - uses loading/error/empty/populated states
+  - mounts in both Student Profile and Parent Portal
+  - keeps Bundi copy-law compliance
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `scripts/j8-learning-journey-page-test.ts` ✓, `scripts/j8-learning-journey-ui-components-test.ts` ✓, `scripts/j8-learning-journey-api-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- Screenshot attempt truthfully blocked: Playwright is installed, but browser launch still fails in this sandbox because required Linux browser libraries are missing and cannot be installed here without elevated permissions. No fake screenshot was produced.
+- NEXT = J.8 Chunk 7 — UX hardening / visual QA / screenshot if environment allows, or proceed carefully to the next founder-approved small step.
+
+## 🔁 PART J BATCH 50 — J.8 LEARNING JOURNEY TIMELINE CHUNK 5 UI COMPONENTS COMPLETED (2026-06-28)
+- Completed J.8 Chunk 5 — UI Components & Icons. Added `src/components/learner-journey/learner-journey-components.tsx`, a reusable Liquid Glass-ready component set for learner journey timelines. Components are presentational only and do not fetch directly; connected page/profile wiring comes later.
+- Components added:
+  - `LearnerJourneyHero`
+  - `LearnerJourneySummaryGrid`
+  - `LearnerJourneyLoadingState`
+  - `LearnerJourneyErrorState`
+  - `LearnerJourneyEmptyState`
+  - `LearnerJourneySourceFilterBar`
+  - `LearnerJourneyEntryCard`
+  - `LearnerJourneyTimelineList`
+- UI covers the main J.8 timeline presentation needs without duplicating source modules:
+  - learner hero / mode explanation
+  - timeline summary counts
+  - source filter chips
+  - visibility / verification badges per entry
+  - entry cards with source-aware icons and deep-link CTA
+  - loading, empty and error states for slow 3G and mobile use
+- Product copy remains rule-based and does not use the banned word. The components explain that the learner journey is assembled from released exams, flexible assessments, attendance, competencies, skills, discipline milestones and approved portfolio evidence.
+- Added `scripts/j8-learning-journey-ui-components-test.ts`, verifying:
+  - all component exports exist
+  - Lucide icon usage across source types
+  - learner-journey copy and parent-safe visibility copy
+  - verification-state copy
+  - Liquid Glass classes (`backdrop-blur`, `rounded-2xl`)
+  - no direct `fetch()` / axios / API calls inside the components
+  - no banned product-copy word
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `scripts/j8-learning-journey-ui-components-test.ts` ✓, `scripts/j8-learning-journey-api-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- No screenshot because Chunk 5 is component-only; the first J.8 visual screenshot should come in Chunk 6 when the learner journey is mounted on a real page/surface.
+- NEXT = J.8 Chunk 6 — Frontend wiring into Student Profile and Parent Portal.
+
+## 🔁 PART J BATCH 49 — J.8 LEARNING JOURNEY TIMELINE CHUNK 4 API ENDPOINTS COMPLETED (2026-06-28)
+- Completed J.8 Chunk 4 — API Endpoints. Added signed-in route `src/app/api/learner-journey/route.ts`.
+- GET behavior: `GET /api/learner-journey?studentId=...&mode=staff|parent` now returns the real unified learner journey timeline from `getLearnerJourneyTimeline(user, query)`.
+- Supported query params are validated through the real J.8 schema layer:
+  - required `studentId`
+  - `mode` (`staff` | `parent`)
+  - optional `from`
+  - optional `to`
+  - optional `source`
+  - optional bounded `limit`
+- The route is signed-in only via `requireUser()` and delegates all audience filtering, row scoping and source aggregation to the backend service created in Chunk 3.
+- Updated `src/lib/api/respond.ts` to import/map `LearnerJourneyError`:
+  - `NOT_FOUND` → 404
+  - `FORBIDDEN` → 403
+  - `INVALID` → 422
+- Added `scripts/j8-learning-journey-api-test.ts`, verifying:
+  - GET handler export exists
+  - route requires signed-in user
+  - query validation uses `learnerJourneyQuerySchema`
+  - missing `studentId` guard exists
+  - route wires `getLearnerJourneyTimeline()`
+  - `LearnerJourneyError` response mappings are correct
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `scripts/j8-learning-journey-api-test.ts` ✓, `scripts/j8-learning-journey-service-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- No screenshot because this was an API-only chunk.
+- NEXT = J.8 Chunk 5 — reusable Learning Journey timeline UI components.
+
+## 🔁 PART J BATCH 48 — J.8 LEARNING JOURNEY TIMELINE CHUNK 3 BACKEND AGGREGATION SERVICE COMPLETED (2026-06-28)
+- Completed J.8 Chunk 3 — Backend Aggregation Service. Added `src/lib/services/learner-journey.service.ts`.
+- The new service builds a unified learner journey **without** creating a duplicate timeline table. It reads and normalizes existing source modules into one ordered entry shape already defined by J.8 validation:
+  - B.5 Exams (`ExamResult`) → grouped exam-result milestones
+  - J.3 Flexible Assessments (`AssessmentRecord`) → released/internal assessment milestones
+  - B.3 Attendance (`AttendanceRecord`) → important attendance events (absent / late / excused)
+  - B.20 Discipline (`DisciplineIncident`, `Suspension`) → behavior/suspension milestones
+  - J.4 Competency Evidence (`CompetencyEvidence`) → competency growth milestones
+  - J.6 Skills Passport (`SkillsPassportEntry`) → talent/leadership growth milestones
+  - J.7 Portfolio (`PortfolioItem`) → portfolio milestones
+  - J.7 portfolio certificates (`PortfolioItem.category = CERTIFICATE`) → certificate milestones
+  - B.1 transfer history (`StudentTransfer`) → system milestones
+- Added `LearnerJourneyError` and `getLearnerJourneyTimeline(user, query)`.
+- Service behavior:
+  - verifies row-scoped learner access using existing `scopeWhere()`
+  - enforces J.8 access mode rules (`staff` vs `parent`)
+  - supports `from`, `to`, `source`, and `limit`
+  - returns normalized entries sorted newest-first plus source counts/summary
+  - keeps parent mode strictly `PARENT_SAFE`
+  - intentionally excludes confidential `CounselingNote` content from the timeline
+  - separates `PORTFOLIO` and `CERTIFICATE` source filtering while still reusing the same underlying portfolio table
+- Added `scripts/j8-learning-journey-service-test.ts`, verifying:
+  - accountant forbidden access
+  - parent blocked from `staff` mode
+  - real aggregation across EXAM / ASSESSMENT / ATTENDANCE / DISCIPLINE / COMPETENCY / SKILLS / PORTFOLIO / CERTIFICATE
+  - parent-safe filtering of unpublished exams, internal assessments, internal competencies, hidden portfolio items, and counseling content
+  - certificate-only source filter
+  - date filtering and limit behavior
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `scripts/j8-learning-journey-service-test.ts` ✓, `scripts/j8-learning-journey-validation-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- No screenshot because this was a backend service chunk only.
+- NEXT = J.8 Chunk 4 — API route for learner journey timeline, then J.8 Chunk 5 reusable UI timeline components.
+
+## 🔁 PART J BATCH 47 — J.8 LEARNING JOURNEY TIMELINE CHUNK 2 VALIDATION & SECURITY COMPLETED (2026-06-28)
+- Completed J.8 Chunk 2 — Security & Validation. Added `src/lib/validations/learner-journey.ts`.
+- The new validation layer defines strict schemas for the future timeline query and normalized timeline-entry shape:
+  - `learnerJourneyQuerySchema` with `studentId`, `mode` (`staff` | `parent`), optional `from`/`to`, optional `source`, and bounded `limit`.
+  - `learnerJourneyEntrySchema` with normalized fields such as `date`, `sourceModule`, `eventType`, `title`, `summary`, `visibility`, and `verificationStatus`.
+- Added source/mode registries for the aggregation layer: timeline sources include `EXAM`, `ASSESSMENT`, `ATTENDANCE`, `DISCIPLINE`, `COMPETENCY`, `SKILLS`, `PORTFOLIO`, `CERTIFICATE`, and `SYSTEM`.
+- Added 16-role access helpers:
+  - `userCanReadLearnerJourney()`
+  - `userCanReadStaffLearnerJourney()`
+  - `userCanReadParentSafeLearnerJourney()`
+  - `userCanAccessLearnerJourneyMode()`
+  - `learnerJourneyAccessMatrix()`
+- Important J.8 privacy rule is now encoded in access semantics: `PARENT` and `STUDENT` may access only `parent` mode, while staff-like roles with learner visibility may access `staff` mode. This sets up later filtering so confidential records (especially counseling notes) never leak into family timelines.
+- Added `scripts/j8-learning-journey-validation-test.ts`, verifying valid query parsing/defaults, invalid date-window rejection, invalid source rejection, normalized entry parsing, 16-role access spot checks, secondary-role inheritance, mode guard behavior, and source-registry coverage.
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `scripts/j8-learning-journey-validation-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- No screenshot because this was validation/security only.
+- NEXT = J.8 Chunk 3 — Backend aggregation service (`learner-journey.service.ts`) that reuses Exams, Flexible Assessments, Attendance, Discipline, Competency Evidence, Skills Passport and Portfolio without creating a duplicate DB table.
+
+## 🔁 PART J BATCH 46 — J.8 LEARNING JOURNEY TIMELINE AUDIT COMPLETED (2026-06-28)
+- Started J.8 with the required non-duplication audit before building. Added `docs/J8-LEARNING-JOURNEY-TIMELINE-AUDIT.md`.
+- Audited existing source modules that can already feed a learner timeline: `ExamResult` / `exam.service.ts` (B.5), `AssessmentRecord` / `assessment.service.ts` (J.3), `AttendanceRecord` / `attendance.service.ts` (B.3), `DisciplineIncident` + `Suspension` + confidential `CounselingNote` / `discipline.service.ts` (B.20), `CompetencyEvidence` (J.4), `SkillsPassportEntry` (J.6), and `PortfolioItem` / `portfolio.service.ts` (J.7).
+- Audited learner-facing surfaces: `src/components/students/student-profile-client.tsx` and `src/components/portal/parent-portal-client.tsx` already carry many learner-growth sections (results, attendance, competencies, skills passport, portfolio links, etc.), so J.8 should extend these instead of creating a disconnected duplicate learner detail module.
+- Key finding: J.8 should begin as a **read-only aggregation layer**, not a new database subsystem. There is currently no unified learner-timeline service, but the source records already exist. The safest next implementation is a service such as `learner-journey.service.ts` that normalizes events from the mature modules.
+- Privacy finding: `CounselingNote` must NOT be exposed directly in a parent-safe timeline. J.8 needs audience-aware filtering (`staff` vs `parent`) when it aggregates discipline / wellbeing records.
+- Gap finding: awards/clubs/community-service are only partially represented today. `PortfolioItem` and `SkillsPassportEntry` can provide early signals, but deeper club/award/community-service history should later connect with J.11 Talent Tracking and J.17 Community Service instead of being duplicated now.
+- Updated `docs/FEATURES-CHECKLIST.md` with a J.8 audit note and refreshed J.25 audit discipline note.
+- No screenshot because this was an audit-only chunk.
+- NEXT = J.8 Chunk 2/3: start the actual read-only learner journey aggregation layer (validation + service) over existing sources, still without introducing a duplicate timeline database table.
+
+## 🔁 PART J BATCH 45 — J.7 STUDENT PORTFOLIO SYSTEM CHUNK 8 KENYAN SEED DATA COMPLETED (2026-06-28)
+- Completed J.7 Chunk 8 — Kenyan Seed Data. Updated `prisma/seed.ts` to create real, idempotent portfolio items for seeded learners without duplicating rows on repeat seed runs.
+- Seed logic now creates three realistic portfolio records inside Karibu High School: 
+  1. `Nairobi River clean-up reflection` for Achieng — category `COMMUNITY`, linked to a real competency + subject, approved and visible to families.
+  2. `Scratch coding fractions animation` for Achieng — category `CODING`, created through the STUDENT role flow so it stays `SUBMITTED` and hidden from parents until approval; includes file-size metadata for storage-warning UX.
+  3. `County music festival certificate` for Atieno — category `CERTIFICATE`, approved/family-visible, with competency/subject links plus club/award identifiers.
+- The seed is idempotent: it checks by learner + stable title before creating, and only runs approval when needed. Re-running `npm run db:seed` keeps exactly one row per seeded title.
+- Added `scripts/j7-student-portfolio-seed-test.ts`, verifying: one approved family-visible item for Achieng with competency/subject links; one submitted hidden item for Achieng with storage metadata; one approved certificate item for Atieno with club/award links; and a non-empty default portfolio timeline.
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `npm run db:seed` ✓, `scripts/j7-student-portfolio-seed-test.ts` ✓, re-ran `npm run db:seed` again to confirm idempotency ✓, then `scripts/j7-student-portfolio-ux-test.ts` ✓, `scripts/j7-student-portfolio-page-test.ts` ✓, `scripts/j7-student-portfolio-api-test.ts` ✓, `scripts/j7-student-portfolio-service-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- Screenshot status remains truthfully blocked in this sandbox: J.7 visual capture script exists, Playwright Chromium is installed, but the Linux browser libraries cannot be installed here because `apt` lacks permission. No fake screenshot was produced.
+- NEXT = either re-attempt the J.7 screenshot in a fuller environment, or continue strict list order into **J.8 — Learning Journey Timeline**, starting with the required non-duplication audit against Exams, Assessments, Attendance, Discipline, Awards/Clubs, Portfolio and existing student/parent detail surfaces.
+
+## 🔁 PART J BATCH 44 — J.7 STUDENT PORTFOLIO SYSTEM CHUNK 7 UX / BROWSER-STATE HARDENING COMPLETED (2026-06-28)
+- Completed J.7 Chunk 7 — UX / Browser-State Hardening on the connected portfolio page.
+- Hardened `src/components/portfolio/portfolio-client.tsx` with stronger live states and client-side workflow behavior: explicit empty state before a learner is selected, local timeline search, status-filter chips (`ALL`, `SUBMITTED`, `APPROVED`, `REJECTED`, `VISIBLE_TO_FAMILY`), filtered-empty state, queue toggle/count controls, URL sync reset behavior when learner changes, and safer export guardrails that block empty export attempts with a user-facing error toast.
+- Added pure helper exports `portfolioStatusCounts()` and `filterPortfolioItems()` inside the connected client so UX logic is testable without a browser.
+- Added `scripts/j7-student-portfolio-ux-test.ts`, verifying status-count math, search/status filtering behavior, explicit no-learner state, filtered-empty state, queue-toggle copy, export guard, and Bundi copy-law compliance.
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `scripts/j7-student-portfolio-ux-test.ts` ✓, `scripts/j7-student-portfolio-page-test.ts` ✓, `scripts/j7-student-portfolio-ui-components-test.ts` ✓, `scripts/j7-student-portfolio-api-test.ts` ✓, `scripts/j7-student-portfolio-service-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- Screenshot status: still truthfully blocked in this sandbox. The prepared script `scripts/shot-j7-student-portfolio.ts` and installed Playwright Chromium are ready, but required Linux browser libraries cannot be installed here because `apt` lacks permission. No fake screenshot was produced.
+- NEXT = J.7 Chunk 8 — formal Kenyan seed data / idempotent portfolio seeding so screens are never empty by default, then re-attempt screenshot capture when browser dependencies are available.
+
+## 🔁 PART J BATCH 43 — J.7 STUDENT PORTFOLIO SYSTEM CHUNK 6 FRONTEND PAGE COMPLETED (2026-06-28)
+- Completed J.7 Chunk 6 — Frontend Page / Connected Client. Added `src/app/(app)/portfolio/page.tsx`, server-guarded with `requirePageUser()` + `effectivePermissionsForUser()`: allows signed-in users who effectively have `academics.view`, `exam.view`, or `student.view`, otherwise redirects to `/forbidden`.
+- Added connected client `src/components/portfolio/portfolio-client.tsx`. It loads accessible learners from the real row-scoped `GET /api/students`, loads learner timelines from the real `GET /api/portfolio?studentId=...`, keeps the selected learner in the URL, posts real portfolio actions to `POST /api/portfolio`, and downloads the real export pack from `GET /api/portfolio?studentId=...&export=1`.
+- Connected page supports the main live workflow: choose learner, view portfolio timeline, submit new item, edit item, approve/reject submitted work, delete item, export pack, view storage warning, and use real linked-learning options from `GET /api/competencies` and `GET /api/academics/subjects` where accessible.
+- Discoverability wiring added: `src/lib/core/navigation.ts` now includes a staff-visible `Portfolio` link (`/portfolio`), `src/components/students/student-profile-client.tsx` now links to `/portfolio?studentId=...`, and `src/components/portal/parent-portal-client.tsx` now links to `/portfolio?studentId=...` from the learner header.
+- Added `scripts/j7-student-portfolio-page-test.ts`, verifying page guard, connected API wiring, URL state sync, nav link, and learner links from Student Profile + Parent Portal.
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `scripts/j7-student-portfolio-page-test.ts` ✓, `scripts/j7-student-portfolio-ui-components-test.ts` ✓, `scripts/j7-student-portfolio-api-test.ts` ✓, `scripts/j7-student-portfolio-service-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- Screenshot attempt: created `scripts/shot-j7-student-portfolio.ts` for real visual capture of `/portfolio?studentId=...` with demo rows, but this sandbox cannot install the missing Linux browser libraries without root (`apt` permission denied), so the screenshot file could not be generated here truthfully. The script is ready for local/privileged execution later; no fake screenshot was produced.
+- NEXT = J.7 Chunk 7 — UX/browser-state hardening + screenshot capture when browser deps are available, then J.7 Chunk 8 formal Kenyan seed data so portfolio screens are never empty.
+
+## 🔁 PART J BATCH 42 — J.7 STUDENT PORTFOLIO SYSTEM CHUNK 5 UI COMPONENTS COMPLETED (2026-06-28)
+- Completed J.7 Chunk 5 — UI Components & Icons. Added `src/components/portfolio/portfolio-components.tsx`, a reusable Liquid Glass-ready component set for the Student Portfolio System. Components are presentational/forms only and intentionally do not fetch directly; connected page wiring comes in Chunk 6.
+- Components added: `PortfolioHero`, `PortfolioSummaryGrid`, `PortfolioLoadingState`, `PortfolioErrorState`, `PortfolioEmptyState`, `PortfolioStorageWarningCard`, `PortfolioTimelineCard`, `PortfolioApprovalQueue`, `PortfolioExportCard`, and `PortfolioItemForm`.
+- The UI covers the required portfolio workflow surfaces without duplicating older modules: learner timeline cards, approval queue, encrypted Storage Vault upload form, linked-learning selectors (competency/subject/club/award), storage warning surface, and export CTA. Product copy stays rule-based and avoids the banned word.
+- Upload/evidence guidance is explicit: encrypted Storage Vault path, 50 MB per-file cap, 10 MB warning-threshold concept, school review before family visibility, and export-pack guardrails.
+- Added `scripts/j7-student-portfolio-ui-components-test.ts`, verifying component exports, Lucide icon usage, encrypted Storage Vault copy, growth/timeline copy, approval/export CTA copy, 50 MB and warning-threshold guidance, Liquid Glass classes, no direct `fetch()`/axios usage, and Bundi copy-law compliance.
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `scripts/j7-student-portfolio-ui-components-test.ts` ✓, `scripts/j7-student-portfolio-api-test.ts` ✓, `scripts/j7-student-portfolio-service-test.ts` ✓, `npm run test:roles` 24/24 ✓.
+- No screenshot captured because Chunk 5 is component-only; the first J.7 screenshot comes in Chunk 6 when the portfolio page/client is mounted and visually tested.
+- NEXT = J.7 Chunk 6 — Frontend Page + connected client (`/portfolio` or mounted learner portfolio surface), then Chunk 7 UX/browser-state hardening + screenshot.
+
+## 🔁 PART J BATCH 41 — J.7 STUDENT PORTFOLIO SYSTEM CHUNK 4 API ENDPOINTS COMPLETED (2026-06-28)
+- Completed J.7 Chunk 4 — API Endpoints. Added signed-in route `src/app/api/portfolio/route.ts` with `GET /api/portfolio` and `POST /api/portfolio`.
+- GET behavior: `GET /api/portfolio?studentId=...` returns the real row-scoped learner portfolio timeline from `getPortfolioTimeline(user, studentId)`. `GET /api/portfolio?studentId=...&export=1` returns the real approved-portfolio export pack from `exportPortfolioPack(user, studentId)`.
+- POST validates `portfolioActionSchema` and dispatches real service actions: `submit_item`, `update_item`, `approve_item`, `reject_item`, and `delete_item`. No mocks, no UI-only placeholders.
+- Updated `src/lib/api/respond.ts` to import/map `PortfolioError`: `NOT_FOUND` → 404, `FORBIDDEN` → 403, `INVALID` → 422, and `TOO_LARGE` → 413.
+- Added `scripts/j7-student-portfolio-api-test.ts`, verifying route exports, action registration in `portfolioActionSchema`, and `PortfolioError` response mappings.
+- Verification: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `npm run test:roles` 24/24 ✓, `scripts/j7-student-portfolio-api-test.ts` ✓, `scripts/j7-student-portfolio-service-test.ts` ✓, `scripts/j7-student-portfolio-validation-test.ts` ✓.
+- No screenshot captured because this chunk is API-only. The visual screenshot starts at the next UI chunk.
+- NEXT = J.7 Chunk 5 — UI Components & Icons (Liquid Glass portfolio timeline cards, approval queue cards, upload/submit form, storage warning surface, and export CTA), then Chunk 6 page wiring and screenshot.
+
+## 🔁 PART J BATCH 40 — REPO TYPECHECK HEALTH REPAIRED BEFORE J.7 CHUNK 4 (2026-06-28)
+- Founder said continue, so the repo was audited before starting the next Part J chunk. The codebase matched the save-game state: J.7 Student Portfolio had Chunk 1 DB, Chunk 2 validation/security, and Chunk 3 backend service already built and passing their own tests.
+- A blocking repo-health issue was found: `npm run typecheck` failed before new J.7 work could safely continue. Errors were in existing shared/support files, not in the J.7 portfolio service itself.
+- Fixed `src/components/ui/empty-state.tsx` so it now supports both the old `action` prop and the newer `primaryAction` / `secondaryAction` config style used by the newer J.5/J.6 component sets. This removed the incompatible prop errors while keeping old screens working.
+- Fixed `src/components/ui/file-upload.tsx` by adding optional `contentType` to `UploadedFile`, and updated `src/app/api/files/encrypted/route.ts` to return `contentType` in the encrypted upload response payload. This aligns the upload shape with J.5 evidence attachment usage.
+- Fixed `scripts/j5-rubrics-service-test.ts` by adding a safe type guard when asserting the `scoreWithRubric()` result for `assessment_record`, removing the union-type TypeScript crash without changing runtime behavior.
+- Verification after repair: `NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck` ✓, `npm run test:roles` 24/24 ✓, `scripts/j5-rubrics-service-test.ts` ✓, `scripts/j5-rubrics-page-test.ts` ✓, `scripts/j6-skills-passport-page-test.ts` ✓, `scripts/j7-student-portfolio-service-test.ts` ✓.
+- No screenshot captured because this was a repo-health repair chunk, not a visual feature.
+- NEXT = J.7 Chunk 4 — API Endpoints (`/api/portfolio` routes wiring the real service + Zod + session/role checks + graceful `PortfolioError` responses), then continue in small chunks.
+
 ## 🔁 PART J BATCH 39 — J.7 STUDENT PORTFOLIO SYSTEM CHUNK 3 BACKEND SERVICE COMPLETED (2026-06-27)
 - Completed J.7 Chunk 3 — Backend Logic / Service. Added `src/lib/services/portfolio.service.ts` with real Prisma-backed functions: `getPortfolioTimeline()`, `submitPortfolioItem()`, `updatePortfolioItem()`, `approvePortfolioItem()`, `rejectPortfolioItem()`, `deletePortfolioItem()`, and `exportPortfolioPack()`.
 - Enforced encrypted Storage Vault path: `submitPortfolioItem()` verifies that `storedFileId` corresponds to a real `StoredFile` row with `encrypted = true`, throwing `PortfolioError` if unencrypted or missing.
