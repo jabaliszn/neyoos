@@ -88,7 +88,7 @@ export function EcosystemTrendsTab() {
                     <span className="text-green-600">{data.competencies.meetingPct}%</span>
                   </div>
                   <div className="h-2 w-full bg-navy-50 dark:bg-navy-900 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 rounded-full" style={{ width: \`\${data.competencies.meetingPct}%\` }} />
+                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${data.competencies.meetingPct}%` }} />
                   </div>
                 </div>
 
@@ -98,7 +98,7 @@ export function EcosystemTrendsTab() {
                     <span className="text-amber-600">{data.competencies.strugglingPct}%</span>
                   </div>
                   <div className="h-2 w-full bg-navy-50 dark:bg-navy-900 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-500 rounded-full" style={{ width: \`\${data.competencies.strugglingPct}%\` }} />
+                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${data.competencies.strugglingPct}%` }} />
                   </div>
                 </div>
               </div>
@@ -121,7 +121,7 @@ export function EcosystemTrendsTab() {
                 {data.pathways.map((p: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-center p-2 bg-navy-50/50 dark:bg-navy-900/30 rounded-lg">
                     <span className="font-bold text-sm text-navy-950 dark:text-white">{p.name}</span>
-                    <Badge variant="secondary" className="font-black">{p.count} students</Badge>
+                    <Badge tone="neutral" className="font-black">{p.count} students</Badge>
                   </div>
                 ))}
               </div>

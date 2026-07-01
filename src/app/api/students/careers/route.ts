@@ -2,13 +2,19 @@ import { NextRequest } from "next/server";
 import { requirePermission } from "@/lib/core/session";
 import { ok, fail, handleError } from "@/lib/api/respond";
 import { careerDiscoverySchema } from "@/lib/validations/career-discovery";
-import { getStudentCareerRecords, logCareerRecord, deleteCareerRecord, CareerDiscoveryError } from "@/lib/services/career-discovery.service";
+import { getStudentCareerRecords, getCareerDiscoveryProfile, logCareerRecord, deleteCareerRecord, CareerDiscoveryError } from "@/lib/services/career-discovery.service";
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await requirePermission("students.view");
+    const user = await requirePermission("student.view");
     const studentId = req.nextUrl.searchParams.get("studentId");
+    const view = req.nextUrl.searchParams.get("view");
     if (!studentId) return fail("INVALID", "studentId required", 400);
+
+    if (view === "profile") {
+      const data = await getCareerDiscoveryProfile(user, studentId);
+      return ok({ data });
+    }
 
     const data = await getStudentCareerRecords(user, studentId);
     return ok({ data });
@@ -19,7 +25,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requirePermission("students.view"); // Any teacher can log a recommendation
+    const user = await requirePermission("student.view");
     const body = await req.json();
     const data = careerDiscoverySchema.parse(body);
     const record = await logCareerRecord(user, data);
@@ -38,7 +44,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const user = await requirePermission("students.view");
+    const user = await requirePermission("student.view");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("INVALID", "id required", 400);
     await deleteCareerRecord(user, id);

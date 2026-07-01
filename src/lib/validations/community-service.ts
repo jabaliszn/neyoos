@@ -13,7 +13,16 @@ export const communityServiceSchema = z.object({
   supervisorName: z.string().max(100).optional().nullable(),
   supervisorPhone: z.string().max(20).optional().nullable(),
   studentReflection: z.string().max(1000).optional().nullable(),
-  status: z.enum(["PENDING", "APPROVED", "REJECTED"]).default("APPROVED"),
+  proofFileId: z.string().cuid().optional().nullable(),
+  competencyId: z.string().cuid().optional().nullable(),
+  status: z.enum(["PENDING", "APPROVED", "REJECTED"]).default("PENDING"),
+});
+
+export const communityServiceDecisionSchema = z.object({
+  id: z.string().cuid(),
+  status: z.enum(["APPROVED", "REJECTED"]),
+  competencyId: z.string().cuid().optional().nullable(),
 });
 
 export type CommunityServiceInput = z.infer<typeof communityServiceSchema>;
+export type CommunityServiceDecisionInput = z.infer<typeof communityServiceDecisionSchema>;

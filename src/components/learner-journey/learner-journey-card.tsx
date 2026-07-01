@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 type JourneySource = (typeof LEARNER_JOURNEY_SOURCES)[number] | "ALL";
 type JourneyMode = (typeof LEARNER_JOURNEY_MODES)[number];
+type JourneyVisibility = "STAFF" | "PARENT_SAFE";
 
 export function LearnerJourneyCard({
   studentId,
@@ -41,6 +42,8 @@ export function LearnerJourneyCard({
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [lastLoadedAt, setLastLoadedAt] = React.useState<string | null>(null);
+  const [busyEntryId, setBusyEntryId] = React.useState<string | null>(null);
+  const [exporting, setExporting] = React.useState(false);
 
   const load = React.useCallback(async (nextSource: JourneySource = source, options?: { soft?: boolean }) => {
     const soft = options?.soft ?? false;
@@ -82,6 +85,65 @@ export function LearnerJourneyCard({
     void load("ALL", { soft: !!timeline });
   }
 
+  async function togglePin(entry: LearnerJourneyTimelineView["entries"][number]) {
+    setBusyEntryId(entry.id);
+    setError(null);
+    try {
+      const payload = entry.pinned
+        ? { action: "unpin_milestone", payload: { studentId, entryId: entry.id } }
+        : {
+            action: "pin_milestone",
+            payload: {
+              studentId,
+              entryId: entry.id,
+              sourceModule: entry.sourceModule,
+              visibility: (entry.pinVisibility ?? (mode === "parent" ? "PARENT_SAFE" : "STAFF")) as JourneyVisibility,
+              note: entry.pinNote ?? `Pinned from ${entry.sourceModule.toLowerCase()} learner journey milestone.`,
+            },
+          };
+
+      const res = await fetch("/api/learner-journey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        setError(json.error?.message || "Learner milestone action could not be saved.");
+        return;
+      }
+
+      setTimeline((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          entries: current.entries.map((currentEntry) => {
+            if (currentEntry.id !== entry.id) return currentEntry;
+            if (entry.pinned) {
+              return {
+                ...currentEntry,
+                pinned: false,
+                pinVisibility: null,
+                pinNote: null,
+              };
+            }
+            return {
+              ...currentEntry,
+              pinned: true,
+              pinVisibility: mode === "parent" ? "PARENT_SAFE" : "STAFF",
+              pinNote: `Pinned from ${entry.sourceModule.toLowerCase()} learner journey milestone.`,
+            };
+          }),
+        };
+      });
+      setLastLoadedAt(new Date().toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit" }));
+    } catch {
+      setError("Check your connection and try again.");
+    } finally {
+      setBusyEntryId(null);
+    }
+  }
+
   if (loading && !timeline && !error) {
     return <div className={className}><LearnerJourneyLoadingState /></div>;
   }
@@ -94,7 +156,7 @@ export function LearnerJourneyCard({
 
   return (
     <div className={cn("space-y-6 border-t border-navy-100 pt-6 dark:border-navy-800", className)}>
-      <LearnerJourneyHero timeline={timeline} />
+      <LearnerJourneyHero timeline={timeline} onExport={exportJourney} exporting={exporting} />
       <LearnerJourneyModeNotice mode={mode} />
       <LearnerJourneyRefreshToolbar currentSource={source} refreshing={refreshing} lastLoadedAt={lastLoadedAt} onRefresh={() => void load(source, { soft: true })} />
       {error ? <LearnerJourneyErrorState message={error} onRetry={() => void load(source, { soft: true })} /> : null}
@@ -113,7 +175,12 @@ export function LearnerJourneyCard({
           {timeline.entries.length === 0 ? (
             <LearnerJourneyEmptyState mode={mode} onResetFilters={resetFilters} />
           ) : (
-            <LearnerJourneyTimelineList entries={timeline.entries} />
+            <LearnerJourneyTimelineList
+              entries={timeline.entries}
+              canPin={mode === "staff"}
+              busyEntryId={busyEntryId}
+              onTogglePin={togglePin}
+            />
           )}
         </div>
       )}

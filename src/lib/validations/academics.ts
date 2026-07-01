@@ -62,6 +62,17 @@ export const lessonPlanSchema = z.object({
 
 export const lessonStatusSchema = z.object({ status: z.enum(["PLANNED", "TAUGHT", "SKIPPED"]) });
 
+/** J.12 — a quick observation recorded directly from a lesson plan. */
+export const lessonObservationSchema = z.object({
+  lessonPlanId: z.string().cuid(),
+  studentId: z.string().cuid().optional().nullable(), // null = whole-class
+  strandId: z.string().cuid().optional().nullable(),
+  competencyId: z.string().cuid().optional().nullable(),
+  level: z.coerce.number().int().min(1).max(4).optional().nullable(),
+  note: z.string().trim().min(2).max(1000),
+  date: dateYmd.optional(),
+});
+
 /** Real KE subject sets (B.4 CBC + 8-4-4 support) — used by seed + "quick add". */
 export const KE_SUBJECT_PRESETS: Record<"CBC" | "8-4-4", { name: string; code: string }[]> = {
   CBC: [

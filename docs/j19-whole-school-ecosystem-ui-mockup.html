@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>J.19 Whole-School Ecosystem Integration — Mockup</title>
+  <style>
+    body{margin:0;font-family:Inter,system-ui,sans-serif;background:#f6f8fb;color:#0f172a}
+    .wrap{max-width:1380px;margin:0 auto;padding:24px}
+    .badge{display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700}
+    .green{background:#dcfce7;color:#166534}.blue{background:#dbeafe;color:#1d4ed8}.amber{background:#fef3c7;color:#92400e}.red{background:#fee2e2;color:#991b1b}.gray{background:#e2e8f0;color:#334155}
+    .hero{background:rgba(255,255,255,.78);backdrop-filter:blur(16px);border:1px solid rgba(148,163,184,.25);border-radius:28px;padding:24px;box-shadow:0 20px 60px rgba(15,23,42,.08)}
+    h1{margin:8px 0 6px;font-size:34px} p{line-height:1.45}
+    .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin-top:18px}.card{background:rgba(255,255,255,.82);border:1px solid rgba(148,163,184,.22);border-radius:24px;padding:18px;box-shadow:0 10px 30px rgba(15,23,42,.06)}
+    .timeline{display:flex;flex-direction:column;gap:12px}.item{border:1px solid #dbe3ef;border-radius:18px;padding:14px;background:#fff}.meta{font-size:12px;color:#64748b;font-weight:700;display:flex;gap:8px;flex-wrap:wrap}
+    .title{font-weight:800;margin:6px 0}.small{font-size:13px;color:#475569}
+    .twocol{display:grid;grid-template-columns:1fr 1fr;gap:14px}.stat{padding:14px;border-radius:18px;background:#f8fafc;border:1px solid #e2e8f0}.stat .n{font-size:28px;font-weight:900}
+    .founder{margin-top:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+    .footer{margin-top:18px;font-size:12px;color:#64748b;text-align:center}
+    @media (max-width: 900px){.grid,.twocol,.founder{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <span class="badge blue">LABELLED MOCKUP — not a screenshot</span>
+      <h1>J.19 — Whole-School Ecosystem Integration</h1>
+      <p>This mockup shows the repaired idea: attendance, behavior, assessments, competencies, portfolio, talent/co-curricular growth, parent-facing progress, and NEYO Ops aggregate education trends working as one connected ecosystem.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="meta"><span class="badge green">Student Profile</span><span class="badge gray">Learner Journey</span></div>
+        <h3>Learner journey timeline</h3>
+        <div class="timeline">
+          <div class="item"><div class="meta"><span class="badge green">ATTENDANCE</span><span class="badge gray">Verified</span></div><div class="title">Late arrival recorded</div><div class="small">Attendance contributes to wellbeing and intervention logic.</div></div>
+          <div class="item"><div class="meta"><span class="badge amber">DISCIPLINE</span><span class="badge gray">Verified</span></div><div class="title">Behavior incident approved</div><div class="small">Behavior now contributes to growth/development reporting.</div></div>
+          <div class="item"><div class="meta"><span class="badge blue">ASSESSMENT</span><span class="badge gray">Verified</span></div><div class="title">Project scored and released</div><div class="small">Flexible assessments and formal exams flow into the same learner story.</div></div>
+          <div class="item"><div class="meta"><span class="badge green">COMPETENCY</span><span class="badge gray">Verified</span></div><div class="title">Critical thinking evidence approved</div><div class="small">Competency evidence is visible in learner growth views.</div></div>
+          <div class="item"><div class="meta"><span class="badge blue">PORTFOLIO</span><span class="badge gray">Encrypted evidence</span></div><div class="title">Portfolio item approved</div><div class="small">Evidence is protected through encrypted Storage Vault files.</div></div>
+          <div class="item"><div class="meta"><span class="badge green">SKILLS / TALENT</span><span class="badge gray">Co-curricular</span></div><div class="title">Debate club leadership logged</div><div class="small">Club/co-curricular growth feeds talent and skills surfaces.</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="meta"><span class="badge blue">Parent Portal</span><span class="badge gray">Growth Dashboard</span></div>
+        <h3>Parent-facing progress</h3>
+        <div class="twocol">
+          <div class="stat"><div>Attendance</div><div class="n">91%</div><div class="small">academic wellbeing signal</div></div>
+          <div class="stat"><div>Behavior notes</div><div class="n">2</div><div class="small">development context</div></div>
+          <div class="stat"><div>Talents logged</div><div class="n">4</div><div class="small">co-curricular growth</div></div>
+          <div class="stat"><div>Portfolio highlights</div><div class="n">3</div><div class="small">approved family-safe evidence</div></div>
+        </div>
+        <div style="margin-top:14px" class="item">
+          <div class="meta"><span class="badge gray">Teacher feedback digest</span></div>
+          <div class="title">Academic + co-curricular progress summary</div>
+          <div class="small">Parents can see safe growth signals from competencies, talent notes, portfolio highlights, and upcoming assessments in one connected view.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <div class="meta"><span class="badge amber">NEYO Ops</span><span class="badge gray">Anonymous aggregate only</span></div>
+      <h3>Cross-tenant education trends</h3>
+      <div class="founder">
+        <div class="stat"><div>Attendance rate</div><div class="n">89%</div><div class="small">all schools combined, no school names exposed</div></div>
+        <div class="stat"><div>Competency health</div><div class="n">63%</div><div class="small">meeting/exceeding aggregate band</div></div>
+        <div class="stat"><div>Community hours</div><div class="n">240</div><div class="small">approved cross-school total</div></div>
+      </div>
+    </div>
+
+    <div class="footer">Powered by NEYO · neyo.co.ke</div>
+  </div>
+</body>
+</html>

@@ -13,19 +13,26 @@
  * - J.6 Skills Passport (`SkillsPassportEntry`)
  * - J.7 Portfolio (`PortfolioItem`)
  * - B.1 Transfer history (`StudentTransfer`) as a SYSTEM milestone
+ * - J.17 Community Service (`CommunityServiceActivity`)
  */
 import { db } from "@/lib/db";
 import { withTenant } from "@/lib/core/tenant-context";
 import { tenantDb } from "@/lib/core/tenant-db";
 import type { SessionUser } from "@/lib/core/session";
 import { scopeWhere } from "@/lib/services/student.service";
+import { issueVerification } from "@/lib/services/document.service";
 import {
   learnerJourneyEntrySchema,
+  learnerJourneyPinSchema,
   learnerJourneyQuerySchema,
+  learnerJourneyUnpinSchema,
+  userCanPinLearnerJourney,
   userCanReadLearnerJourney,
   userCanAccessLearnerJourneyMode,
   LEARNER_JOURNEY_SOURCES,
+  type LearnerJourneyPinInput,
   type LearnerJourneyQueryInput,
+  type LearnerJourneyUnpinInput,
 } from "@/lib/validations/learner-journey";
 
 export class LearnerJourneyError extends Error {
@@ -44,6 +51,12 @@ function assertRead(user: SessionUser) {
 function assertMode(user: SessionUser, mode: "staff" | "parent") {
   if (!userCanAccessLearnerJourneyMode(user, mode)) {
     throw new LearnerJourneyError("FORBIDDEN", "You do not have permission to view that learner journey mode.");
+  }
+}
+
+function assertPin(user: SessionUser) {
+  if (!userCanPinLearnerJourney(user)) {
+    throw new LearnerJourneyError("FORBIDDEN", "You do not have permission to pin learner milestones.");
   }
 }
 
@@ -455,6 +468,42 @@ async function collectPortfolioEntries(
   }
 }
 
+
+async function collectCommunityServiceEntries(
+  studentId: string,
+  mode: "staff" | "parent",
+  push: (entry: Parameters<typeof learnerJourneyEntrySchema.parse>[0]) => void,
+) {
+  const rows = await tenantDb().communityServiceActivity.findMany({
+    where: {
+      studentId,
+      ...(mode === "parent" ? { status: "APPROVED" } : {}),
+    },
+    orderBy: { date: "desc" },
+    take: 60,
+  });
+
+  for (const row of rows) {
+    push({
+      id: `community:${row.id}`,
+      date: row.date,
+      sourceModule: "PORTFOLIO",
+      eventType: `COMMUNITY_${row.status}`,
+      title: row.title,
+      summary: buildEntrySummary([
+        `Community service in ${titleCase(row.category)} for ${row.hours} hour${row.hours === 1 ? "" : "s"}.`,
+        row.location ? `Location: ${truncate(row.location, 80)}.` : undefined,
+        row.supervisorName ? `Supervisor: ${truncate(row.supervisorName, 80)}.` : undefined,
+        truncate(row.studentReflection),
+      ]),
+      status: row.status,
+      href: `/students/${studentId}`,
+      visibility: row.status === "APPROVED" ? "PARENT_SAFE" : "STAFF",
+      verificationStatus: row.status === "APPROVED" ? "VERIFIED" : "PENDING",
+    });
+  }
+}
+
 async function collectSystemEntries(
   studentId: string,
   push: (entry: Parameters<typeof learnerJourneyEntrySchema.parse>[0]) => void,
@@ -486,20 +535,25 @@ async function collectSystemEntries(
   }
 }
 
+async function assertScopedStudent(user: SessionUser, studentId: string) {
+  const scope = await scopeWhere(user);
+  const student = await tenantDb().student.findFirst({
+    where: { AND: [{ id: studentId }, scope] },
+    include: { schoolClass: true },
+  });
+  if (!student) {
+    throw new LearnerJourneyError("NOT_FOUND", "Learner not found or access is blocked by row scoping.");
+  }
+  return student;
+}
+
 export async function getLearnerJourneyTimeline(user: SessionUser, input: LearnerJourneyQueryInput) {
   assertRead(user);
   const query = learnerJourneyQuerySchema.parse(input);
   assertMode(user, query.mode);
 
   return withTenant(user.tenantId, async () => {
-    const scope = await scopeWhere(user);
-    const student = await tenantDb().student.findFirst({
-      where: { AND: [{ id: query.studentId }, scope] },
-      include: { schoolClass: true },
-    });
-    if (!student) {
-      throw new LearnerJourneyError("NOT_FOUND", "Learner not found or access is blocked by row scoping.");
-    }
+    const student = await assertScopedStudent(user, query.studentId);
 
     const entries: Array<ReturnType<typeof learnerJourneyEntrySchema.parse>> = [];
     const push = (entry: Parameters<typeof learnerJourneyEntrySchema.parse>[0]) => {
@@ -521,10 +575,29 @@ export async function getLearnerJourneyTimeline(user: SessionUser, input: Learne
     if (!query.source || query.source === "PORTFOLIO" || query.source === "CERTIFICATE") {
       await collectPortfolioEntries(student.id, query.mode, query.source, push);
     }
+    if (!query.source) await collectCommunityServiceEntries(student.id, query.mode, push);
     if (wanted("SYSTEM")) await collectSystemEntries(student.id, push);
 
     const sorted = entries.sort(sortEntries);
     const limited = sorted.slice(0, query.limit);
+    const pins = await tenantDb().learnerJourneyPin.findMany({
+      where: { studentId: student.id },
+      orderBy: { pinnedAt: "desc" },
+    });
+    const visiblePins = query.mode === "parent"
+      ? pins.filter((pin) => pin.visibility === "PARENT_SAFE")
+      : pins;
+    const pinMap = new Map(visiblePins.map((pin) => [pin.entryId, pin]));
+    const decoratedLimited = limited.map((entry) => {
+      const pin = pinMap.get(entry.id);
+      if (!pin) return entry;
+      return {
+        ...entry,
+        pinned: true,
+        pinVisibility: pin.visibility as "STAFF" | "PARENT_SAFE",
+        pinNote: pin.note ?? null,
+      };
+    });
     const sourceCounts = LEARNER_JOURNEY_SOURCES
       .map((source) => ({ source, count: sorted.filter((entry) => entry.sourceModule === source).length }))
       .filter((row) => row.count > 0);
@@ -549,7 +622,184 @@ export async function getLearnerJourneyTimeline(user: SessionUser, input: Learne
         returnedEntries: limited.length,
         sourceCounts,
       },
-      entries: limited,
+      entries: decoratedLimited,
+    };
+  });
+}
+
+export async function pinLearnerJourneyMilestone(user: SessionUser, input: LearnerJourneyPinInput) {
+  assertPin(user);
+  const payload = learnerJourneyPinSchema.parse(input);
+
+  return withTenant(user.tenantId, async () => {
+    const student = await assertScopedStudent(user, payload.studentId);
+    const timeline = await getLearnerJourneyTimeline(user, {
+      studentId: payload.studentId,
+      mode: "staff",
+      source: payload.sourceModule,
+      limit: 200,
+    });
+
+    const matchedEntry = timeline.entries.find((entry) => entry.id === payload.entryId);
+    if (!matchedEntry) {
+      throw new LearnerJourneyError("INVALID", "Only real learner journey entries can be pinned.");
+    }
+
+    const pin = await tenantDb().learnerJourneyPin.upsert({
+      where: {
+        tenantId_studentId_entryId: {
+          tenantId: user.tenantId,
+          studentId: student.id,
+          entryId: payload.entryId,
+        },
+      },
+      create: {
+        tenantId: user.tenantId,
+        studentId: student.id,
+        entryId: payload.entryId,
+        sourceModule: payload.sourceModule,
+        sourceRecordId: payload.sourceRecordId,
+        note: payload.note,
+        visibility: payload.visibility,
+        pinnedById: user.id,
+        pinnedByName: user.fullName,
+      },
+      update: {
+        sourceModule: payload.sourceModule,
+        sourceRecordId: payload.sourceRecordId,
+        note: payload.note,
+        visibility: payload.visibility,
+        pinnedById: user.id,
+        pinnedByName: user.fullName,
+        pinnedAt: new Date(),
+      },
+    });
+
+    await tenantDb().auditLog.create({
+      data: {
+        actorId: user.id,
+        action: "learner_journey.milestone_pinned",
+        entityType: "LearnerJourneyPin",
+        entityId: pin.id,
+        metadata: JSON.stringify({
+          studentId: student.id,
+          entryId: payload.entryId,
+          sourceModule: payload.sourceModule,
+          visibility: payload.visibility,
+        }),
+      },
+    });
+
+    return pin;
+  });
+}
+
+export async function unpinLearnerJourneyMilestone(user: SessionUser, input: LearnerJourneyUnpinInput) {
+  assertPin(user);
+  const payload = learnerJourneyUnpinSchema.parse(input);
+
+  return withTenant(user.tenantId, async () => {
+    const student = await assertScopedStudent(user, payload.studentId);
+    const existing = await tenantDb().learnerJourneyPin.findUnique({
+      where: {
+        tenantId_studentId_entryId: {
+          tenantId: user.tenantId,
+          studentId: student.id,
+          entryId: payload.entryId,
+        },
+      },
+    });
+
+    if (!existing) {
+      throw new LearnerJourneyError("NOT_FOUND", "Pinned learner milestone not found.");
+    }
+
+    await tenantDb().learnerJourneyPin.delete({ where: { id: existing.id } });
+
+    await tenantDb().auditLog.create({
+      data: {
+        actorId: user.id,
+        action: "learner_journey.milestone_unpinned",
+        entityType: "LearnerJourneyPin",
+        entityId: existing.id,
+        metadata: JSON.stringify({
+          studentId: student.id,
+          entryId: payload.entryId,
+          sourceModule: existing.sourceModule,
+        }),
+      },
+    });
+
+    return { success: true };
+  });
+}
+
+export async function exportLearnerJourneyPack(user: SessionUser, input: LearnerJourneyQueryInput) {
+  assertRead(user);
+  const query = learnerJourneyQuerySchema.parse({
+    ...input,
+    mode: input.mode ?? "parent",
+    limit: Math.min(input.limit ?? 120, 120),
+  });
+
+  return withTenant(user.tenantId, async () => {
+    const timeline = await getLearnerJourneyTimeline(user, query);
+    const verifyCode = await issueVerification(
+      user.tenantId,
+      "LEARNER_JOURNEY_EXPORT",
+      `Learner Journey Export — ${timeline.student.name} (${timeline.student.admissionNo})`,
+      {
+        studentId: timeline.student.id,
+        admissionNo: timeline.student.admissionNo,
+        mode: timeline.mode,
+        source: timeline.filters.source,
+        totalEntries: timeline.entries.length,
+      }
+    );
+
+    await tenantDb().auditLog.create({
+      data: {
+        actorId: user.id,
+        action: "learner_journey.export_generated",
+        entityType: "Student",
+        entityId: timeline.student.id,
+        metadata: JSON.stringify({
+          studentId: timeline.student.id,
+          admissionNo: timeline.student.admissionNo,
+          mode: timeline.mode,
+          source: timeline.filters.source,
+          returnedEntries: timeline.entries.length,
+          verifyCode,
+        }),
+      },
+    });
+
+    return {
+      manifest: {
+        version: "1.0",
+        generatedAt: new Date().toISOString(),
+        issuer: "NEYO Education OS",
+        tenantId: user.tenantId,
+      },
+      learner: timeline.student,
+      export: {
+        verifyCode,
+        transferFriendly: true,
+        filters: {
+          mode: timeline.mode,
+          source: timeline.filters.source,
+          from: timeline.filters.from,
+          to: timeline.filters.to,
+          limit: timeline.filters.limit,
+        },
+        notes: [
+          "Source module labels are preserved so a receiving school can understand where each milestone came from.",
+          "Visibility and verification fields are kept to support safe family sharing and internal school review.",
+          "This export is read-only and reflects live learner records at the time it was generated.",
+        ],
+      },
+      summary: timeline.summary,
+      journey: timeline.entries,
     };
   });
 }

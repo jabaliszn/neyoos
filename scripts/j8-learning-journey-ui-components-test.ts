@@ -34,6 +34,8 @@ async function main() {
     "FolderOpen",
     "FileCheck2",
     "Layers",
+    "Pin",
+    "PinOff",
   ];
   for (const icon of icons) {
     assert(file.includes(icon), `uses Lucide icon ${icon}`);
@@ -45,6 +47,8 @@ async function main() {
   assert(file.includes("released exam results, attendance, competencies, portfolio milestones"), "filter bar copy explains real source filtering");
   assert(file.includes("Family safe") && file.includes("School staff only"), "entry cards expose visibility states");
   assert(file.includes("Verified") && file.includes("Pending review") && file.includes("Recorded"), "entry cards expose verification states");
+  assert(file.includes("Pin milestone") && file.includes("Unpin milestone"), "entry cards expose pin and unpin controls for staff timelines");
+  assert(file.includes("Pinned milestone") && file.includes("Pinned note"), "entry cards expose pinned milestone state and note copy");
 
   assert(file.includes("backdrop-blur") && file.includes("rounded-2xl"), "components follow Liquid Glass styling conventions");
   assert(!file.includes("fetch(") && !file.includes("axios") && !file.includes("/api/"), "UI components do not fetch directly");

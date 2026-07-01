@@ -15,6 +15,7 @@ async function main() {
   assert(cardSource.includes('fetch(`/api/learner-journey?${params.toString()}`'), "connected learner journey card fetches the real learner-journey API");
   assert(cardSource.includes('mode, limit: String(limit)'), "connected learner journey card forwards real mode and limit values");
   assert(cardSource.includes('params.set("source", nextSource)'), "connected learner journey card supports source filter reloads");
+  assert(cardSource.includes('fetch("/api/learner-journey", {') && cardSource.includes('action: "pin_milestone"') && cardSource.includes('action: "unpin_milestone"'), "connected learner journey card posts real pin and unpin actions");
 
   const states = [
     "LearnerJourneyLoadingState",
@@ -29,6 +30,7 @@ async function main() {
   assert(cardSource.includes("LearnerJourneyHero"), "connected learner journey card uses hero component");
   assert(cardSource.includes("LearnerJourneySummaryGrid"), "connected learner journey card uses summary grid component");
   assert(cardSource.includes("LearnerJourneySourceFilterBar"), "connected learner journey card uses source filter bar component");
+  assert(cardSource.includes("canPin={mode === \"staff\"}") && cardSource.includes("onTogglePin={togglePin}"), "connected learner journey card exposes staff-only pin controls on the timeline list");
 
   assert(studentProfileSource.includes("LearnerJourneyCard") && studentProfileSource.includes('mode="staff"'), "student profile mounts the staff learner journey card");
   assert(parentPortalSource.includes("LearnerJourneyCard") && parentPortalSource.includes('mode="parent"'), "parent portal mounts the parent-safe learner journey card");

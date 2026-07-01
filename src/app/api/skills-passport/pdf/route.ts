@@ -6,6 +6,7 @@
  */
 import { NextRequest } from "next/server";
 import { requireUser } from "@/lib/core/session";
+import { requireRevenueFeature } from "@/lib/services/tier-gating.service";
 import { fail, handleError } from "@/lib/api/respond";
 import { getSkillsPassportProfile } from "@/lib/services/skills-passport.service";
 import { issueVerification } from "@/lib/services/document.service";
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const user = await requireUser();
+    await requireRevenueFeature(user, "skills_passport");
     const studentId = req.nextUrl.searchParams.get("studentId");
     if (!studentId) return fail("INVALID", "studentId parameter is required.", 422);
 

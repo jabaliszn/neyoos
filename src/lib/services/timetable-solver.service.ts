@@ -68,11 +68,14 @@ export async function getTeacherSubjects(user: SessionUser, teacherId: string) {
 /** Save subject weekly lessons need + assigned teacher (The Input Matrix). */
 export async function saveClassSubjectNeed(
   user: SessionUser,
-  input: { classId: string; subjectId: string; lessonsPerWeek: number; teacherId?: string | null }
+  input: { classId: string; subjectId: string; lessonsPerWeek: number; teacherId?: string | null; doubleCount?: number; allowSplitDouble?: boolean }
 ) {
   return withTenant(user.tenantId, async () => {
     const tdb = tenantDb();
     const { classId, subjectId, lessonsPerWeek, teacherId } = input;
+    // L.7: doubles can't exceed half the weekly lessons.
+    const doubleCount = Math.max(0, Math.min(input.doubleCount ?? 0, Math.floor(lessonsPerWeek / 2)));
+    const allowSplitDouble = input.allowSplitDouble ?? false;
 
     const row = await tdb.classSubjectNeed.upsert({
       where: { tenantId_classId_subjectId: { tenantId: user.tenantId, classId, subjectId } },
@@ -82,10 +85,14 @@ export async function saveClassSubjectNeed(
         subjectId,
         teacherId: teacherId || null,
         lessonsPerWeek,
+        doubleCount,
+        allowSplitDouble,
       },
       update: {
         teacherId: teacherId || null,
         lessonsPerWeek,
+        doubleCount,
+        allowSplitDouble,
       },
     });
 

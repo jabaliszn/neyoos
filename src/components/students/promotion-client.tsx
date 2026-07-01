@@ -27,7 +27,7 @@ interface ClassOpt { id: string; level: string; stream: string | null; name: str
 
 export function PromotionClient() {
   const { toast } = useToast();
-  const [tab, setTab] = React.useState<"promote" | "reshuffle">("promote");
+  const [tab, setTab] = React.useState<"promote" | "reshuffle" | "auto-grouping" | "continuity" | "transfer-impact">("promote");
   const [plan, setPlan] = React.useState<PlanStep[] | null>(null);
   const [unmapped, setUnmapped] = React.useState<string[]>([]);
   const [history, setHistory] = React.useState<RunRow[]>([]);
@@ -82,6 +82,15 @@ export function PromotionClient() {
         </button>
         <button onClick={() => setTab("reshuffle")} className={`rounded-full px-4 py-1.5 text-sm font-medium ${tab === "reshuffle" ? "bg-navy-900 text-white dark:bg-navy-50 dark:text-navy-900" : "text-navy-500"}`}>
           Reshuffle streams
+        </button>
+        <button onClick={() => setTab("auto-grouping")} className={`rounded-full px-4 py-1.5 text-sm font-medium ${tab === "auto-grouping" ? "bg-navy-900 text-white dark:bg-navy-50 dark:text-navy-900" : "text-navy-500"}`}>
+          Auto-grouping
+        </button>
+        <button onClick={() => setTab("continuity")} className={`rounded-full px-4 py-1.5 text-sm font-medium ${tab === "continuity" ? "bg-navy-900 text-white dark:bg-navy-50 dark:text-navy-900" : "text-navy-500"}`}>
+          Continuity engine
+        </button>
+        <button onClick={() => setTab("transfer-impact")} className={`rounded-full px-4 py-1.5 text-sm font-medium ${tab === "transfer-impact" ? "bg-navy-900 text-white dark:bg-navy-50 dark:text-navy-900" : "text-navy-500"}`}>
+          Teacher transfer impact
         </button>
       </div>
 
@@ -157,8 +166,14 @@ export function PromotionClient() {
             </Card>
           )}
         </>
-      ) : (
+      ) : tab === "reshuffle" ? (
         <ReshufflePanel onDone={load} />
+      ) : tab === "auto-grouping" ? (
+        <AutoGroupingPanel onDone={load} />
+      ) : tab === "continuity" ? (
+        <ContinuityEnginePanel />
+      ) : (
+        <TeacherTransferImpactPanel />
       )}
 
       {/* history */}
@@ -304,5 +319,413 @@ function ReshufflePanel({ onDone }: { onDone: () => void }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+
+function AutoGroupingPanel({ onDone }: { onDone: () => void }) {
+  const { toast } = useToast();
+  const [setup, setSetup] = React.useState<any>(null);
+  const [level, setLevel] = React.useState("");
+  const [preview, setPreview] = React.useState<any>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [ruleName, setRuleName] = React.useState("Subject-choice continuity rule");
+  const [maxClasses, setMaxClasses] = React.useState("4");
+
+  const load = React.useCallback(async () => {
+    const res = await fetch('/api/promotion/auto-grouping');
+    const json = await res.json();
+    if (json.ok) setSetup(json.data);
+  }, []);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const levels = React.useMemo(() => Array.from(new Set((setup?.classes ?? []).map((c: any) => c.level))).sort(), [setup]);
+
+  async function saveRule() {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/promotion/auto-grouping', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_rule', name: ruleName, targetLevel: level || null, ruleType: 'SCHOOL_DEFINED', priority: 10, active: true, config: { retainSubjectTeachers: true, retainClassTeachers: true, maxClassesPerTeacher: Number(maxClasses) } })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Failed');
+      const workload = await fetch('/api/promotion/auto-grouping', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_workload', maxClasses: Number(maxClasses), retainSubjectLoads: true, retainClassTeacher: true })
+      });
+      const workloadJson = await workload.json();
+      if (!workloadJson.ok) throw new Error(workloadJson.error?.message || 'Failed');
+      toast({ title: 'Auto-grouping rules saved', tone: 'success' });
+      load();
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not save auto-grouping rule', tone: 'error' });
+    } finally { setBusy(false); }
+  }
+
+  async function runPreview(commit = false) {
+    if (!level) { toast({ title: 'Choose a level first', tone: 'error' }); return; }
+    setBusy(true);
+    try {
+      const res = await fetch('/api/promotion/auto-grouping', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: commit ? 'commit' : 'preview', level })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Failed');
+      if (commit) {
+        toast({ title: json.data.summary, tone: 'success' });
+        setPreview(null);
+        onDone();
+      } else setPreview(json.data);
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not run auto-grouping', tone: 'error' });
+    } finally { setBusy(false); }
+  }
+
+  if (!setup) return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>;
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Wand2 className="h-5 w-5 text-green-600" /> Bulk admissions auto-grouping</CardTitle>
+          <p className="text-xs text-navy-400">Place learners by school rules first, then keep subject-combination continuity, retain teachers where possible, and replace transferred teachers fairly.</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <Label>Level</Label>
+              <select value={level} onChange={(e) => setLevel(e.target.value)} className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900">
+                <option value="">Choose level…</option>
+                {levels.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>Rule name</Label>
+              <Input value={ruleName} onChange={(e) => setRuleName(e.target.value)} />
+            </div>
+            <div>
+              <Label>Max classes per teacher</Label>
+              <Input type="number" value={maxClasses} onChange={(e) => setMaxClasses(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <StatCard icon={Users} label="Active classes" value={String((setup.classes ?? []).length)} />
+            <StatCard icon={Check} label="Confirmed subject choices" value={String(setup.confirmedSelections ?? 0)} />
+            <StatCard icon={RefreshCw} label="Saved rules" value={String((setup.rules ?? []).length)} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={saveRule} disabled={busy}><Check className="h-4 w-4" /> Save continuity rule</Button>
+            <Button variant="secondary" onClick={() => runPreview(false)} disabled={busy}><Wand2 className="h-4 w-4" /> Preview grouping</Button>
+            <Button variant="secondary" onClick={() => runPreview(true)} disabled={busy}><ArrowUpRight className="h-4 w-4" /> Commit grouping</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {preview && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Grouping preview · {preview.level}</CardTitle>
+            <p className="text-xs text-navy-400">Rule: {preview.ruleApplied} · {preview.movedCount} learners will move · subject-choice continuity applied first.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              {(preview.preview ?? []).map((group: any) => (
+                <div key={group.classId} className="rounded-2xl border border-navy-100 p-4 dark:border-navy-800">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-bold text-navy-900 dark:text-white">{group.label}</p>
+                    <Badge tone="blue">{group.count} students</Badge>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {group.students.slice(0, 8).map((student: any) => (
+                      <div key={student.id} className="flex items-center justify-between gap-3 rounded-xl border border-navy-50 px-3 py-2 text-xs dark:border-navy-800">
+                        <div>
+                          <p className="font-medium text-navy-800 dark:text-navy-100">{student.name}</p>
+                          <p className="text-navy-400">{student.selectedSubjectIds.length > 0 ? `${student.selectedSubjectIds.length} chosen subjects` : 'No confirmed subject choice yet'}</p>
+                        </div>
+                        {student.moved ? <Badge tone="amber">Moved</Badge> : <Badge tone="green">Stays</Badge>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+
+function ContinuityEnginePanel() {
+  const { toast } = useToast();
+  const [classes, setClasses] = React.useState<ClassOpt[]>([]);
+  const [level, setLevel] = React.useState("");
+  const [snapshot, setSnapshot] = React.useState<any>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch('/api/classes').then((r) => r.json()).then((j) => j.ok && setClasses(j.data.classes));
+  }, []);
+
+  const levels = React.useMemo(() => Array.from(new Set(classes.map((c) => c.level))).sort(), [classes]);
+
+  async function loadSnapshot(target = level) {
+    if (!target) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/promotion/continuity-engine?level=${encodeURIComponent(target)}`);
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Failed');
+      setSnapshot(json.data);
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not load continuity snapshot', tone: 'error' });
+    } finally { setBusy(false); }
+  }
+
+  async function applyChange(item: any, roleType: 'SUBJECT' | 'CLASS_TEACHER') {
+    const candidate = item.recommendations?.[0];
+    if (!candidate) {
+      toast({ title: 'No replacement recommendation available', tone: 'error' });
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch('/api/promotion/continuity-engine', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'apply_change', classId: item.classId, subjectId: item.subjectId ?? null, teacherId: candidate.teacherId, roleType, regenerateTimetable: true })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Failed');
+      toast({ title: 'Teacher change applied and timetable regeneration started', tone: 'success' });
+      loadSnapshot();
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not apply teacher change', tone: 'error' });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><UserCheck className="h-5 w-5 text-green-600" /> Teacher continuity engine</CardTitle>
+          <p className="text-xs text-navy-400">Keep class groups with their teachers across years, recommend fair replacements when teachers transfer, and regenerate timetable after approved changes.</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[220px]">
+              <Label>Level</Label>
+              <select value={level} onChange={(e) => setLevel(e.target.value)} className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900">
+                <option value="">Choose level…</option>
+                {levels.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            <Button onClick={() => loadSnapshot()} disabled={busy || !level}><Sparkles className="h-4 w-4" /> Analyse continuity</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {snapshot && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Subject teacher continuity · {snapshot.level}</CardTitle>
+              <p className="text-xs text-navy-400">Next level: {snapshot.nextLevel ?? 'Final level / no next level'}.</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(snapshot.subjectAssignments ?? []).map((item: any, idx: number) => (
+                <div key={`${item.classId}-${item.subjectId}-${idx}`} className="rounded-2xl border border-navy-100 p-4 dark:border-navy-800">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-navy-900 dark:text-white">{item.classLabel}</p>
+                      <p className="text-xs text-navy-400">Subject {item.subjectId}</p>
+                    </div>
+                    {item.needsReplacement ? <Badge tone="amber">Needs replacement</Badge> : <Badge tone="green">Teacher retained</Badge>}
+                  </div>
+                  <div className="mt-3 text-xs text-navy-600 dark:text-navy-300">
+                    {item.recommendations?.length > 0 ? (
+                      <div className="space-y-2">
+                        <p><strong>Best replacement:</strong> {item.recommendations[0].teacherName} · {item.recommendations[0].classCount} classes · {item.recommendations[0].lessonLoad} lessons</p>
+                        <div className="rounded-xl bg-navy-50/60 p-3 dark:bg-navy-900/60">
+                          <p><strong>Impact:</strong> {item.impact?.lessonsPerWeek ?? 0} lessons/week · {item.impact?.doubleCount ?? 0} doubles · {item.impact?.splitAllowed ? 'split doubles allowed' : 'consecutive doubles only'}</p>
+                          <p className="mt-1"><strong>Why this teacher:</strong> {(item.recommendations[0].reasons ?? []).join(' · ')}</p>
+                        </div>
+                        <Button size="sm" className="mt-2" onClick={() => applyChange(item, 'SUBJECT')} disabled={busy}><Check className="h-4 w-4" /> Apply replacement + regenerate timetable</Button>
+                      </div>
+                    ) : <p>No change needed.</p>}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Class teacher continuity · {snapshot.level}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(snapshot.classTeacherAssignments ?? []).map((item: any, idx: number) => (
+                <div key={`${item.classId}-${idx}`} className="rounded-2xl border border-navy-100 p-4 dark:border-navy-800">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-navy-900 dark:text-white">{item.classLabel}</p>
+                    </div>
+                    {item.needsReplacement ? <Badge tone="amber">Needs replacement</Badge> : <Badge tone="green">Teacher retained</Badge>}
+                  </div>
+                  <div className="mt-3 text-xs text-navy-600 dark:text-navy-300">
+                    {item.recommendations?.length > 0 ? (
+                      <div className="space-y-2">
+                        <p><strong>Best replacement:</strong> {item.recommendations[0].teacherName} · {item.recommendations[0].classCount} classes · {item.recommendations[0].lessonLoad} lessons</p>
+                        <div className="rounded-xl bg-navy-50/60 p-3 dark:bg-navy-900/60">
+                          <p><strong>Impact:</strong> {item.impact?.reason}</p>
+                          <p className="mt-1"><strong>Why this teacher:</strong> {(item.recommendations[0].reasons ?? []).join(' · ')}</p>
+                        </div>
+                        <Button size="sm" className="mt-2" onClick={() => applyChange(item, 'CLASS_TEACHER')} disabled={busy}><Check className="h-4 w-4" /> Apply class teacher + regenerate timetable</Button>
+                      </div>
+                    ) : <p>No change needed.</p>}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+
+function TeacherTransferImpactPanel() {
+  const { toast } = useToast();
+  const [teachers, setTeachers] = React.useState<any[]>([]);
+  const [teacherId, setTeacherId] = React.useState("");
+  const [reason, setReason] = React.useState("Transferred / left school");
+  const [impact, setImpact] = React.useState<any>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch('/api/conversations/recipients').then((r) => r.json()).then((j) => {
+      if (j.ok) setTeachers((j.data.recipients ?? []).filter((u: any) => ["TEACHER", "CLASS_TEACHER", "HOD", "DEPUTY_PRINCIPAL", "DEAN_OF_STUDIES"].includes(u.role)));
+    });
+  }, []);
+
+  async function analyse() {
+    if (!teacherId) { toast({ title: 'Choose a teacher first', tone: 'error' }); return; }
+    setBusy(true);
+    try {
+      const res = await fetch('/api/promotion/teacher-transfer-impact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'analyse', teacherId, reason }) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Failed');
+      setImpact(json.data);
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not analyse teacher transfer impact', tone: 'error' });
+    } finally { setBusy(false); }
+  }
+
+  async function apply() {
+    if (!impact?.impactId) return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/promotion/teacher-transfer-impact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'apply', impactId: impact.impactId }) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Failed');
+      toast({ title: 'Replacement applied and timetable regeneration started', tone: 'success' });
+      setImpact(null);
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not apply teacher transfer replacement', tone: 'error' });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Replace className="h-5 w-5 text-amber-600" /> Teacher transfer impact</CardTitle>
+          <p className="text-xs text-navy-400">Analyse what breaks when a teacher leaves, see fair replacements, then apply and regenerate the timetable.</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <Label>Teacher</Label>
+              <select value={teacherId} onChange={(e) => setTeacherId(e.target.value)} className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900">
+                <option value="">Choose teacher…</option>
+                {teachers.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>Reason</Label>
+              <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={analyse} disabled={busy}><Sparkles className="h-4 w-4" /> Analyse impact</Button>
+            {impact && <Button variant="secondary" onClick={apply} disabled={busy}><Check className="h-4 w-4" /> Apply best replacements + regenerate</Button>}
+          </div>
+        </CardContent>
+      </Card>
+
+      {impact && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Impact summary</CardTitle>
+            <p className="text-xs text-navy-400">{impact.summary}</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {(impact.recommendations ?? []).map((row: any, idx: number) => (
+              <div key={`${row.type}-${row.classId}-${idx}`} className="rounded-2xl border border-navy-100 p-4 dark:border-navy-800">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{row.classLabel}</p>
+                    <p className="text-xs text-navy-400">{row.type === 'SUBJECT' ? `Subject ${row.subjectId}` : 'Class teacher role'}</p>
+                  </div>
+                  <Badge tone="amber">Needs replacement</Badge>
+                </div>
+                <div className="mt-3 rounded-xl bg-navy-50/60 p-3 text-xs text-navy-700 dark:bg-navy-900/60 dark:text-navy-200">
+                  <p><strong>Best replacement:</strong> {row.best?.teacherName}</p>
+                  <p><strong>Projected classes:</strong> {row.best?.projectedClassCount} · <strong>Current lessons:</strong> {row.best?.lessonLoad}</p>
+                  <p><strong>Max classes:</strong> {row.best?.maxClasses ?? 'No limit set'} · <strong>Max lessons:</strong> {row.best?.maxLessonsPerWeek ?? 'No limit set'}</p>
+                  <p className="mt-1"><strong>Why this teacher:</strong> {(row.best?.reasons ?? []).join(' · ')}</p>
+                  <p className="mt-1"><strong>Timetable impact:</strong> timetable will regenerate for affected classes and subjects.</p>
+                </div>
+                {row.comparison?.length > 0 && (
+                  <div className="mt-3 overflow-x-auto rounded-2xl border border-navy-100 dark:border-navy-800">
+                    <table className="w-full min-w-[640px] text-xs">
+                      <thead className="bg-white/70 dark:bg-navy-950/40">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Rank</th>
+                          <th className="px-3 py-2 text-left">Teacher</th>
+                          <th className="px-3 py-2 text-left">Classes</th>
+                          <th className="px-3 py-2 text-left">Lessons</th>
+                          <th className="px-3 py-2 text-left">Projected</th>
+                          <th className="px-3 py-2 text-left">Safety</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {row.comparison.map((candidate: any) => {
+                          const safe = (candidate.maxClasses == null || candidate.projectedClassCount <= candidate.maxClasses) && (candidate.maxLessonsPerWeek == null || candidate.lessonLoad <= candidate.maxLessonsPerWeek);
+                          return (
+                            <tr key={candidate.teacherId} className="border-t border-navy-100 dark:border-navy-800">
+                              <td className="px-3 py-2 font-bold">#{candidate.rank}</td>
+                              <td className="px-3 py-2">{candidate.teacherName}</td>
+                              <td className="px-3 py-2">{candidate.classCount}</td>
+                              <td className="px-3 py-2">{candidate.lessonLoad}</td>
+                              <td className="px-3 py-2">{candidate.projectedClassCount} classes</td>
+                              <td className="px-3 py-2">{safe ? <Badge tone="green">Safest</Badge> : <Badge tone="amber">Risk</Badge>}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

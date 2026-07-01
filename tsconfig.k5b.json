@@ -1,0 +1,1 @@
+{ "extends": "./tsconfig.json", "compilerOptions": { "noEmit": true, "skipLibCheck": true, "incremental": false }, "include": [ "src/lib/services/computation-engine.service.ts", "src/app/api/academics/grading/computation/route.ts" ] }

@@ -1,7 +1,23 @@
 import { NextRequest } from "next/server";
 import { requirePermission } from "@/lib/core/session";
 import { ok, fail, handleError } from "@/lib/api/respond";
-import { triggerTermComputation, releaseTermResults, ComputationError } from "@/lib/services/computation-engine.service";
+import { triggerTermComputation, releaseTermResults, getMasterReportCards, ComputationError } from "@/lib/services/computation-engine.service";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(req: NextRequest) {
+  try {
+    const user = await requirePermission("academics.view");
+    const termId = req.nextUrl.searchParams.get("termId");
+    const classId = req.nextUrl.searchParams.get("classId");
+    if (!termId || !classId) return fail("INVALID", "termId and classId are required.", 400);
+    const data = await getMasterReportCards(user.tenantId, termId, classId);
+    return ok({ data });
+  } catch (error) {
+    if (error instanceof ComputationError) return fail("INVALID", error.message, 400);
+    return handleError(error);
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {

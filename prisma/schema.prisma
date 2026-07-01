@@ -33,6 +33,7 @@ model Tenant {
   principalSignatureUrl String? // K.14 Digital Signature
   schoolStampUrl        String? // K.14 Digital Stamp
   curriculum            String? // "CBC" | "8-4-4" | "BOTH"
+  educationLevelsOffered String? // JSON array: ECDE | PRIMARY | JUNIOR_SCHOOL | SENIOR_SCHOOL
   onboardedAt           DateTime?
   // G.14 Day-One Demo Mode: a sandboxed, time-boxed tenant that auto-expires.
 
@@ -272,6 +273,7 @@ model Tenant {
   publicSiteTestimonials     PublicSiteTestimonial[]
   publicSiteGalleryImages    PublicSiteGalleryImage[]
   publicSiteActivities       PublicSiteActivity[]
+  examTimetableGeneratorRuns  ExamTimetableGeneratorRun[]
   entranceExamPapers         EntranceExamPaper[] // Added for entrance exam papers (H.3)
   ActivityCategory           ActivityCategory[]
   Pathway                    Pathway[]
@@ -283,6 +285,7 @@ model Tenant {
   careerDiscoveryRecords     CareerDiscoveryRecord[]
   outgoingPassports          TransferPassportRequest[]     @relation("SourceTenant")
   incomingPassports          TransferPassportRequest[]     @relation("DestinationTenant")
+  learnerJourneyPins         LearnerJourneyPin[]
   MarksPortal                MarksPortal[]
   TermAggregationRule        TermAggregationRule[]
   SubjectPaperConfig         SubjectPaperConfig[]
@@ -295,8 +298,18 @@ model Tenant {
   PromotionRequest           PromotionRequest[]
   SmsMarginLedger            SmsMarginLedger[]
   KnecExportBatch            KnecExportBatch[]
+  MasterReportCard           MasterReportCard[]
+  CombinationGroup           CombinationGroup[]
+  TimetableConstraint        TimetableConstraint[]
+  TeacherTimeOff             TeacherTimeOff[]
+  TimetableGenerationJob     TimetableGenerationJob[]
+  ClassGroupingRule          ClassGroupingRule[]
+  TeacherWorkloadRule        TeacherWorkloadRule[]
+  TeacherContinuityAssignment  TeacherContinuityAssignment[]
+  TeacherTransferImpact      TeacherTransferImpact[]
 
   @@index([osKey])
+  lessonObservations LessonObservation[]
 }
 
 // B.9 extended staff record (User holds login/role; this holds HR facts).
@@ -662,6 +675,8 @@ model AssessmentType {
   scoreMode          String   @default("MIXED") // MARKS | RUBRIC | NARRATIVE | MIXED
   defaultMaxMarks    Int?
   defaultWeight      Int      @default(0) // percentage weight suggestion; plan can override
+  effectiveFrom      String? // YYYY-MM-DD
+  effectiveTo        String? // YYYY-MM-DD
   evidenceAllowed    Boolean  @default(true)
   requiresModeration Boolean  @default(true)
   rubricId           String? // J.5 configurable Rubric bridge
@@ -906,6 +921,12 @@ model Curriculum {
   previousVersion   Curriculum?  @relation("CurriculumHistory", fields: [previousVersionId], references: [id], onDelete: SetNull)
   nextVersions      Curriculum[] @relation("CurriculumHistory")
 
+  // J.21 — if this curriculum was adopted from a NEYO Ops library template, we
+  // remember which template + which template version, so schools can be told
+  // when a newer version is published and adopt the update intentionally.
+  adoptedTemplateId      String?
+  adoptedTemplateVersion String?
+
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1140,6 +1161,7 @@ model LessonPlan {
   assessmentPlan   AssessmentPlan? @relation(fields: [assessmentPlanId], references: [id], onDelete: SetNull)
 
   resources  LessonResource[]
+  observations LessonObservation[]
   activities String?
   notes      String?
   status     String           @default("PLANNED") // PLANNED | TAUGHT | SKIPPED
@@ -2274,6 +2296,78 @@ model PromotionRun {
   @@index([tenantId, createdAt])
 }
 
+// L.7 — Automatic admissions grouping / annual reshuffle rules.
+model ClassGroupingRule {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  targetLevel String? // e.g. "Form 3" or null = all levels
+  ruleType  String   @default("SUBJECT_SET") // SUBJECT_SET | BALANCE | SCHOOL_DEFINED
+  priority  Int      @default(100)
+  active    Boolean  @default(true)
+  configJson String  @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, targetLevel, active])
+}
+
+// L.7 — Teacher continuity / fairness workload settings.
+model TeacherWorkloadRule {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacherId String?
+  maxClasses Int? // max distinct classes/streams teacher may handle
+  maxLessonsPerWeek Int?
+  retainSubjectLoads Boolean @default(true)
+  retainClassTeacher Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, teacherId])
+}
+
+// L.7 — continuity of class-group teachers across academic years.
+model TeacherContinuityAssignment {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  levelKey  String   // logical cohort key, e.g. "Form 1::EAST"
+  subjectId String?
+  classId   String?
+  teacherId String
+  roleType  String   @default("SUBJECT") // SUBJECT | CLASS_TEACHER
+  locked    Boolean  @default(false)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, levelKey, roleType, active])
+  @@index([tenantId, teacherId, active])
+}
+
+// L.7 — formal teacher transfer/change event with impact + recommendation snapshot.
+model TeacherTransferImpact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacherId String
+  replacementTeacherId String?
+  status    String   @default("OPEN") // OPEN | APPLIED | DISMISSED
+  reason    String?
+  affectedJson String @default("[]")
+  recommendationJson String @default("[]")
+  timetableJobId String?
+  createdById String
+  createdByName String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, teacherId, status])
+}
+
 // B.3 daily class attendance. One row per student per day (idempotent upsert).
 // status: P present | A absent | L late | E excused.
 // I.6 Principal Powers & Delegation: non-sensitive tasks assigned by Principal/Owner to teachers.
@@ -3270,6 +3364,7 @@ model Student {
   StudentDutyAssignment    StudentDutyAssignment[]
   StudentSubjectSelection  StudentSubjectSelection[]
   PromotionRequest         PromotionRequest[]
+  learnerJourneyPins      LearnerJourneyPin[]
 
   @@unique([tenantId, admissionNo])
   @@index([tenantId])
@@ -3618,9 +3713,109 @@ model ClassSubjectNeed {
   subjectId      String // Subject.id
   teacherId      String? // User.id
   lessonsPerWeek Int     @default(5)
+  // L.7 timetable: how many of the weekly lessons should be DOUBLE (back-to-back)
+  // periods. The rest are scheduled as singles. e.g. lessonsPerWeek=6, doubleCount=2
+  // => two doubles (4 periods) + two singles (2 periods).
+  doubleCount    Int     @default(0)
+  // If true, a double may be split across the day (two periods, not necessarily
+  // adjacent) for hard subjects; if false, doubles are strictly consecutive.
+  allowSplitDouble Boolean @default(false)
 
   @@unique([tenantId, classId, subjectId])
   @@index([tenantId])
+}
+
+// L.7 — School-defined combination groups: classes that take a subject together
+// (e.g. Form 1 East + Form 2 West combined Physics). The solver schedules the
+// subject once for the whole group at the same period across all member classes
+// with one teacher. scope GLOBAL = applies to the whole class-group as configured;
+// SELECTED = only the named member classes are combined.
+model CombinationGroup {
+  id        String @id @default(cuid())
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String // "Physics Group A"
+  subjectId String
+  teacherId String? // shared teacher for the combined lesson
+  lessonsPerWeek Int  @default(4)
+  doubleCount    Int  @default(0)
+  // GLOBAL = the school runs this combination for every class in the configured
+  // class-group; SELECTED = only the explicitly listed member classes.
+  scope     String @default("SELECTED") // GLOBAL | SELECTED
+  // SUBJECT_CHOICE = derive members from how students chose subjects
+  // (StudentSubjectSelection); MANUAL = use the explicit member class list.
+  source    String @default("MANUAL") // MANUAL | SUBJECT_CHOICE
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members CombinationGroupClass[]
+
+  @@index([tenantId])
+}
+
+model CombinationGroupClass {
+  id      String @id @default(cuid())
+  tenantId String
+  groupId String
+  group   CombinationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  classId String
+
+  @@unique([groupId, classId])
+  @@index([tenantId])
+}
+
+// L.7 — Configurable timetable constraints a school turns on/off (and tunes).
+// Deterministic rule engine, never AI. `kind` selects the rule; `configJson`
+// holds rule-specific parameters (e.g. which subjects, which periods).
+model TimetableConstraint {
+  id        String @id @default(cuid())
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kind      String // SUBJECT_MORNING | SUBJECTS_NOT_ADJACENT | SPLIT_DOUBLE_HARD | STREAM_DISTRIBUTION | LESSON_DISTRIBUTION | TEACHER_TIMEOFF | DOUBLE_SAME_DAY | CLASS_STREAM_CONFLICT | ONE_SINGLE_PER_DAY | PE_TIMESLOT | CUSTOM
+  label     String // human label, incl. school-added custom constraints
+  enabled   Boolean @default(true)
+  priority  Int     @default(100) // lower = applied/respected first (hard vs soft ordering)
+  isHard    Boolean @default(false) // hard = must satisfy; soft = best-effort
+  configJson String @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, kind])
+}
+
+// L.7 — Teacher unavailability windows (time off) the solver must respect.
+model TeacherTimeOff {
+  id        String @id @default(cuid())
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacherId String
+  dayOfWeek Int    // 1=Mon..5=Fri; or 0 = all days
+  period    Int    // specific period, or 0 = whole day
+  note      String?
+
+  @@index([tenantId, teacherId])
+}
+
+// L.7 — Master timetable generation job (the Master Button): runs in the
+// background, tracks live progress so the UI can show a bar, records the result.
+model TimetableGenerationJob {
+  id        String @id @default(cuid())
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status    String @default("QUEUED") // QUEUED | RUNNING | DONE | FAILED
+  progress  Int    @default(0) // 0..100
+  phase     String @default("Queued") // human-readable current phase
+  slotsPlaced Int  @default(0)
+  unplacedJson String @default("[]") // JSON list of loads that could not be placed
+  warningsJson String @default("[]") // JSON list of soft-constraint warnings
+  error     String?
+  startedById   String
+  startedByName String
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+
+  @@index([tenantId, status])
 }
 
 // I.27 — YouTube learning inside NEYO.
@@ -3873,24 +4068,54 @@ model SyllabusTopic {
 }
 
 // I.28 — dedicated exam timetable, separate from normal lesson timetable.
-model ExamTimetableSlot {
+
+model ExamTimetableGeneratorRun {
   id            String   @id @default(cuid())
   tenantId      String
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  classId       String
-  subjectId     String
   examName      String
-  examDate      String // YYYY-MM-DD
-  startTime     String // HH:MM
-  endTime       String // HH:MM
-  venue         String?
+  classIdsJson  String   @default("[]")
+  periodJson    String   @default("[]")
+  startDate     String
+  endDate       String
+  paperMode     String   @default("ALL_SUBJECTS_SELECTED_CLASSES")
+  distributionMode String @default("ONE_PAPER_PER_CLASS_PER_PERIOD")
+  generatedCount Int     @default(0)
   notes         String?
   createdById   String
   createdByName String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@unique([tenantId, classId, subjectId, examDate, startTime])
+  @@index([tenantId, examName])
+}
+
+model ExamTimetableSlot {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classId       String
+  subjectId     String
+  paperConfigId String?
+  examName      String
+  paperName     String? // PP1 | PP2 | PP3 | Theory | Practical
+  examDate      String // YYYY-MM-DD
+  startTime     String // HH:MM
+  endTime       String // HH:MM
+  venue         String?
+  targetScope   String   @default("CLASS") // CLASS | STREAM_GROUP | COMBINATION
+  targetJson    String?  @default("[]")
+  invigilatorScope String @default("AUTO") // AUTO | ELIGIBLE_ONLY
+  eligibleInvigilatorJson String? @default("[]")
+  invigilatorJson String? @default("[]")
+  warningJson   String?  @default("[]")
+  notes         String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, classId, subjectId, examDate, startTime, paperName])
   @@index([tenantId, examDate])
   @@index([tenantId, classId])
 }
@@ -4471,6 +4696,32 @@ model PortfolioItem {
   @@index([tenantId, status])
 }
 
+// =============================================================================
+// PART J.8 — Learning Journey Timeline milestone pinning foundation
+// =============================================================================
+
+model LearnerJourneyPin {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sourceModule   String // EXAM | ASSESSMENT | ATTENDANCE | DISCIPLINE | COMPETENCY | SKILLS | PORTFOLIO | CERTIFICATE | SYSTEM
+  sourceRecordId String?
+  entryId        String // stable normalized learner-journey entry id
+  note           String?
+  visibility     String   @default("STAFF") // STAFF | PARENT_SAFE
+  pinnedById     String
+  pinnedByName   String
+  pinnedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, studentId, entryId])
+  @@index([tenantId, studentId])
+  @@index([tenantId, sourceModule])
+}
+
 // PART J.10 — Senior School Pathway Management
 // =============================================================================
 
@@ -4580,6 +4831,29 @@ model LessonResource {
   @@index([tenantId, lessonPlanId])
 }
 
+// J.12 — a teacher's quick observation captured directly from a lesson plan.
+// Records what was actually observed in the lesson (per learner or whole-class),
+// optionally tagged to a CBC strand/competency objective and a CBC level (1..4).
+model LessonObservation {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lessonPlanId String
+  lessonPlan   LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  studentId    String? // null = whole-class observation
+  strandId     String? // optional CBC strand objective
+  competencyId String? // optional competency objective
+  level        Int? // 1..4 CBC proficiency, optional
+  note         String
+  teacherId    String
+  teacherName  String
+  date         String // YYYY-MM-DD
+  createdAt    DateTime   @default(now())
+
+  @@index([tenantId, lessonPlanId])
+  @@index([tenantId, studentId])
+}
+
 // PART J.13 — Parent Growth Dashboard (Student Goals)
 // =============================================================================
 
@@ -4632,7 +4906,11 @@ model TransferPassportRequest {
   consentBy       String // Name of parent/guardian who gave legal consent
   consentDate     DateTime @default(now())
 
-  payloadJson String? // The actual aggregated digital identity snapshot
+  payloadJson   String?   // The actual aggregated digital identity snapshot
+  importedAt    DateTime?
+  receivedById  String?
+  receivedByName String?
+  lastAccessedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4640,6 +4918,7 @@ model TransferPassportRequest {
   @@index([sourceTenantId])
   @@index([destinationTenantId])
   @@index([studentId])
+  @@index([status])
 }
 
 // PART J.15 — Modular Report Builder
@@ -4652,6 +4931,10 @@ model ReportTemplate {
   name        String // e.g. "CBC Comprehensive Report", "Standard 8-4-4 End of Term"
   description String?
   isDefault   Boolean @default(false)
+  version     String  @default("v1")
+  effectiveFrom String? // YYYY-MM-DD
+  effectiveTo   String? // YYYY-MM-DD
+  curriculumVersion String?
 
   // JSON array of section objects, e.g. [{ type: "HEADER" }, { type: "MARKS_TABLE", showPosition: false }, { type: "TALENT" }]
   sectionsJson String @default("[]")
@@ -4729,6 +5012,11 @@ model GlobalCurriculumTemplate {
   // JSON array of learning areas: [{ name, code, description }]
   learningAreasJson String @default("[]")
 
+  // J.21 publish + update-announcement tracking.
+  publishedAt   DateTime? // set the first time the template is PUBLISHED
+  changeNote    String? // what changed in this version (shown to schools on update)
+  announcedAt   DateTime? // when NEYO Ops last announced an update for this template
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -4783,6 +5071,36 @@ model TermAggregationRule {
   updatedAt DateTime @updatedAt
 
   @@unique([tenantId, classId, subjectId])
+}
+
+// K.5 — Master term report card: one row per student per subject per term, the
+// final aggregated figure produced by the background computation engine from the
+// term's exams/CATs (weighted by TermAggregationRule when present, else simple
+// average). A summary row (subjectId = null) holds the student's overall term
+// mean + position. Idempotent via the unique key.
+model MasterReportCard {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  termId    String
+  classId   String
+  studentId String
+  subjectId String? // null = the overall/summary row for the student that term
+
+  finalMark   Float // 0..100 aggregated subject mark, or overall mean on the summary row
+  cbcLevel    Int? // 1..4 CBC band derived from finalMark (when curriculum engine on)
+  letterGrade String? // e.g. "A", "B+" for 8-4-4 style summaries
+  rank        Int? // position within the class for this subject (or overall on summary row)
+  outOf       Int? // class size used for the rank
+  isTraditional Boolean @default(false) // true = simple average used (no weighting rule)
+  componentsJson String @default("[]") // JSON breakdown of the sources + weights that produced finalMark
+
+  computedAt DateTime @default(now())
+
+  @@unique([tenantId, termId, studentId, subjectId])
+  @@index([tenantId, termId, classId])
+  @@index([tenantId, studentId])
 }
 
 // Configures PP1, PP2, Practicals for a specific subject
@@ -5006,3 +5324,4 @@ model KnecExportBatch {
 
   @@index([tenantId])
 }
+

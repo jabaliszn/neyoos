@@ -1,12 +1,26 @@
 import { NextRequest } from "next/server";
 import { requirePermission } from "@/lib/core/session";
+import { requireRevenueFeature } from "@/lib/services/tier-gating.service";
 import { ok, fail, handleError } from "@/lib/api/respond";
 import { reportTemplateSchema } from "@/lib/validations/report-builder";
-import { getReportTemplates, createReportTemplate, updateReportTemplate, deleteReportTemplate, ReportTemplateError } from "@/lib/services/report-template.service";
+import { getReportTemplates, createReportTemplate, updateReportTemplate, deleteReportTemplate, buildTemplateDrivenReportPdf, ReportTemplateError } from "@/lib/services/report-template.service";
 
 export async function GET(req: NextRequest) {
   try {
     const user = await requirePermission("academics.view");
+    await requireRevenueFeature(user, "custom_reports");
+    const studentId = req.nextUrl.searchParams.get("studentId");
+    const templateId = req.nextUrl.searchParams.get("templateId");
+    const format = req.nextUrl.searchParams.get("format");
+    if (studentId && format === "pdf") {
+      const built = await buildTemplateDrivenReportPdf(user, studentId, templateId);
+      return new Response(new Uint8Array(built.pdf), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${built.fileName}"`,
+        },
+      });
+    }
     const templates = await getReportTemplates(user);
     return ok({ data: templates });
   } catch (error) {
@@ -17,6 +31,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requirePermission("academics.manage");
+    await requireRevenueFeature(user, "custom_reports");
     const body = await req.json();
     const data = reportTemplateSchema.parse(body);
     const template = await createReportTemplate(user, data);
@@ -36,6 +51,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const user = await requirePermission("academics.manage");
+    await requireRevenueFeature(user, "custom_reports");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("INVALID", "Template ID required", 400);
     const body = await req.json();
@@ -54,6 +70,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const user = await requirePermission("academics.manage");
+    await requireRevenueFeature(user, "custom_reports");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("INVALID", "Template ID required", 400);
     await deleteReportTemplate(user, id);

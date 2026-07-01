@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true,
+    "incremental": false
+  },
+  "include": [
+    "src/components/academics/academics-client.tsx",
+    "src/app/api/academics/timetable/engine/route.ts",
+    "src/app/api/academics/timetable/generate-job/route.ts",
+    "src/lib/services/timetable-engine.service.ts"
+  ]
+}

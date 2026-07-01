@@ -30,3 +30,12 @@ export const studentPathwayAllocationSchema = z.object({
 
 export type StudentPathwayPreferenceInput = z.infer<typeof studentPathwayPreferenceSchema>;
 export type StudentPathwayAllocationInput = z.infer<typeof studentPathwayAllocationSchema>;
+
+// Payload for the "set preferences" screen: a student picks up to 5 ranked pathways.
+export const setStudentPreferencesSchema = z.object({
+  preferences: z
+    .array(studentPathwayPreferenceSchema)
+    .max(5, "A student can rank at most 5 pathway choices."),
+});
+
+export type SetStudentPreferencesInput = z.infer<typeof setStudentPreferencesSchema>;

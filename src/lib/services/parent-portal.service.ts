@@ -267,3 +267,44 @@ export async function parentStk(user: SessionUser, invoiceId: string, phone: str
     return stkForInvoice(user, invoiceId, phone, amountKes);
   });
 }
+
+/**
+ * J.10 — Parent/student view of pathway readiness.
+ * Reuses the staff readiness engine but only exposes parent-safe fields:
+ * - friendly readiness labels (no raw teacher private notes)
+ * - the child's stated choices and final allocation
+ * - per-pathway "what is still needed" without exposing other students' data
+ */
+export async function parentChildPathwayReadiness(user: SessionUser, studentId: string) {
+  return withTenant(user.tenantId, async () => {
+    await assertOwnChild(user, studentId);
+    const { getStudentPathwayReadiness } = await import("@/lib/services/pathway.service");
+    const full = await getStudentPathwayReadiness(user, studentId);
+
+    return {
+      student: full.student,
+      pathways: full.pathways.map((p) => ({
+        pathwayName: p.pathwayName,
+        pathwayCode: p.pathwayCode,
+        isChoice: p.isChoice,
+        choiceOrder: p.choiceOrder,
+        isAllocated: p.isAllocated,
+        isRecommended: p.isRecommended,
+        readiness: p.overallReadiness,
+        academicReadinessPct: p.academicReadinessPct,
+        requirementsMet: p.requirementsMet,
+        requirementsTotal: p.requirementsTotal,
+        talentEvidenceCount: p.talentEvidenceCount,
+        portfolioEvidenceCount: p.portfolioEvidenceCount,
+        // subject-level guidance, parent-safe (child's own averages only)
+        subjects: p.subjects.map((s) => ({
+          subjectName: s.subjectName,
+          isCore: s.isCore,
+          minScorePct: s.minScorePct,
+          studentAvgPct: s.studentAvgPct,
+          met: s.met,
+        })),
+      })),
+    };
+  });
+}

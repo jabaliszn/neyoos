@@ -9,7 +9,7 @@ import * as React from "react";
 import {
   GraduationCap, AlertCircle, Loader2, ArrowLeft, FileText, Wallet,
   CalendarCheck, MessageSquare, Smartphone, X, BookOpen, Download, Calendar,
-  UserCheck, ShieldCheck, KeyRound, Trash2, Camera, FolderOpen, ShoppingBag, Book, CalendarDays, CheckCircle2,
+  UserCheck, ShieldCheck, KeyRound, Trash2, Camera, FolderOpen, ShoppingBag, Book, CalendarDays, CheckCircle2, Sparkles,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import { StudentCompetencySummaryCard } from "@/components/competencies/competen
 import { SkillsPassportCard } from "@/components/skills-passport/skills-passport-card";
 import { LearnerJourneyCard } from "@/components/learner-journey/learner-journey-card";
 import { ParentGrowthTab } from "./parent-growth-tab";
+import { ParentPathwayCard } from "./parent-pathway-card";
 
 const kes = (n: number) => `KES ${n.toLocaleString("en-KE")}`;
 
@@ -214,11 +215,22 @@ function ChildView({ id, onBack }: { id: string; onBack: () => void }) {
       {/* J.4 Competency Framework Summary */}
       <StudentCompetencySummaryWrapper studentId={id} />
 
+      {/* J.13 Parent Growth Dashboard — growth, not just grades */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-amber-500" /> Growth dashboard</CardTitle></CardHeader>
+        <CardContent>
+          <ParentGrowthTab studentId={id} />
+        </CardContent>
+      </Card>
+
       {/* J.6 Skills Passport */}
       <SkillsPassportCard studentId={id} />
 
       {/* J.8 Learning Journey Timeline */}
       {isCurriculumEngineEnabled && <LearnerJourneyCard studentId={id} mode="parent" />}
+
+      {/* J.10 Senior School Pathway readiness (parent-safe) */}
+      <ParentPathwayCard studentId={id} />
 
       {/* attendance */}
       <Card>
@@ -247,6 +259,9 @@ function ChildView({ id, onBack }: { id: string; onBack: () => void }) {
         onAddAlternate={() => setPickupDialog("alternate")}
         onChanged={load}
       />
+
+      {/* K.10 — Parent uploads (photo + documents) that go to school approval */}
+      <ParentUploadCard studentId={data.child.id} studentName={data.child.name} />
 
       {/* timetable (B.11 — shared family portal) */}
       {data.timetable.length > 0 && (
@@ -690,6 +705,86 @@ function CommitToPayDialog({ invoice, onClose, onDone }: {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * K.10 — Parent upload card.
+ * Parents pick a photo or a document; the file is encrypted+stored via the shared
+ * FileUpload control, then we POST an approval REQUEST (not a direct write). The
+ * school's class teacher / department must approve before it lands on the profile.
+ */
+function ParentUploadCard({ studentId, studentName }: { studentId: string; studentName: string }) {
+  const { toast } = useToast();
+  const [kind, setKind] = React.useState<"PHOTO_UPDATE" | "DOCUMENT_UPLOAD">("PHOTO_UPDATE");
+  const [label, setLabel] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
+  const [done, setDone] = React.useState(false);
+
+  async function submit(file: UploadedFile) {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/students/approvals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId,
+          requestType: kind,
+          documentLabel: kind === "DOCUMENT_UPLOAD" ? (label || "Document") : null,
+          fileUrl: file.url,
+          fileName: file.fileName,
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setDone(true);
+        toast({ title: "Sent for school approval", tone: "success" });
+      } else {
+        toast({ title: json.error?.message || "Could not send request.", tone: "error" });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Camera className="h-4 w-4 text-navy-400" /> Upload photo or documents
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-navy-500 dark:text-navy-400">
+          Upload {studentName}\u2019s passport photo or documents (birth certificate, certificates).
+          The school must approve before it is saved to the profile.
+        </p>
+        <div className="flex gap-2">
+          <Button size="sm" variant={kind === "PHOTO_UPDATE" ? "primary" : "secondary"} onClick={() => { setKind("PHOTO_UPDATE"); setDone(false); }}>Photo</Button>
+          <Button size="sm" variant={kind === "DOCUMENT_UPLOAD" ? "primary" : "secondary"} onClick={() => { setKind("DOCUMENT_UPLOAD"); setDone(false); }}>Document</Button>
+        </div>
+        {kind === "DOCUMENT_UPLOAD" && (
+          <div>
+            <Label htmlFor="docLabel" className="text-xs">Document name</Label>
+            <Input id="docLabel" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Birth Certificate" />
+          </div>
+        )}
+        {done ? (
+          <div className="flex items-center gap-2 rounded-xl bg-green-50 px-3 py-2 text-sm font-medium text-green-700 dark:bg-green-900/20">
+            <CheckCircle2 className="h-4 w-4" /> Pending school approval.
+          </div>
+        ) : submitting ? (
+          <div className="flex items-center gap-2 text-sm text-navy-500"><Loader2 className="h-4 w-4 animate-spin" /> Sending\u2026</div>
+        ) : (
+          <FileUpload
+            label={kind === "PHOTO_UPDATE" ? "Choose photo" : "Choose document"}
+            accept={kind === "PHOTO_UPDATE" ? "image/*" : "image/*,application/pdf"}
+            category="student-approval"
+            onUploaded={submit}
+          />
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

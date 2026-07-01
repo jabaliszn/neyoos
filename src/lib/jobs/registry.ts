@@ -73,23 +73,40 @@ async function termPulse(ctx: JobContext) {
   return summary;
 }
 
-/** G.8 Polish — data retention / auto-archive scheduler. */
-async function dataRetention(ctx: JobContext): Promise<{ notificationsPurged: number; auditsArchived: number }> {
-  await ctx.progress(20);
+/** G.8 Polish + J.22 Compliance — data retention / auto-archive scheduler. */
+async function dataRetention(ctx: JobContext): Promise<{
+  notificationsPurged: number;
+  auditsArchived: number;
+  expiredPassportsPurged: number;
+  oldPortfoliosPurged: number;
+}> {
+  await ctx.progress(15);
   const notifCutoff = new Date(Date.now() - 90 * 24 * 3600 * 1000); // 90 days
   const resNotif = await db.notification.deleteMany({
     where: { NOT: { readAt: null }, readAt: { lt: notifCutoff } },
   });
 
-  await ctx.progress(60);
+  await ctx.progress(45);
   // Compliance audit log retention (e.g., older than 7 years soft archive or purge)
   const auditCutoff = new Date(Date.now() - 7 * 365 * 24 * 3600 * 1000); // 7 years
   const resAudit = await db.auditLog.deleteMany({
     where: { createdAt: { lt: auditCutoff } },
   });
 
+  await ctx.progress(70);
+  // J.22 — run the real compliance retention engine: wipe expired transfer
+  // passport payloads (data minimization) and purge stale unapproved portfolio
+  // evidence. Previously this engine existed but was never invoked (dead code).
+  const { enforceDataRetentionPolicies } = await import("@/lib/services/retention.service");
+  const compliance = await enforceDataRetentionPolicies();
+
   await ctx.progress(100);
-  return { notificationsPurged: resNotif.count, auditsArchived: resAudit.count };
+  return {
+    notificationsPurged: resNotif.count,
+    auditsArchived: resAudit.count,
+    expiredPassportsPurged: compliance.expiredPassportsPurged,
+    oldPortfoliosPurged: compliance.oldPortfoliosPurged,
+  };
 }
 
 

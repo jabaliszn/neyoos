@@ -15,7 +15,8 @@ import { SubjectSelectionManager } from "./subject-selection-manager";
 import { ComputationDashboardClient } from "./computation-dashboard";
 import {
   BookOpen, Building2, CalendarRange, Grid3X3, NotebookPen, Plus,
-  AlertCircle, Loader2, X, Sparkles, Trash2, Check, Calendar, Printer, Palette, Sliders, Info, HelpCircle, Save, Trophy
+  AlertCircle, Loader2, X, Sparkles, Trash2, Check, Calendar, Printer, Palette, Sliders, Info, HelpCircle, Save, Trophy,
+  Calculator, FileText, Clock3, Wand2, RefreshCw, Link2, Ban, Users, TimerReset, ShieldCheck, RotateCcw, ClipboardList
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,27 +41,58 @@ interface Staff { id: string; fullName: string; role: string }
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
-export function AcademicsClient({ canManage, canAppointHod, isScopedHod, isCurriculumEngineEnabled = false }: { canManage: boolean; canAppointHod: boolean; isScopedHod: boolean; isCurriculumEngineEnabled?: boolean }) {
-  const [tab, setTab] = React.useState<"subjects" | "departments" | "cocurricular" | "terms" | "timetable" | "lessons" | "generator" | "roster" | "reports" | "curriculum-versions" | "pathways">("subjects");
+export function AcademicsClient({ canManage, canAppointHod, isScopedHod, isCurriculumEngineEnabled = false, schoolLevelActivation }: { canManage: boolean; canAppointHod: boolean; isScopedHod: boolean; isCurriculumEngineEnabled?: boolean; schoolLevelActivation?: { shouldShowPathwayTools: boolean; shouldShowSubjectSelectionTools: boolean; isJuniorSchool: boolean; isSeniorSchool: boolean; isMixedSchool: boolean; educationLevelsOffered: string[] } }) {
+  const [subjects, setSubjects] = React.useState<Subject[]>([]);
+  const [tab, setTab] = React.useState<"subjects" | "departments" | "cocurricular" | "terms" | "timetable" | "exam-timetable" | "exam-auto-generator" | "lessons" | "generator" | "smart-timetable" | "roster" | "reports" | "curriculum-versions" | "pathways" | "computation" | "subject-selection">("subjects");
+
+  React.useEffect(() => {
+    fetch("/api/academics/subjects")
+      .then((r) => r.json())
+      .then((j) => { if (j.ok) setSubjects(j.data.subjects ?? []); })
+      .catch(() => {});
+  }, []);
+
+  const showPathwayTools = schoolLevelActivation?.shouldShowPathwayTools ?? true;
+  const showSubjectSelectionTools = schoolLevelActivation?.shouldShowSubjectSelectionTools ?? true;
+
   const tabs = [
     { key: "subjects" as const, label: "Subjects", icon: BookOpen },
     { key: "departments" as const, label: "Departments", icon: Building2 },
     { key: "cocurricular" as const, label: "Co-curricular", icon: Trophy },
     { key: "terms" as const, label: "Terms", icon: CalendarRange },
     { key: "timetable" as const, label: "Timetable", icon: Grid3X3 },
+    { key: "exam-timetable" as const, label: "Exam Timetable", icon: ClipboardList },
+    { key: "exam-auto-generator" as const, label: "Exam Auto-Generator", icon: Sparkles },
     { key: "lessons" as const, label: "Lesson plans", icon: NotebookPen },
     ...(isCurriculumEngineEnabled ? [
       { key: "computation" as const, label: "Grading Engine", icon: Calculator },
       { key: "reports" as const, label: "Report Builder", icon: FileText },
       { key: "curriculum-versions" as const, label: "Curriculum Versions", icon: Sliders },
-      { key: "pathways" as const, label: "Senior Pathways", icon: Sparkles },
-      { key: "subject-selection" as const, label: "Subject Selection", icon: BookOpen }
+      ...(showPathwayTools ? [{ key: "pathways" as const, label: "Senior Pathways", icon: Sparkles }] : []),
+      ...(showSubjectSelectionTools ? [{ key: "subject-selection" as const, label: "Subject Selection", icon: BookOpen }] : [])
     ] : []),
     { key: "generator" as const, label: "Timetable Generator", icon: Sparkles },
+    { key: "smart-timetable" as const, label: "Smart Timetable", icon: Wand2 },
     { key: "roster" as const, label: "Duty Roster", icon: CalendarRange },
   ];
   return (
     <div className="space-y-5">
+      {schoolLevelActivation && (
+        <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 dark:border-green-900/30 dark:bg-green-950/20 dark:text-green-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="green">Level-aware Academics</Badge>
+            {schoolLevelActivation.isJuniorSchool && <Badge tone="blue">Junior School active</Badge>}
+            {schoolLevelActivation.isSeniorSchool && <Badge tone="blue">Senior School active</Badge>}
+            {schoolLevelActivation.isMixedSchool && <Badge tone="amber">Mixed school</Badge>}
+          </div>
+          <p className="mt-2 text-xs text-green-800 dark:text-green-300">
+            Subject Selection tools appear only when Junior School or Senior School is active. Senior Pathway tools appear only when Senior School is active.
+          </p>
+          <p className="mt-2 text-xs text-green-800 dark:text-green-300">
+            Timetable preset guidance: {schoolLevelActivation.isSeniorSchool ? 'favor pathway-aware, combination-aware, and richer subject-structure planning' : schoolLevelActivation.isJuniorSchool ? 'favor subject-selection-aware planning without full Senior pathway complexity' : 'favor broad simpler planning with less pathway complexity'}.
+          </p>
+        </div>
+      )}
       <div className="inline-flex max-w-full overflow-x-auto rounded-full border border-navy-200 p-0.5 dark:border-navy-700">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
@@ -74,13 +106,16 @@ export function AcademicsClient({ canManage, canAppointHod, isScopedHod, isCurri
       {tab === "cocurricular" && <CoCurricularTab canManage={canManage} onOpenTimetable={() => setTab("timetable")} />}
       {tab === "terms" && <TermsTab canManage={canManage} />}
       {tab === "timetable" && <TimetableTab canManage={canManage} />}
+      {tab === "exam-timetable" && <ExamTimetableTab canManage={canManage} />}
+      {tab === "exam-auto-generator" && <ExamAutoGeneratorTab canManage={canManage} />}
       {tab === "lessons" && <LessonsTab />}
-      {tab === "computation" && <ComputationDashboardClient canManage={canManage} />}
-      {tab === "reports" && <ReportBuilderClient canManage={canManage} />}
+      {tab === "computation" && <ComputationDashboardClient canManage={canManage} schoolLevelActivation={schoolLevelActivation} />}
+      {tab === "reports" && <ReportBuilderClient canManage={canManage} schoolLevelActivation={schoolLevelActivation} />}
       {tab === "curriculum-versions" && <CurriculumVersionManagerClient canManage={canManage} />}
       {tab === "pathways" && <PathwayManagerClient subjects={[]} />}
       {tab === "subject-selection" && <SubjectSelectionManager subjects={subjects} />}
       {tab === "generator" && <TimetableGeneratorTab canManage={canManage} />}
+      {tab === "smart-timetable" && <TimetableEngineTab canManage={canManage} schoolLevelActivation={schoolLevelActivation} />}
       {tab === "roster" && (
         <div className="space-y-8">
           <DutyRosterTab canManage={canManage} />
@@ -110,6 +145,42 @@ function SubjectsTab({ canManage }: { canManage: boolean }) {
     } catch { setError(true); }
   }, []);
   React.useEffect(() => { load(); }, [load]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      hydratingDraftRef.current = true;
+      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
+      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
+      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
+      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
+      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hydratingDraftRef.current) return;
+    const draft = {
+      savedAt: new Date().toISOString(),
+      timeOffTeacherId,
+      timeOffWindows,
+      combinationForm,
+    };
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
+    } catch {}
+  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
+
+  function clearDraft(showToast = true) {
+    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
+    setDraftMeta({ dirty: false, restored: false });
+    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
+  }
 
   async function addPreset(preset: "CBC" | "8-4-4") {
     setBusy(true);
@@ -437,6 +508,42 @@ function OldCoCurricularTab({ canManage, onOpenTimetable }: { canManage: boolean
 
   React.useEffect(() => { load(); }, [load]);
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      hydratingDraftRef.current = true;
+      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
+      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
+      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
+      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
+      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hydratingDraftRef.current) return;
+    const draft = {
+      savedAt: new Date().toISOString(),
+      timeOffTeacherId,
+      timeOffWindows,
+      combinationForm,
+    };
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
+    } catch {}
+  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
+
+  function clearDraft(showToast = true) {
+    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
+    setDraftMeta({ dirty: false, restored: false });
+    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
+  }
+
   async function saveClassConfig(classId: string, current: any | null, values: { coCurricularName: string; coCurricularCount: number }) {
     setSavingClassId(classId);
     try {
@@ -624,6 +731,42 @@ function TermsTab({ canManage }: { canManage: boolean }) {
     } catch { setError(true); }
   }, []);
   React.useEffect(() => { load(); }, [load]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      hydratingDraftRef.current = true;
+      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
+      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
+      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
+      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
+      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hydratingDraftRef.current) return;
+    const draft = {
+      savedAt: new Date().toISOString(),
+      timeOffTeacherId,
+      timeOffWindows,
+      combinationForm,
+    };
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
+    } catch {}
+  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
+
+  function clearDraft(showToast = true) {
+    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
+    setDraftMeta({ dirty: false, restored: false });
+    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
+  }
 
   async function save() {
     setSaving(true);
@@ -975,6 +1118,42 @@ function TimetableTab({ canManage }: { canManage: boolean }) {
     } catch { setError(true); }
   }, [classId]);
   React.useEffect(() => { load(); }, [load]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      hydratingDraftRef.current = true;
+      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
+      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
+      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
+      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
+      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hydratingDraftRef.current) return;
+    const draft = {
+      savedAt: new Date().toISOString(),
+      timeOffTeacherId,
+      timeOffWindows,
+      combinationForm,
+    };
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
+    } catch {}
+  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
+
+  function clearDraft(showToast = true) {
+    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
+    setDraftMeta({ dirty: false, restored: false });
+    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
+  }
 
   const grid = new Map<string, Slot>();
   for (const s of slots ?? []) grid.set(`${s.dayOfWeek}|${s.period}`, s);
@@ -1401,13 +1580,33 @@ function AutoFillDialog({ classId, subjects, staff, onClose, onDone }: {
 }
 
 // ---- Lesson plans -------------------------------------------------------------------
+interface PlanRow extends Plan {
+  classId: string; teacherId: string;
+  objectives?: string | null; activities?: string | null; notes?: string | null;
+  strand?: { id: string; name: string } | null;
+  competency?: { id: string; name: string } | null;
+  assessmentPlan?: { id: string; title: string } | null;
+  resources?: { id: string; fileUrl: string; fileName?: string | null }[];
+}
+interface CompetencyOpt { id: string; name: string; code?: string }
+interface AssessmentPlanOpt { id: string; title: string; subjectId?: string | null; classId?: string | null }
+interface StrandOpt { id: string; name: string }
+
+const selectClass = "mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800";
+const areaClass = "mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800";
+
 function LessonsTab() {
   const { toast } = useToast();
-  const [plans, setPlans] = React.useState<Plan[] | null>(null);
+  const [plans, setPlans] = React.useState<PlanRow[] | null>(null);
   const [error, setError] = React.useState(false);
   const [dialog, setDialog] = React.useState(false);
   const [subjects, setSubjects] = React.useState<Subject[]>([]);
   const [classes, setClasses] = React.useState<ClassOpt[]>([]);
+  const [competencies, setCompetencies] = React.useState<CompetencyOpt[]>([]);
+  const [assessmentPlans, setAssessmentPlans] = React.useState<AssessmentPlanOpt[]>([]);
+  const [observeFor, setObserveFor] = React.useState<PlanRow | null>(null);
+  const [resourceFor, setResourceFor] = React.useState<PlanRow | null>(null);
+  const [analyticsFor, setAnalyticsFor] = React.useState<{ classId: string; subjectId: string } | null>(null);
 
   const load = React.useCallback(async () => {
     setError(false);
@@ -1421,6 +1620,8 @@ function LessonsTab() {
     load();
     fetch("/api/academics/subjects").then((r) => r.json()).then((j) => j.ok && setSubjects(j.data.subjects));
     fetch("/api/classes").then((r) => r.json()).then((j) => j.ok && setClasses(j.data.classes));
+    fetch("/api/competencies").then((r) => r.json()).then((j) => j.ok && setCompetencies(j.data.board?.competencies ?? []));
+    fetch("/api/assessments").then((r) => r.json()).then((j) => j.ok && setAssessmentPlans((j.data.board?.plans ?? []).map((p: any) => ({ id: p.id, title: p.title, subjectId: p.subjectId, classId: p.classId }))));
   }, [load]);
 
   async function setStatus(id: string, status: string) {
@@ -1435,13 +1636,15 @@ function LessonsTab() {
 
   return (
     <div className="space-y-4">
-      <Button onClick={() => setDialog(true)}><Plus className="h-4 w-4" /> Plan a lesson</Button>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => setDialog(true)}><Plus className="h-4 w-4" /> Plan a lesson</Button>
+      </div>
       {plans.length === 0 ? (
-        <EmptyState icon={NotebookPen} title="No lesson plans yet" description="Teachers plan their lessons here — topic, objectives and activities per class and date." />
+        <EmptyState icon={NotebookPen} title="No lesson plans yet" description="Teachers plan their lessons here — topic, objectives, curriculum links, resources and observations per class and date." />
       ) : (
         <TableContainer>
           <Table>
-            <THead><TR><TH>Date</TH><TH>Class</TH><TH>Subject</TH><TH>Topic</TH><TH>Teacher</TH><TH>Status</TH></TR></THead>
+            <THead><TR><TH>Date</TH><TH>Class</TH><TH>Subject</TH><TH>Topic</TH><TH>Curriculum links</TH><TH>Status</TH><TH>Actions</TH></TR></THead>
             <TBody>
               {plans.map((p) => (
                 <TR key={p.id}>
@@ -1449,11 +1652,26 @@ function LessonsTab() {
                   <TD>{p.className}</TD>
                   <TD className="font-mono text-xs">{p.subjectCode}</TD>
                   <TD className="font-medium">{p.topic}</TD>
-                  <TD className="text-xs text-navy-400">{p.teacherName}</TD>
+                  <TD className="text-xs">
+                    <div className="flex flex-wrap gap-1">
+                      {p.strand && <Badge tone="blue">Strand: {p.strand.name}</Badge>}
+                      {p.competency && <Badge tone="blue">Competency: {p.competency.name}</Badge>}
+                      {p.assessmentPlan && <Badge tone="green">Assessment: {p.assessmentPlan.title}</Badge>}
+                      {(p.resources?.length ?? 0) > 0 && <Badge>{p.resources!.length} resource{p.resources!.length > 1 ? "s" : ""}</Badge>}
+                      {!p.strand && !p.competency && !p.assessmentPlan && (p.resources?.length ?? 0) === 0 && <span className="text-navy-300">—</span>}
+                    </div>
+                  </TD>
                   <TD>
                     <select value={p.status} onChange={(e) => setStatus(p.id, e.target.value)} className="rounded-full border border-navy-200 bg-white px-2 py-1 text-xs dark:border-navy-700 dark:bg-navy-800">
                       <option value="PLANNED">Planned</option><option value="TAUGHT">Taught</option><option value="SKIPPED">Skipped</option>
                     </select>
+                  </TD>
+                  <TD>
+                    <div className="flex flex-wrap gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => setObserveFor(p)}>Observe</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setResourceFor(p)}>Resources</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setAnalyticsFor({ classId: p.classId, subjectId: (subjects.find((s) => s.code === p.subjectCode)?.id) || "" })}>Coverage</Button>
+                    </div>
                   </TD>
                 </TR>
               ))}
@@ -1461,40 +1679,69 @@ function LessonsTab() {
           </Table>
         </TableContainer>
       )}
-      {dialog && <PlanDialog subjects={subjects} classes={classes} onClose={() => setDialog(false)} onDone={() => { setDialog(false); load(); toast({ title: "Lesson planned", tone: "success" }); }} />}
+      {dialog && <PlanDialog subjects={subjects} classes={classes} competencies={competencies} assessmentPlans={assessmentPlans} onClose={() => setDialog(false)} onDone={() => { setDialog(false); load(); toast({ title: "Lesson planned", tone: "success" }); }} />}
+      {observeFor && <ObservationDialog plan={observeFor} onClose={() => setObserveFor(null)} onDone={() => toast({ title: "Observation recorded", tone: "success" })} />}
+      {resourceFor && <ResourceDialog plan={resourceFor} onClose={() => setResourceFor(null)} onDone={() => { setResourceFor(null); load(); toast({ title: "Resource attached", tone: "success" }); }} />}
+      {analyticsFor && <CoverageDialog classId={analyticsFor.classId} subjectId={analyticsFor.subjectId} onClose={() => setAnalyticsFor(null)} />}
     </div>
   );
 }
 
-function PlanDialog({ subjects, classes, onClose, onDone }: {
-  subjects: Subject[]; classes: ClassOpt[]; onClose: () => void; onDone: () => void;
+function PlanDialog({ subjects, classes, competencies, assessmentPlans, onClose, onDone }: {
+  subjects: Subject[]; classes: ClassOpt[]; competencies: CompetencyOpt[]; assessmentPlans: AssessmentPlanOpt[]; onClose: () => void; onDone: () => void;
 }) {
   const { toast } = useToast();
-  const [f, setF] = React.useState({ subjectId: "", classId: "", date: new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10), topic: "", objectives: "", activities: "" });
+  const [f, setF] = React.useState({ subjectId: "", classId: "", date: new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10), topic: "", objectives: "", activities: "", strandId: "", competencyId: "", assessmentPlanId: "" });
+  const [strands, setStrands] = React.useState<StrandOpt[]>([]);
+  const [resources, setResources] = React.useState<{ fileUrl: string; fileName: string }[]>([]);
+  const [resUrl, setResUrl] = React.useState("");
+  const [resName, setResName] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!f.subjectId) { setStrands([]); return; }
+    fetch(`/api/cbc/strands?subjectId=${f.subjectId}`).then((r) => r.json()).then((j) => j.ok && setStrands((j.data.strands ?? []).map((s: any) => ({ id: s.id, name: s.name }))));
+  }, [f.subjectId]);
+
+  function addResource() {
+    try { new URL(resUrl); } catch { toast({ title: "Enter a valid resource URL (https://…)", tone: "error" }); return; }
+    setResources([...resources, { fileUrl: resUrl, fileName: resName || "" }]);
+    setResUrl(""); setResName("");
+  }
+
   async function save() {
     setSaving(true);
     try {
-      const res = await fetch("/api/academics/lesson-plans", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f) });
+      const body: any = {
+        subjectId: f.subjectId, classId: f.classId, date: f.date, topic: f.topic,
+        objectives: f.objectives || undefined, activities: f.activities || undefined,
+        strandId: f.strandId || undefined, competencyId: f.competencyId || undefined,
+        assessmentPlanId: f.assessmentPlanId || undefined,
+        resources: resources.length ? resources.map((r) => ({ fileUrl: r.fileUrl, fileName: r.fileName || undefined })) : undefined,
+      };
+      const res = await fetch("/api/academics/lesson-plans", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json();
       if (json.ok) onDone();
       else toast({ title: json.error?.message || "Failed", tone: "error" });
     } finally { setSaving(false); }
   }
+
+  const planOptions = assessmentPlans.filter((p) => !p.subjectId || p.subjectId === f.subjectId);
+
   return (
-    <Modal title="Plan a lesson" onClose={onClose}>
+    <Modal title="Plan a lesson" onClose={onClose} wide>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label>Class</Label>
-            <select value={f.classId} onChange={(e) => setF({ ...f, classId: e.target.value })} className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+            <select value={f.classId} onChange={(e) => setF({ ...f, classId: e.target.value })} className={selectClass}>
               <option value="">Choose…</option>
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <Label>Subject</Label>
-            <select value={f.subjectId} onChange={(e) => setF({ ...f, subjectId: e.target.value })} className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+            <select value={f.subjectId} onChange={(e) => setF({ ...f, subjectId: e.target.value, strandId: "" })} className={selectClass}>
               <option value="">Choose…</option>
               {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
@@ -1504,11 +1751,243 @@ function PlanDialog({ subjects, classes, onClose, onDone }: {
         <div><Label>Topic</Label><Input value={f.topic} onChange={(e) => setF({ ...f, topic: e.target.value })} placeholder="e.g. Quadratic equations — completing the square" /></div>
         <div><Label>Objectives (optional)</Label><Input value={f.objectives} onChange={(e) => setF({ ...f, objectives: e.target.value })} /></div>
         <div><Label>Activities (optional)</Label><Input value={f.activities} onChange={(e) => setF({ ...f, activities: e.target.value })} /></div>
+
+        <div className="rounded-xl border border-navy-200 p-3 dark:border-navy-700">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-navy-400">Link to curriculum (CBC objectives)</p>
+          <div className="grid grid-cols-1 gap-2">
+            <div>
+              <Label>Curriculum strand / objective (optional)</Label>
+              <select value={f.strandId} onChange={(e) => setF({ ...f, strandId: e.target.value })} className={selectClass} disabled={!f.subjectId}>
+                <option value="">{f.subjectId ? "Choose a strand…" : "Pick a subject first"}</option>
+                {strands.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>Competency (optional)</Label>
+              <select value={f.competencyId} onChange={(e) => setF({ ...f, competencyId: e.target.value })} className={selectClass}>
+                <option value="">Choose a competency…</option>
+                {competencies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>Assessment plan (optional)</Label>
+              <select value={f.assessmentPlanId} onChange={(e) => setF({ ...f, assessmentPlanId: e.target.value })} className={selectClass}>
+                <option value="">Choose an assessment plan…</option>
+                {planOptions.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-navy-200 p-3 dark:border-navy-700">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-navy-400">Learning resources & evidence (optional)</p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input value={resUrl} onChange={(e) => setResUrl(e.target.value)} placeholder="https://… link to resource" />
+            <Input value={resName} onChange={(e) => setResName(e.target.value)} placeholder="Name (optional)" />
+            <Button type="button" variant="secondary" onClick={addResource}><Plus className="h-4 w-4" /> Add</Button>
+          </div>
+          {resources.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {resources.map((r, i) => (
+                <li key={i} className="flex items-center justify-between rounded-lg bg-navy-50 px-2 py-1 text-xs dark:bg-navy-800">
+                  <span className="truncate">{r.fileName || r.fileUrl}</span>
+                  <button type="button" onClick={() => setResources(resources.filter((_, idx) => idx !== i))} className="text-red-500"><Trash2 className="h-3 w-3" /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         <Button onClick={save} disabled={saving || !f.classId || !f.subjectId || f.topic.length < 2} className="w-full">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Save plan
         </Button>
       </div>
     </Modal>
+  );
+}
+
+function ObservationDialog({ plan, onClose, onDone }: { plan: PlanRow; onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [obs, setObs] = React.useState<any[] | null>(null);
+  const [note, setNote] = React.useState("");
+  const [level, setLevel] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    const res = await fetch(`/api/academics/lesson-plans/observations?lessonPlanId=${plan.id}`);
+    const json = await res.json();
+    if (json.ok) setObs(json.data.observations); else setObs([]);
+  }, [plan.id]);
+  React.useEffect(() => { load(); }, [load]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      hydratingDraftRef.current = true;
+      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
+      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
+      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
+      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
+      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hydratingDraftRef.current) return;
+    const draft = {
+      savedAt: new Date().toISOString(),
+      timeOffTeacherId,
+      timeOffWindows,
+      combinationForm,
+    };
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
+    } catch {}
+  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
+
+  function clearDraft(showToast = true) {
+    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
+    setDraftMeta({ dirty: false, restored: false });
+    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
+  }
+
+  async function save() {
+    if (note.trim().length < 2) { toast({ title: "Write a short observation note.", tone: "error" }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/academics/lesson-plans/observations", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lessonPlanId: plan.id, note: note.trim(), level: level ? Number(level) : undefined }),
+      });
+      const json = await res.json();
+      if (json.ok) { setNote(""); setLevel(""); await load(); onDone(); }
+      else toast({ title: json.error?.message || "Failed", tone: "error" });
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Modal title={`Observations — ${plan.topic}`} onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-xs text-navy-400">Record what you observed in this lesson. Links to its strand/competency automatically.</p>
+        <div>
+          <Label>Observation note</Label>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className={areaClass} placeholder="e.g. Most learners grasped factorisation; 4 still struggle with sign changes." />
+        </div>
+        <div>
+          <Label>CBC proficiency level (optional, 1–4)</Label>
+          <select value={level} onChange={(e) => setLevel(e.target.value)} className={selectClass}>
+            <option value="">—</option>
+            <option value="1">1 — Below expectation</option>
+            <option value="2">2 — Approaching expectation</option>
+            <option value="3">3 — Meeting expectation</option>
+            <option value="4">4 — Exceeding expectation</option>
+          </select>
+        </div>
+        <Button onClick={save} disabled={saving} className="w-full">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Record observation
+        </Button>
+        <div className="border-t border-navy-100 pt-2 dark:border-navy-800">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wide text-navy-400">Recorded</p>
+          {obs === null ? <Skeletons /> : obs.length === 0 ? (
+            <p className="text-xs text-navy-300">No observations yet.</p>
+          ) : (
+            <ul className="space-y-1">
+              {obs.map((o) => (
+                <li key={o.id} className="rounded-lg bg-navy-50 px-2 py-1 text-xs dark:bg-navy-800">
+                  <span className="font-medium">{o.studentName}</span>{o.level ? ` · L${o.level}` : ""} — {o.note} <span className="text-navy-300">({o.date})</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ResourceDialog({ plan, onClose, onDone }: { plan: PlanRow; onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [url, setUrl] = React.useState("");
+  const [name, setName] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  async function save() {
+    try { new URL(url); } catch { toast({ title: "Enter a valid URL (https://…)", tone: "error" }); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/academics/lesson-plans/resources", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lessonPlanId: plan.id, resources: [{ fileUrl: url, fileName: name || undefined }] }),
+      });
+      const json = await res.json();
+      if (json.ok) onDone();
+      else toast({ title: json.error?.message || "Failed", tone: "error" });
+    } finally { setSaving(false); }
+  }
+  return (
+    <Modal title={`Attach resource — ${plan.topic}`} onClose={onClose}>
+      <div className="space-y-3">
+        {(plan.resources?.length ?? 0) > 0 && (
+          <ul className="space-y-1">
+            {plan.resources!.map((r) => (
+              <li key={r.id} className="truncate rounded-lg bg-navy-50 px-2 py-1 text-xs dark:bg-navy-800">{r.fileName || r.fileUrl}</li>
+            ))}
+          </ul>
+        )}
+        <div><Label>Resource URL</Label><Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://… worksheet, video, slides" /></div>
+        <div><Label>Name (optional)</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+        <Button onClick={save} disabled={saving} className="w-full">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Attach
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+function CoverageDialog({ classId, subjectId, onClose }: { classId: string; subjectId: string; onClose: () => void }) {
+  const [data, setData] = React.useState<any>(null);
+  const [error, setError] = React.useState(false);
+  React.useEffect(() => {
+    if (!classId || !subjectId) { setError(true); return; }
+    fetch(`/api/academics/lesson-plans/analytics?classId=${classId}&subjectId=${subjectId}`)
+      .then((r) => r.json()).then((j) => j.ok ? setData(j.data.data) : setError(true)).catch(() => setError(true));
+  }, [classId, subjectId]);
+  return (
+    <Modal title="Planning coverage & analytics" onClose={onClose}>
+      {error ? (
+        <p className="text-sm text-red-500">Could not load analytics. Pick a plan with a known subject.</p>
+      ) : data === null ? <Skeletons /> : (
+        <div className="space-y-3">
+          <p className="text-xs text-navy-400">Planned vs taught vs assessed for this class &amp; subject.</p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <Stat label="Planned" value={data.totalPlans} />
+            <Stat label="Taught" value={`${data.taughtPlans} (${data.taughtPct}%)`} />
+            <Stat label="Assessed" value={`${data.assessedPlans} (${data.assessedPct}%)`} />
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <Stat label="Strands covered" value={`${data.uniqueStrandsCovered}/${data.totalStrands} (${data.strandCoveragePct}%)`} />
+            <Stat label="Competencies taught" value={data.uniqueCompetenciesTaught} />
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <Stat label="Plans linked to assessment" value={data.plansLinkedToAssessment} />
+            <Stat label="Objectives assessed" value={data.assessedObjectives} />
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-navy-200 p-3 dark:border-navy-700">
+      <p className="text-lg font-bold text-navy-950 dark:text-white">{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-navy-400">{label}</p>
+    </div>
   );
 }
 
@@ -1541,6 +2020,42 @@ function TimetableGeneratorTab({ canManage }: { canManage: boolean }) {
   }, []);
 
   React.useEffect(() => { load(); }, [load]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      hydratingDraftRef.current = true;
+      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
+      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
+      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
+      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
+      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hydratingDraftRef.current) return;
+    const draft = {
+      savedAt: new Date().toISOString(),
+      timeOffTeacherId,
+      timeOffWindows,
+      combinationForm,
+    };
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
+    } catch {}
+  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
+
+  function clearDraft(showToast = true) {
+    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
+    setDraftMeta({ dirty: false, restored: false });
+    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
+  }
 
   async function generate(force = false) {
     if (!force && !hasConfiguredConstraints) {
@@ -1587,6 +2102,24 @@ function TimetableGeneratorTab({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-6 text-left">
+      <Card className="border border-amber-100 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/10">
+        <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">Draft resume protection</p>
+            <p className="mt-1 text-sm text-navy-700 dark:text-navy-200">
+              If you leave this screen midway, NEYO restores your unfinished teacher time-off and combination setup when you return.
+            </p>
+            <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
+              {draftMeta.savedAt ? `Last saved locally: ${new Date(draftMeta.savedAt).toLocaleString()}` : "No local draft saved yet."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {draftMeta.restored && <Badge tone="blue">Draft restored</Badge>}
+            {draftMeta.dirty && <Badge tone="amber">Unsaved setup protected</Badge>}
+            <Button size="sm" variant="secondary" onClick={() => clearDraft()}><RotateCcw className="h-4 w-4" /> Clear saved draft</Button>
+          </div>
+        </CardContent>
+      </Card>
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Subject Weights Constraints Editor Card */}
         <Card className="lg:col-span-2">
@@ -1716,6 +2249,547 @@ function TimetableGeneratorTab({ canManage }: { canManage: boolean }) {
       )}
     </div>
   );
+}
+
+
+function TimetableEngineTab({ canManage, schoolLevelActivation }: { canManage: boolean; schoolLevelActivation?: { isSeniorSchool: boolean; isJuniorSchool: boolean; isMixedSchool: boolean; educationLevelsOffered: string[] } }) {
+  const { toast } = useToast();
+  const DRAFT_KEY = "neyo-smart-timetable-draft-v1";
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [starting, setStarting] = React.useState(false);
+  const [payload, setPayload] = React.useState<any>(null);
+  const [job, setJob] = React.useState<any>(null);
+  const [classes, setClasses] = React.useState<any[]>([]);
+  const [subjects, setSubjects] = React.useState<any[]>([]);
+  const [teachers, setTeachers] = React.useState<any[]>([]);
+  const [classNeeds, setClassNeeds] = React.useState<Record<string, any[]>>({});
+  const [timeOffTeacherId, setTimeOffTeacherId] = React.useState("");
+  const [timeOffWindows, setTimeOffWindows] = React.useState([{ dayOfWeek: 1, period: 1, note: "" }]);
+  const [combinationForm, setCombinationForm] = React.useState<any>({
+    id: "",
+    name: "",
+    subjectId: "",
+    teacherId: "",
+    lessonsPerWeek: 4,
+    doubleCount: 0,
+    scope: "SELECTED",
+    source: "MANUAL",
+    classIds: [] as string[],
+  });
+  const [draftMeta, setDraftMeta] = React.useState<{ savedAt?: string; dirty: boolean; restored: boolean }>({ dirty: false, restored: false });
+  const pollRef = React.useRef<any>(null);
+  const hydratingDraftRef = React.useRef(false);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [engineRes, generatorRes, jobRes, teacherRes] = await Promise.all([
+        fetch("/api/academics/timetable/engine"),
+        fetch("/api/academics/timetable/generator"),
+        fetch("/api/academics/timetable/generate-job"),
+        fetch("/api/conversations/recipients"),
+      ]);
+      const [engineJson, generatorJson, jobJson, teacherJson] = await Promise.all([
+        engineRes.json(), generatorRes.json(), jobRes.json(), teacherRes.json(),
+      ]);
+      if (!engineJson.ok || !generatorJson.ok) throw new Error("Failed to load timetable engine data.");
+      setPayload(engineJson.data);
+      setJob(jobJson.ok ? jobJson.data.job : null);
+      setClasses(generatorJson.data.classes ?? []);
+      setSubjects((generatorJson.data.subjects ?? []).filter((s: any) => !s.archived));
+      setClassNeeds(generatorJson.data.needsByClassId ?? {});
+      setTeachers((teacherJson.ok ? teacherJson.data.recipients : []).filter((u: any) => ["TEACHER", "CLASS_TEACHER", "HOD", "DEPUTY_PRINCIPAL", "PRINCIPAL", "SCHOOL_OWNER", "DEAN_OF_STUDIES"].includes(u.role)));
+    } catch {
+      toast({ title: "Could not load smart timetable settings.", tone: "error" });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      hydratingDraftRef.current = true;
+      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
+      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
+      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
+      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
+      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hydratingDraftRef.current) return;
+    const draft = {
+      savedAt: new Date().toISOString(),
+      timeOffTeacherId,
+      timeOffWindows,
+      combinationForm,
+    };
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
+    } catch {}
+  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
+
+  function clearDraft(showToast = true) {
+    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
+    setDraftMeta({ dirty: false, restored: false });
+    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
+  }
+
+  React.useEffect(() => {
+    if (!job || !["QUEUED", "RUNNING"].includes(job.status)) {
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+      return;
+    }
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/academics/timetable/generate-job?jobId=${job.id}`);
+        const json = await res.json();
+        if (json.ok) {
+          setJob(json.data.job);
+          if (!["QUEUED", "RUNNING"].includes(json.data.job?.status)) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+            load();
+          }
+        }
+      } catch {}
+    }, 2000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [job, load]);
+
+  async function saveNeed(classId: string, subjectId: string, patch: any) {
+    setSaving(true);
+    try {
+      const current = (classNeeds[classId] ?? []).find((n: any) => n.subjectId === subjectId) ?? {};
+      const body = {
+        action: "save_need",
+        classId,
+        subjectId,
+        lessonsPerWeek: Number(patch.lessonsPerWeek ?? current.lessonsPerWeek ?? 0),
+        teacherId: patch.teacherId ?? current.teacherId ?? null,
+        doubleCount: Number(patch.doubleCount ?? current.doubleCount ?? 0),
+        allowSplitDouble: Boolean(patch.allowSplitDouble ?? current.allowSplitDouble ?? false),
+      };
+      const res = await fetch("/api/academics/timetable/generator", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || "Failed");
+      await load();
+      toast({ title: "Class subject need saved", tone: "success" });
+    } catch (e: any) {
+      toast({ title: e?.message || "Could not save class subject need.", tone: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveConstraint(constraint: any) {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/academics/timetable/engine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upsert_constraint", ...constraint }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || "Failed");
+      await load();
+      toast({ title: "Constraint saved", tone: "success" });
+    } catch (e: any) {
+      toast({ title: e?.message || "Could not save constraint.", tone: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveTimeOff() {
+    if (!timeOffTeacherId) {
+      toast({ title: "Choose a teacher first.", tone: "error" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const windows = timeOffWindows.map((w) => ({ dayOfWeek: Number(w.dayOfWeek), period: Number(w.period), note: w.note || undefined }));
+      const res = await fetch("/api/academics/timetable/engine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save_timeoff", teacherId: timeOffTeacherId, windows }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || "Failed");
+      await load();
+      clearDraft(false);
+      toast({ title: "Teacher time-off saved", tone: "success" });
+    } catch (e: any) {
+      toast({ title: e?.message || "Could not save teacher time-off.", tone: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveCombination() {
+    if (!combinationForm.name || !combinationForm.subjectId) {
+      toast({ title: "Combination needs a name and subject.", tone: "error" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/academics/timetable/engine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "upsert_combination", ...combinationForm, lessonsPerWeek: Number(combinationForm.lessonsPerWeek), doubleCount: Number(combinationForm.doubleCount) }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || "Failed");
+      setCombinationForm({ id: "", name: "", subjectId: "", teacherId: "", lessonsPerWeek: 4, doubleCount: 0, scope: "SELECTED", source: "MANUAL", classIds: [] });
+      await load();
+      clearDraft(false);
+      toast({ title: "Combination group saved", tone: "success" });
+    } catch (e: any) {
+      toast({ title: e?.message || "Could not save combination group.", tone: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteCombination(id: string) {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/academics/timetable/engine", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_combination", id }) });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || "Failed");
+      await load();
+      toast({ title: "Combination group deleted", tone: "success" });
+    } catch (e: any) {
+      toast({ title: e?.message || "Could not delete combination group.", tone: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runMasterButton() {
+    setStarting(true);
+    try {
+      const res = await fetch("/api/academics/timetable/generate-job", { method: "POST" });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || "Failed");
+      setJob(json.data.job);
+      toast({ title: "Timetable generation started", description: "The master button is now building the timetable in the background.", tone: "success" });
+    } catch (e: any) {
+      toast({ title: e?.message || "Could not start timetable generation.", tone: "error" });
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  if (loading || !payload) return <Skeletons />;
+
+  const constraintSummary = (c: any) => {
+    const cfg = c.config ?? {};
+    if (c.kind === "SUBJECT_MORNING") return `Subjects: ${(cfg.subjectIds ?? []).length} · up to period ${cfg.maxPeriod ?? 4}`;
+    if (c.kind === "SUBJECTS_NOT_ADJACENT") return `${cfg.subjectAName ?? "Subject A"} should not follow ${cfg.subjectBName ?? "Subject B"}`;
+    if (c.kind === "PE_TIMESLOT") return `Allowed periods: ${(cfg.allowedPeriods ?? []).join(", ") || "not set"}`;
+    if (c.kind === "TEACHER_TIMEOFF") return "Uses saved teacher blocked windows";
+    if (c.kind === "LESSON_DISTRIBUTION") return `Spread target: ${cfg.minDays ?? 2} days`;
+    if (c.kind === "ONE_SINGLE_PER_DAY") return "At most one single lesson per subject per day";
+    if (c.kind === "SPLIT_DOUBLE_HARD") return `Subjects: ${(cfg.subjectIds ?? []).length}`;
+    return c.label;
+  };
+
+  return (
+    <div className="space-y-6 text-left">
+      <Card className="border border-amber-100 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/10">
+        <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">Draft resume protection</p>
+            <p className="mt-1 text-sm text-navy-700 dark:text-navy-200">
+              If you leave this screen midway, NEYO restores your unfinished teacher time-off and combination setup when you return.
+            </p>
+            <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
+              {draftMeta.savedAt ? `Last saved locally: ${new Date(draftMeta.savedAt).toLocaleString()}` : "No local draft saved yet."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {draftMeta.restored && <Badge tone="blue">Draft restored</Badge>}
+            {draftMeta.dirty && <Badge tone="amber">Unsaved setup protected</Badge>}
+            <Button size="sm" variant="secondary" onClick={() => clearDraft()}><RotateCcw className="h-4 w-4" /> Clear saved draft</Button>
+          </div>
+        </CardContent>
+      </Card>
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="overflow-hidden border border-white/50 bg-white/80 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-950/70">
+          <CardContent className="p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <Badge tone="green">L.7 Smart Timetable Engine</Badge>
+                <h2 className="mt-3 text-xl font-black tracking-tight text-navy-950 dark:text-white">Master button timetable generation</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-navy-500 dark:text-navy-400">
+                  Set the real school rules first, then press one master button. NEYO builds the timetable in the background, shows live progress, respects teacher time-off, avoids clashes, and schedules single, double and combination lessons deterministically.
+                </p>
+              </div>
+              <Button onClick={runMasterButton} disabled={!canManage || starting || ["QUEUED", "RUNNING"].includes(job?.status)} className="h-12 min-w-[220px]">
+                {starting || ["QUEUED", "RUNNING"].includes(job?.status)
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Wand2 className="h-4 w-4" />}
+                {job?.status === "RUNNING" ? "Generating…" : job?.status === "QUEUED" ? "Queued…" : "Start Master Button"}
+              </Button>
+            </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              <StatPill icon={Users} label="Classes" value={String(classes.length)} />
+              <StatPill icon={BookOpen} label="Subjects" value={String(subjects.length)} />
+              <StatPill icon={Clock3} label="Constraints" value={String((payload.constraints ?? []).length)} />
+            </div>
+            {job && (
+              <div className="mt-5 rounded-3xl border border-green-100 bg-green-50/70 p-4 dark:border-green-900/40 dark:bg-green-950/10">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-green-700 dark:text-green-300">Background job</p>
+                    <p className="mt-1 text-sm font-semibold text-navy-800 dark:text-navy-100">{job.phase || job.status}</p>
+                  </div>
+                  <Badge tone={job.status === "DONE" ? "green" : job.status === "FAILED" ? "red" : "blue"}>{job.status}</Badge>
+                </div>
+                <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/80 dark:bg-navy-900">
+                  <div className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all" style={{ width: `${Math.max(3, Number(job.progress ?? 0))}%` }} />
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-navy-600 dark:text-navy-300 md:grid-cols-3">
+                  <div><strong>Progress:</strong> {job.progress ?? 0}%</div>
+                  <div><strong>Slots placed:</strong> {job.slotsPlaced ?? 0}</div>
+                  <div><strong>Warnings:</strong> {(job.warnings ?? []).length}</div>
+                </div>
+                {(job.unplaced ?? []).length > 0 && (
+                  <div className="mt-3 rounded-2xl border border-amber-100 bg-white/80 p-3 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-navy-950/60 dark:text-amber-300">
+                    <strong>Unplaced lessons:</strong> {(job.unplaced ?? []).slice(0, 5).map((u: any) => u.subjectCode || u.classLabel || "item").join(", ")}
+                  </div>
+                )}
+                {job.error && (
+                  <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">{job.error}</div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">What this engine enforces now</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-navy-600 dark:text-navy-300">
+            <FeatureRow icon={ShieldCheck} text="No class double-booking and no teacher double-booking" />
+            <FeatureRow icon={TimerReset} text="Single and double lessons with optional split doubles" />
+            <FeatureRow icon={Link2} text="Combination classes can run once across many classes" />
+            <FeatureRow icon={Ban} text="Teacher time-off and blocked periods are respected" />
+            <FeatureRow icon={Clock3} text="Morning subjects, PE time slots, spread rules, adjacency rules" />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base"><Sliders className="h-5 w-5 text-green-600" /> Constraint settings</CardTitle>
+            <p className="text-xs text-navy-400">Turn timetable rules on or off and tune how the school wants lessons arranged.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {(payload.constraints ?? []).length === 0 && (
+              <EmptyState icon={Sliders} title="No smart constraints saved yet" description="Create timetable rules below. The engine already supports lessons-per-week, doubles, combinations and teacher time-off." />
+            )}
+            {(payload.constraints ?? []).map((constraint: any) => (
+              <div key={constraint.id} className="rounded-2xl border border-navy-100 p-4 dark:border-navy-800">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">{constraint.label}</p>
+                    <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">{constraintSummary(constraint)}</p>
+                  </div>
+                  <Badge tone={constraint.enabled ? "green" : "neutral"}>{constraint.enabled ? "Enabled" : "Off"}</Badge>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" disabled={saving} onClick={() => saveConstraint({ ...constraint, enabled: !constraint.enabled, config: constraint.config })}>{constraint.enabled ? "Turn off" : "Turn on"}</Button>
+                  <Button size="sm" variant="secondary" disabled={saving} onClick={() => {
+                    const minDays = Number((constraint.config?.minDays ?? 2)) + 1;
+                    saveConstraint({ ...constraint, config: { ...(constraint.config ?? {}), minDays: Math.min(5, minDays) } });
+                  }}>Tune</Button>
+                </div>
+              </div>
+            ))}
+            <div className="rounded-2xl border border-dashed border-navy-200 p-4 dark:border-navy-700">
+              <p className="text-xs font-bold uppercase tracking-widest text-navy-400">Quick add rules</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  { kind: "SUBJECT_MORNING", label: "Math in morning", config: { maxPeriod: 4 } },
+                  { kind: "SUBJECTS_NOT_ADJACENT", label: "English and Kiswahili apart", config: {} },
+                  { kind: "LESSON_DISTRIBUTION", label: "Spread lessons", config: { minDays: 2 } },
+                  { kind: "ONE_SINGLE_PER_DAY", label: "One single per day", config: {} },
+                  { kind: "PE_TIMESLOT", label: "PE allowed slots", config: { allowedPeriods: [6, 7, 8] } },
+                ].map((preset) => (
+                  <Button key={preset.kind + preset.label} size="sm" variant="secondary" disabled={saving} onClick={() => saveConstraint({ kind: preset.kind, label: preset.label, enabled: true, config: preset.config })}>{preset.label}</Button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base"><Ban className="h-5 w-5 text-amber-600" /> Teacher time-off</CardTitle>
+            <p className="text-xs text-navy-400">Block days or periods when a teacher should not be scheduled.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label>Teacher</Label>
+              <select value={timeOffTeacherId} onChange={(e) => setTimeOffTeacherId(e.target.value)} className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+                <option value="">Choose teacher…</option>
+                {teachers.map((t: any) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
+              </select>
+            </div>
+            {timeOffWindows.map((w, index) => (
+              <div key={index} className="grid grid-cols-[1fr_1fr_1.4fr_auto] gap-2">
+                <select value={w.dayOfWeek} onChange={(e) => setTimeOffWindows((prev) => prev.map((x, i) => i === index ? { ...x, dayOfWeek: Number(e.target.value) } : x))} className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+                  <option value={0}>All days</option>
+                  {DAY_NAMES.map((d, i) => <option key={d} value={i + 1}>{d}</option>)}
+                </select>
+                <select value={w.period} onChange={(e) => setTimeOffWindows((prev) => prev.map((x, i) => i === index ? { ...x, period: Number(e.target.value) } : x))} className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+                  <option value={0}>Whole day</option>
+                  {Array.from({ length: 8 }, (_, i) => i + 1).map((p) => <option key={p} value={p}>Period {p}</option>)}
+                </select>
+                <Input value={w.note} onChange={(e) => setTimeOffWindows((prev) => prev.map((x, i) => i === index ? { ...x, note: e.target.value } : x))} placeholder="Reason" />
+                <Button size="sm" variant="ghost" onClick={() => setTimeOffWindows((prev) => prev.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            ))}
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setTimeOffWindows((prev) => [...prev, { dayOfWeek: 1, period: 1, note: "" }])}><Plus className="h-4 w-4" /> Add window</Button>
+              <Button size="sm" onClick={saveTimeOff} disabled={saving || !canManage}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save time-off</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base"><Grid3X3 className="h-5 w-5 text-blue-600" /> Class subject lesson requirements</CardTitle>
+            <p className="text-xs text-navy-400">For each class and subject, save lessons per week, number of doubles, split-double preference and teacher.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {classes.slice(0, 6).map((cls: any) => (
+              <div key={cls.id} className="rounded-2xl border border-navy-100 p-4 dark:border-navy-800">
+                <p className="text-sm font-bold text-navy-900 dark:text-white">{cls.level} {cls.stream}</p>
+                <div className="mt-3 space-y-2">
+                  {subjects.slice(0, 8).map((subject: any) => {
+                    const current = (classNeeds[cls.id] ?? []).find((n: any) => n.subjectId === subject.id) ?? {};
+                    return (
+                      <div key={subject.id} className="grid grid-cols-[minmax(120px,1.2fr)_84px_84px_130px_1fr_auto] items-center gap-2 rounded-xl border border-navy-50 p-2 text-xs dark:border-navy-800">
+                        <div>
+                          <p className="font-semibold text-navy-800 dark:text-navy-100">{subject.name}</p>
+                          <p className="text-[10px] text-navy-400">{subject.code}</p>
+                        </div>
+                        <Input type="number" min={0} max={12} defaultValue={current.lessonsPerWeek ?? 0} onBlur={(e) => saveNeed(cls.id, subject.id, { lessonsPerWeek: e.target.value })} />
+                        <Input type="number" min={0} max={6} defaultValue={current.doubleCount ?? 0} onBlur={(e) => saveNeed(cls.id, subject.id, { doubleCount: e.target.value })} />
+                        <label className="flex items-center gap-2 text-xs text-navy-600 dark:text-navy-300"><input type="checkbox" defaultChecked={Boolean(current.allowSplitDouble)} onChange={(e) => saveNeed(cls.id, subject.id, { allowSplitDouble: e.target.checked })} /> Split double</label>
+                        <select defaultValue={current.teacherId ?? ""} onChange={(e) => saveNeed(cls.id, subject.id, { teacherId: e.target.value || null })} className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+                          <option value="">Teacher…</option>
+                          {teachers.map((t: any) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
+                        </select>
+                        <Badge tone={(current.lessonsPerWeek ?? 0) > 0 ? "green" : "neutral"}>{(current.lessonsPerWeek ?? 0) > 0 ? "Saved" : "Empty"}</Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {classes.length > 6 && <p className="text-xs text-navy-400">Showing first 6 classes for speed. The same save flow works for the rest through the existing Timetable Generator tab.</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base"><Link2 className="h-5 w-5 text-purple-600" /> Combination classes</CardTitle>
+            <p className="text-xs text-navy-400">Handle grouped lessons for whole school combinations or selected classes only.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-3 rounded-2xl border border-navy-100 p-4 dark:border-navy-800">
+              <Input value={combinationForm.name} onChange={(e) => setCombinationForm((p: any) => ({ ...p, name: e.target.value }))} placeholder="e.g. Combined Physics" />
+              <div className="grid grid-cols-2 gap-2">
+                <select value={combinationForm.subjectId} onChange={(e) => setCombinationForm((p: any) => ({ ...p, subjectId: e.target.value }))} className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+                  <option value="">Subject…</option>
+                  {subjects.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <select value={combinationForm.teacherId} onChange={(e) => setCombinationForm((p: any) => ({ ...p, teacherId: e.target.value }))} className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+                  <option value="">Teacher…</option>
+                  {teachers.map((t: any) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Input type="number" min={1} max={12} value={combinationForm.lessonsPerWeek} onChange={(e) => setCombinationForm((p: any) => ({ ...p, lessonsPerWeek: Number(e.target.value) }))} placeholder="Lessons / week" />
+                <Input type="number" min={0} max={6} value={combinationForm.doubleCount} onChange={(e) => setCombinationForm((p: any) => ({ ...p, doubleCount: Number(e.target.value) }))} placeholder="Double lessons" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <select value={combinationForm.scope} onChange={(e) => setCombinationForm((p: any) => ({ ...p, scope: e.target.value }))} className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+                  <option value="SELECTED">Selected classes only</option>
+                  <option value="GLOBAL">Whole class group</option>
+                </select>
+                <select value={combinationForm.source} onChange={(e) => setCombinationForm((p: any) => ({ ...p, source: e.target.value }))} className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+                  <option value="MANUAL">School-defined classes</option>
+                  <option value="SUBJECT_CHOICE">Use student subject choices</option>
+                </select>
+              </div>
+              <div className="max-h-36 overflow-y-auto rounded-2xl border border-navy-100 p-3 dark:border-navy-800">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-navy-400">Member classes</p>
+                <div className="space-y-2">
+                  {classes.map((cls: any) => {
+                    const checked = combinationForm.classIds.includes(cls.id);
+                    return (
+                      <label key={cls.id} className="flex items-center gap-2 text-sm text-navy-700 dark:text-navy-200">
+                        <input type="checkbox" checked={checked} onChange={(e) => setCombinationForm((p: any) => ({ ...p, classIds: e.target.checked ? [...p.classIds, cls.id] : p.classIds.filter((id: string) => id !== cls.id) }))} />
+                        <span>{cls.level} {cls.stream}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <Button onClick={saveCombination} disabled={saving || !canManage}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save combination group</Button>
+            </div>
+            <div className="space-y-2">
+              {(payload.combinations ?? []).map((group: any) => (
+                <div key={group.id} className="rounded-2xl border border-navy-100 p-3 dark:border-navy-800">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-navy-900 dark:text-white">{group.name}</p>
+                      <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">{group.lessonsPerWeek} lessons/week · {group.doubleCount} doubles · {group.source} · {group.scope}</p>
+                      <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">{(group.members ?? []).length} class members</p>
+                    </div>
+                    <Button size="sm" variant="ghost" disabled={saving || !canManage} onClick={() => deleteCombination(group.id)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function StatPill({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-navy-100 bg-white/70 px-4 py-3 dark:border-navy-800 dark:bg-navy-950/60">
+      <div className="flex items-center gap-2 text-navy-500 dark:text-navy-400"><Icon className="h-4 w-4" /><span className="text-xs font-semibold uppercase tracking-widest">{label}</span></div>
+      <p className="mt-2 text-2xl font-black tracking-tight text-navy-950 dark:text-white">{value}</p>
+    </div>
+  );
+}
+
+function FeatureRow({ icon: Icon, text }: { icon: any; text: string }) {
+  return <div className="flex items-start gap-2"><Icon className="mt-0.5 h-4 w-4 text-green-600" /><p>{text}</p></div>;
 }
 
 function TeacherSubjectsModal({ teacherId, subjects, currentSubjectIds, onClose, onSaved }: {
@@ -2364,6 +3438,24 @@ function DutyRosterTab({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-6 text-left">
+      <Card className="border border-amber-100 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/10">
+        <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">Draft resume protection</p>
+            <p className="mt-1 text-sm text-navy-700 dark:text-navy-200">
+              If you leave this screen midway, NEYO restores your unfinished teacher time-off and combination setup when you return.
+            </p>
+            <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
+              {draftMeta.savedAt ? `Last saved locally: ${new Date(draftMeta.savedAt).toLocaleString()}` : "No local draft saved yet."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {draftMeta.restored && <Badge tone="blue">Draft restored</Badge>}
+            {draftMeta.dirty && <Badge tone="amber">Unsaved setup protected</Badge>}
+            <Button size="sm" variant="secondary" onClick={() => clearDraft()}><RotateCcw className="h-4 w-4" /> Clear saved draft</Button>
+          </div>
+        </CardContent>
+      </Card>
       <Card className="print:hidden">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -2510,7 +3602,7 @@ function StudentDutyRosterClient({ canManage }: { canManage: boolean }) {
             <CardContent className="p-4">
               <h4 className="font-bold">{a.name}</h4>
               <div className="flex gap-2 mt-2">
-                <Badge variant="outline" className="text-[10px]">{a.genderConstraint}</Badge>
+                <Badge variant="secondary" className="text-[10px]">{a.genderConstraint}</Badge>
                 <Badge variant="secondary" className="text-[10px]">Max: {a.maxStudents}</Badge>
               </div>
               <p className="text-[10px] text-navy-400 mt-3 italic">Automatically excludes health-conditioned students & school leaders.</p>
@@ -2598,12 +3690,856 @@ function BulkConfigDialog({ data, onClose, onDone }: any) {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="rounded-full bg-blue-600 hover:bg-blue-700 text-white">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply Rules"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type ExamPaper = { id: string; subjectId: string; classId?: string | null; name: string; outOfMarks: number; weightPct: number };
+type ExamSlotRow = {
+  id: string;
+  classId: string;
+  subjectId: string;
+  examName: string;
+  paperName?: string | null;
+  examDate: string;
+  startTime: string;
+  endTime: string;
+  venue?: string | null;
+  targetScope: string;
+  targetJson?: string | null;
+  invigilatorScope?: string;
+  eligibleInvigilators?: { teacherId: string; teacherName: string }[];
+  invigilators?: { teacherId: string; teacherName: string; warning?: string }[];
+  warnings?: string[];
+  notes?: string | null;
+};
+
+function ExamTimetableTab({ canManage }: { canManage: boolean }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [setup, setSetup] = React.useState<{ slots: ExamSlotRow[]; papers: ExamPaper[]; classes: ClassOpt[]; subjects: Subject[]; streamGroups: { id: string; label: string; classIds: string[] }[]; combinationGroups: { id: string; label: string; classIds: string[]; subjectId: string; source: string; scope: string }[] } | null>(null);
+  const [teachers, setTeachers] = React.useState<Staff[]>([]);
+  const [examName, setExamName] = React.useState('Midterm');
+  const [editingSlotId, setEditingSlotId] = React.useState<string | null>(null);
+  const [form, setForm] = React.useState<any>({
+    classId: '',
+    subjectId: '',
+    paperConfigId: '',
+    paperName: 'PP1',
+    examDate: '',
+    startTime: '08:00',
+    endTime: '10:00',
+    venue: '',
+    targetScope: 'CLASS',
+    targetIds: [] as string[],
+    invigilatorScope: 'AUTO',
+    eligibleInvigilatorIds: [] as string[],
+    notes: '',
+  });
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [setupRes, teacherRes] = await Promise.all([
+        fetch('/api/academics/exam-timetable'),
+        fetch('/api/conversations/recipients'),
+      ]);
+      const [setupJson, teacherJson] = await Promise.all([setupRes.json(), teacherRes.json()]);
+      if (!setupJson.ok) throw new Error(setupJson.error?.message || 'Could not load exam timetable setup.');
+      setSetup(setupJson.data);
+      if (teacherJson.ok) {
+        setTeachers((teacherJson.data.recipients ?? []).filter((u: any) => ['TEACHER', 'CLASS_TEACHER', 'HOD', 'DEPUTY_PRINCIPAL', 'DEAN_OF_STUDIES'].includes(u.role)));
+      }
+      const latestExam = setupJson.data.slots?.[0]?.examName;
+      if (latestExam) setExamName(latestExam);
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not load exam timetable.', tone: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  React.useEffect(() => {
+    if (!setup?.classes?.length) return;
+    setForm((prev: any) => ({
+      ...prev,
+      classId: prev.classId || setup.classes[0].id,
+      targetIds: prev.targetIds?.length ? prev.targetIds : [setup.classes[0].id],
+    }));
+  }, [setup]);
+
+  const filteredPapers = React.useMemo(() => {
+    if (!setup) return [];
+    return setup.papers.filter((p) => p.subjectId === form.subjectId && (!p.classId || p.classId === form.classId));
+  }, [setup, form.subjectId, form.classId]);
+
+  const selectedCombinationGroups = React.useMemo(() => {
+    if (!setup || form.targetScope !== 'COMBINATION') return [];
+    return setup.combinationGroups.filter((group) => group.classIds.length > 0 && group.classIds.every((id) => form.targetIds.includes(id)));
+  }, [setup, form.targetScope, form.targetIds]);
+
+  function resetForm() {
+    setEditingSlotId(null);
+    setForm({
+      classId: setup?.classes?.[0]?.id || '',
+      subjectId: '',
+      paperConfigId: '',
+      paperName: 'PP1',
+      examDate: '',
+      startTime: '08:00',
+      endTime: '10:00',
+      venue: '',
+      targetScope: 'CLASS',
+      targetIds: setup?.classes?.[0]?.id ? [setup.classes[0].id] : [],
+      invigilatorScope: 'AUTO',
+      eligibleInvigilatorIds: [],
+      notes: '',
+    });
+  }
+
+  function startEdit(slot: ExamSlotRow) {
+    setEditingSlotId(slot.id);
+    setExamName(slot.examName || '');
+    setForm({
+      classId: slot.classId || '',
+      subjectId: slot.subjectId || '',
+      paperConfigId: slot.paperConfigId || '',
+      paperName: slot.paperName || 'PP1',
+      examDate: slot.examDate || '',
+      startTime: slot.startTime || '08:00',
+      endTime: slot.endTime || '10:00',
+      venue: slot.venue || '',
+      targetScope: slot.targetScope || 'CLASS',
+      targetIds: Array.isArray((slot as any).targetIds) ? (slot as any).targetIds : Array.isArray(slot.targetJson) ? slot.targetJson : [],
+      invigilatorScope: slot.invigilatorScope || 'AUTO',
+      eligibleInvigilatorIds: (slot.eligibleInvigilators ?? []).map((t) => t.teacherId),
+      notes: slot.notes || '',
+    });
+  }
+
+  async function saveSlot() {
+    if (!form.classId || !form.subjectId || !examName || !form.examDate || !form.startTime || !form.endTime) {
+      toast({ title: 'Fill exam name, class, subject, date and time first.', tone: 'error' });
+      return;
+    }
+    if (form.startTime >= form.endTime) {
+      toast({ title: 'End time must be after start time.', tone: 'error' });
+      return;
+    }
+    if (form.targetScope !== 'CLASS' && (!form.targetIds || form.targetIds.length === 0)) {
+      toast({ title: 'Select at least one target group for this exam slot.', tone: 'error' });
+      return;
+    }
+    if (form.targetScope === 'COMBINATION' && selectedCombinationGroups.length === 0) {
+      toast({ title: 'Choose at least one real combination group for this subject.', tone: 'error' });
+      return;
+    }
+    if (form.invigilatorScope === 'ELIGIBLE_ONLY' && (!form.eligibleInvigilatorIds || form.eligibleInvigilatorIds.length === 0)) {
+      toast({ title: 'Pick at least one eligible invigilator or switch back to Auto.', tone: 'error' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/academics/exam-timetable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_slot',
+          id: editingSlotId,
+          examName,
+          classId: form.classId,
+          subjectId: form.subjectId,
+          paperConfigId: form.paperConfigId || null,
+          paperName: form.paperName || null,
+          examDate: form.examDate,
+          startTime: form.startTime,
+          endTime: form.endTime,
+          venue: form.venue || null,
+          targetScope: form.targetScope,
+          targetIds: form.targetIds?.length ? form.targetIds : [form.classId],
+          invigilatorScope: form.invigilatorScope,
+          eligibleInvigilatorIds: form.eligibleInvigilatorIds,
+          notes: form.notes || null,
+        }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Could not save exam slot.');
+      toast({ title: editingSlotId ? 'Exam timetable slot updated' : 'Exam timetable slot saved', tone: 'success' });
+      await load();
+      resetForm();
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not save exam slot.', tone: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function generateInvigilators() {
+    if (!examName) {
+      toast({ title: 'Enter exam name first.', tone: 'error' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/academics/exam-timetable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generate_invigilators', examName }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Could not generate invigilators.');
+      toast({ title: `Invigilators generated for ${examName}`, tone: 'success' });
+      await load();
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not generate invigilators.', tone: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveInvigilatorPool(slotId: string, scope: string, teacherIds: string[]) {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/academics/exam-timetable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_invigilator_pool', examName, slotId, invigilatorScope: scope, eligibleInvigilatorIds: teacherIds }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Could not save eligible invigilator pool.');
+      toast({ title: 'Eligible invigilator pool saved', tone: 'success' });
+      await load();
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not save eligible invigilator pool.', tone: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteSlot(slotId: string) {
+    if (typeof window !== 'undefined' && !window.confirm('Delete this exam slot? This removes the saved paper and its generated invigilator assignment.')) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/academics/exam-timetable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_slot', id: slotId }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Could not delete exam slot.');
+      toast({ title: 'Exam slot deleted', tone: 'success' });
+      if (editingSlotId === slotId) resetForm();
+      await load();
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not delete exam slot.', tone: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading || !setup) return <Skeletons />;
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <Badge tone="green">Exam papers + invigilators</Badge>
+              <h2 className="mt-2 text-lg font-black tracking-tight text-navy-950 dark:text-navy-50">Exam timetable builder</h2>
+              <p className="mt-1 max-w-3xl text-sm text-navy-500 dark:text-navy-400">
+                Set exam papers by day and time, choose PP1 / PP2 / PP3 / Theory / Practical, target classes or groups, define the eligible invigilator pool, then let NEYO generate with honest fallback warnings when no fully free invigilator exists.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Input value={examName} onChange={(e) => setExamName(e.target.value)} placeholder="e.g. Midterm 2026" className="min-w-[180px]" />
+              <Button onClick={generateInvigilators} disabled={!canManage || saving}><Sparkles className="h-4 w-4" /> Generate Invigilators</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">{editingSlotId ? 'Edit exam slot' : 'Add exam slot'}</CardTitle>
+                <p className="text-xs text-navy-400">Use this to set the paper, timing, target class/group, and the eligible invigilator pool.</p>
+              </div>
+              {editingSlotId && (
+                <Button variant="ghost" size="sm" onClick={resetForm} disabled={saving}>
+                  <X className="h-4 w-4" /> Cancel edit
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Class</Label>
+                <select value={form.classId} onChange={(e) => setForm((p: any) => ({ ...p, classId: e.target.value, targetIds: p.targetScope === 'CLASS' ? [e.target.value] : p.targetIds }))} className={selectClass}>
+                  <option value="">Choose class…</option>
+                  {setup.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>Subject</Label>
+                <select value={form.subjectId} onChange={(e) => setForm((p: any) => ({ ...p, subjectId: e.target.value, paperConfigId: '', targetIds: p.targetScope === 'COMBINATION' ? [] : p.targetIds }))} className={selectClass}>
+                  <option value="">Choose subject…</option>
+                  {setup.subjects.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Paper type</Label>
+                <select value={form.paperName} onChange={(e) => setForm((p: any) => ({ ...p, paperName: e.target.value }))} className={selectClass}>
+                  {['PP1', 'PP2', 'PP3', 'Theory', 'Practical'].map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>Paper config (optional)</Label>
+                <select value={form.paperConfigId} onChange={(e) => setForm((p: any) => ({ ...p, paperConfigId: e.target.value }))} className={selectClass}>
+                  <option value="">None</option>
+                  {filteredPapers.map((paper) => <option key={paper.id} value={paper.id}>{paper.name} · {paper.weightPct}%</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label>Date</Label><Input type="date" value={form.examDate} onChange={(e) => setForm((p: any) => ({ ...p, examDate: e.target.value }))} /></div>
+              <div><Label>Venue</Label><Input value={form.venue} onChange={(e) => setForm((p: any) => ({ ...p, venue: e.target.value }))} placeholder="Hall / Lab / Room" /></div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label>Starts</Label><Input type="time" value={form.startTime} onChange={(e) => setForm((p: any) => ({ ...p, startTime: e.target.value }))} /></div>
+              <div><Label>Ends</Label><Input type="time" value={form.endTime} onChange={(e) => setForm((p: any) => ({ ...p, endTime: e.target.value }))} /></div>
+            </div>
+
+            <div>
+              <Label>Target scope</Label>
+              <select value={form.targetScope} onChange={(e) => setForm((p: any) => ({ ...p, targetScope: e.target.value, targetIds: e.target.value === 'CLASS' ? (p.classId ? [p.classId] : []) : [] }))} className={selectClass}>
+                <option value="CLASS">Single class</option>
+                <option value="STREAM_GROUP">Multiple classes / streams</option>
+                <option value="COMBINATION">Combination group</option>
+              </select>
+
+              {form.targetScope === 'CLASS' && (
+                <div className="mt-2 rounded-xl border border-navy-100 p-3 dark:border-navy-800">
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-navy-400">Target class</p>
+                  <p className="text-xs text-navy-600 dark:text-navy-300">This paper will target the selected class above: <span className="font-bold">{setup.classes.find((c) => c.id === form.classId)?.name || 'No class selected'}</span></p>
+                </div>
+              )}
+
+              {form.targetScope === 'STREAM_GROUP' && (
+                <div className="mt-2 rounded-xl border border-navy-100 p-3 dark:border-navy-800">
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-navy-400">Target stream groups</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {setup.streamGroups.map((group) => {
+                      const checked = group.classIds.length > 0 && group.classIds.every((id) => form.targetIds.includes(id));
+                      return (
+                        <label key={group.id} className="flex items-start gap-2 text-xs text-navy-700 dark:text-navy-200">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => setForm((p: any) => ({
+                              ...p,
+                              targetIds: e.target.checked
+                                ? [...new Set([...p.targetIds, ...group.classIds])]
+                                : p.targetIds.filter((id: string) => !group.classIds.includes(id)),
+                            }))}
+                          />
+                          <span>
+                            <span className="font-semibold">{group.label}</span>
+                            <span className="block text-[11px] text-navy-400">{group.classIds.map((id) => setup.classes.find((c) => c.id === id)?.name).filter(Boolean).join(', ') || 'No classes linked'}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {form.targetScope === 'COMBINATION' && (() => {
+                const subjectCombinationGroups = setup.combinationGroups.filter((group) => !form.subjectId || group.subjectId === form.subjectId);
+                return (
+                  <div className="mt-2 rounded-xl border border-navy-100 p-3 dark:border-navy-800">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-navy-400">Target combination groups</p>
+                    <p className="mb-2 text-[11px] text-navy-400">Now using real saved combination groups for the selected subject where available.</p>
+                    {selectedCombinationGroups.length > 0 && <p className="mb-2 text-[11px] text-green-700 dark:text-green-300">Selected: {selectedCombinationGroups.map((group) => group.label).join(', ')}</p>}
+                    {subjectCombinationGroups.length === 0 ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+                        No active combination group exists yet for this subject. Create the combination group first, then come back and target it here.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-2">
+                        {subjectCombinationGroups.map((group) => {
+                          const checked = group.classIds.length > 0 && group.classIds.every((id) => form.targetIds.includes(id));
+                          return (
+                            <label key={group.id} className="flex items-start gap-2 text-xs text-navy-700 dark:text-navy-200">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => setForm((p: any) => ({
+                                  ...p,
+                                  targetIds: e.target.checked
+                                    ? [...new Set([...p.targetIds, ...group.classIds])]
+                                    : p.targetIds.filter((id: string) => !group.classIds.includes(id)),
+                                }))}
+                              />
+                              <span>
+                                <span className="font-semibold">{group.label}</span>
+                                <span className="block text-[11px] text-navy-400">{group.scope} · {group.source} · {(group.classIds ?? []).map((id) => setup.classes.find((c) => c.id === id)?.name).filter(Boolean).join(', ') || 'No classes linked'}</span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div>
+              <Label>Invigilator pool mode</Label>
+              <select value={form.invigilatorScope} onChange={(e) => setForm((p: any) => ({ ...p, invigilatorScope: e.target.value, eligibleInvigilatorIds: e.target.value === 'AUTO' ? [] : p.eligibleInvigilatorIds }))} className={selectClass}>
+                <option value="AUTO">Auto from all eligible staff</option>
+                <option value="ELIGIBLE_ONLY">Only selected eligible invigilators</option>
+              </select>
+            </div>
+
+            <div>
+              <Label>Eligible invigilators</Label>
+              <div className="mt-2 max-h-36 overflow-y-auto rounded-xl border border-navy-100 p-3 dark:border-navy-800">
+                {form.invigilatorScope === 'AUTO' && <p className="mb-2 text-[11px] text-navy-400">Auto mode uses the full eligible staff pool and ignores the checkbox list below until you switch to Eligible Only.</p>}
+                <div className="space-y-2">
+                  {teachers.map((t) => {
+                    const checked = form.eligibleInvigilatorIds.includes(t.id);
+                    return (
+                      <label key={t.id} className="flex items-center gap-2 text-xs text-navy-700 dark:text-navy-200">
+                        <input type="checkbox" disabled={form.invigilatorScope === 'AUTO'} checked={checked} onChange={(e) => setForm((p: any) => ({ ...p, eligibleInvigilatorIds: e.target.checked ? [...new Set([...p.eligibleInvigilatorIds, t.id])] : p.eligibleInvigilatorIds.filter((id: string) => id !== t.id) }))} />
+                        <span>{t.fullName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div><Label>Notes</Label><Input value={form.notes} onChange={(e) => setForm((p: any) => ({ ...p, notes: e.target.value }))} placeholder="Optional exam note" /></div>
+
+            <Button onClick={saveSlot} disabled={!canManage || saving} className="w-full">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {editingSlotId ? 'Update Exam Slot' : 'Save Exam Slot'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Saved exam timetable</CardTitle>
+            <p className="text-xs text-navy-400">See papers, generated invigilators, pool rules, and fallback warnings in one place.</p>
+          </CardHeader>
+          <CardContent>
+            {setup.slots.length === 0 ? (
+              <EmptyState icon={ClipboardList} title="No exam slots yet" description="Save the first paper on the left, then generate invigilators." />
+            ) : (() => {
+              const visibleSlots = setup.slots.filter((slot) => !examName || slot.examName === examName);
+              return visibleSlots.length === 0 ? (
+                <EmptyState icon={ClipboardList} title="No slots for this exam name yet" description="Change the exam name above or save a new paper for this exam." />
+              ) : (
+                <div className="space-y-3 max-h-[760px] overflow-y-auto pr-1">
+                  {visibleSlots.map((slot) => (
+                    <ExamSlotCard key={slot.id} slot={slot} classes={setup.classes} subjects={setup.subjects} teachers={teachers} onSavePool={saveInvigilatorPool} onEdit={startEdit} onDelete={deleteSlot} busy={saving} />
+                  ))}
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function ExamSlotCard({ slot, classes, subjects, teachers, onSavePool, onEdit, onDelete, busy }: {
+  slot: ExamSlotRow;
+  classes: ClassOpt[];
+  subjects: Subject[];
+  teachers: Staff[];
+  onSavePool: (slotId: string, scope: string, teacherIds: string[]) => Promise<void>;
+  onEdit: (slot: ExamSlotRow) => void;
+  onDelete: (slotId: string) => Promise<void>;
+  busy: boolean;
+}) {
+  const [scope, setScope] = React.useState(slot.invigilatorScope || 'AUTO');
+  const [teacherIds, setTeacherIds] = React.useState<string[]>((slot.eligibleInvigilators ?? []).map((t) => t.teacherId));
+  const className = classes.find((c) => c.id === slot.classId)?.name || 'Class';
+  const subjectName = subjects.find((s) => s.id === slot.subjectId)?.name || 'Subject';
+
+  React.useEffect(() => {
+    setScope(slot.invigilatorScope || 'AUTO');
+    setTeacherIds((slot.eligibleInvigilators ?? []).map((t) => t.teacherId));
+  }, [slot.id, slot.invigilatorScope, JSON.stringify(slot.eligibleInvigilators ?? [])]);
+
+  return (
+    <div className="rounded-2xl border border-navy-100 p-4 dark:border-navy-800">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-bold text-navy-950 dark:text-navy-50">{slot.examName} · {subjectName} · {slot.paperName || 'Paper'}</p>
+            <Badge tone="blue">{className}</Badge>
+            <Badge tone="neutral">{slot.targetScope}</Badge>
+          </div>
+          <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">{slot.examDate} · {slot.startTime}–{slot.endTime} · {slot.venue || 'Venue not set'}</p>
+          {(slot.targetIds ?? []).length > 0 && (
+            <p className="mt-1 text-[11px] text-navy-400">Targets: {(slot.targetIds ?? []).map((id) => classes.find((c) => c.id === id)?.name).filter(Boolean).join(', ')}</p>
+          )}
+        </div>
+        <div className="flex items-start gap-2">
+          <div className="text-right text-xs text-navy-500 dark:text-navy-400">
+            <p className="font-semibold">Invigilator mode: {slot.invigilatorScope || 'AUTO'}</p>
+            <p>{(slot.eligibleInvigilators ?? []).length} eligible teacher(s)</p>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => onEdit(slot)} disabled={busy}>
+            Edit
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => onDelete(slot.id)} disabled={busy} className="text-rose-600 hover:text-rose-700">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-xl border border-navy-100 p-3 dark:border-navy-800">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-navy-400">Generated invigilators</p>
+          {(slot.invigilators ?? []).length === 0 ? (
+            <p className="mt-2 text-xs text-navy-400">Not generated yet.</p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              {slot.invigilators?.map((inv) => (
+                <div key={inv.teacherId} className="rounded-lg bg-green-50 px-2 py-2 text-xs text-green-800 dark:bg-green-950/20 dark:text-green-300">
+                  <p className="font-bold">{inv.teacherName}</p>
+                  {inv.warning && <p className="mt-1 text-[11px]">{inv.warning}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+          {(slot.warnings ?? []).length > 0 && (
+            <div className="mt-3 space-y-2">
+              {slot.warnings?.map((warning, index) => (
+                <div key={index} className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+                  {warning}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-navy-100 p-3 dark:border-navy-800">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-navy-400">Eligible invigilator pool</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-[180px_1fr_auto] sm:items-start">
+            <select value={scope} onChange={(e) => setScope(e.target.value)} className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-xs dark:border-navy-700 dark:bg-navy-800">
+              <option value="AUTO">AUTO</option>
+              <option value="ELIGIBLE_ONLY">ELIGIBLE ONLY</option>
+            </select>
+            <div className="max-h-28 overflow-y-auto rounded-xl border border-navy-100 p-2 dark:border-navy-800">
+              <div className="grid grid-cols-1 gap-1">
+                {teachers.map((teacher) => {
+                  const checked = teacherIds.includes(teacher.id);
+                  return (
+                    <label key={teacher.id} className="flex items-center gap-2 text-[11px] text-navy-700 dark:text-navy-200">
+                      <input type="checkbox" checked={checked} onChange={(e) => setTeacherIds((prev) => e.target.checked ? [...new Set([...prev, teacher.id])] : prev.filter((id) => id !== teacher.id))} />
+                      <span>{teacher.fullName}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <Button size="sm" onClick={() => onSavePool(slot.id, scope, teacherIds)} disabled={busy}><Save className="h-4 w-4" /> Save Pool</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+type ExamGeneratorRunRow = {
+  id: string;
+  examName: string;
+  startDate: string;
+  endDate: string;
+  generatedCount: number;
+  classIds: string[];
+  periods: { label: string; startTime: string; endTime: string }[];
+  createdByName: string;
+  createdAt: string;
+};
+
+function ExamAutoGeneratorTab({ canManage }: { canManage: boolean }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [setup, setSetup] = React.useState<{ classes: ClassOpt[]; runs: ExamGeneratorRunRow[] } | null>(null);
+  const [preview, setPreview] = React.useState<any | null>(null);
+  const [form, setForm] = React.useState({
+    examName: schoolLevelActivation?.isSeniorSchool ? 'Senior School Midterm 2026' : schoolLevelActivation?.isJuniorSchool ? 'Junior School Midterm 2026' : 'Auto Midterm 2026',
+    classIds: [] as string[],
+    startDate: '',
+    endDate: '',
+    notes: schoolLevelActivation?.isSeniorSchool ? 'Use richer subject paper structures where configured.' : schoolLevelActivation?.isJuniorSchool ? 'Use subject-selection-aware setup where needed.' : '',
+    autoGenerateInvigilators: true,
+    periods: schoolLevelActivation?.isSeniorSchool ? [
+      { label: 'Morning 1', startTime: '08:00', endTime: '10:00' },
+      { label: 'Morning 2', startTime: '10:30', endTime: '12:30' },
+      { label: 'Afternoon 1', startTime: '14:00', endTime: '16:00' },
+    ] : [
+      { label: 'Morning 1', startTime: '08:00', endTime: '10:00' },
+      { label: 'Morning 2', startTime: '10:30', endTime: '12:30' },
+    ],
+  });
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/academics/exam-timetable/generator');
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Could not load exam auto-generator setup.');
+      setSetup(json.data);
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not load exam auto-generator.', tone: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    if (!setup?.classes?.length) return;
+    setForm((prev) => ({
+      ...prev,
+      classIds: prev.classIds.length ? prev.classIds : [setup.classes[0].id],
+      periods: prev.periods.length ? prev.periods : schoolLevelActivation?.isSeniorSchool
+        ? [
+            { label: 'Morning 1', startTime: '08:00', endTime: '10:00' },
+            { label: 'Morning 2', startTime: '10:30', endTime: '12:30' },
+            { label: 'Afternoon 1', startTime: '14:00', endTime: '16:00' },
+          ]
+        : schoolLevelActivation?.isJuniorSchool
+        ? [
+            { label: 'Morning 1', startTime: '08:00', endTime: '10:00' },
+            { label: 'Morning 2', startTime: '10:30', endTime: '12:30' },
+          ]
+        : prev.periods,
+    }));
+  }, [setup, schoolLevelActivation]);
+
+  async function previewGenerator() {
+    if (!form.examName || !form.startDate || !form.endDate || form.classIds.length === 0) {
+      toast({ title: 'Fill exam name, class selection, and date range first.', tone: 'error' });
+      return;
+    }
+    if (form.periods.some((period) => !period.label || !period.startTime || !period.endTime || period.startTime >= period.endTime)) {
+      toast({ title: 'Each custom exam period needs a valid label and time range.', tone: 'error' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/academics/exam-timetable/generator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, action: 'preview' }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Could not preview exam timetable.');
+      setPreview(json.data);
+      toast({ title: `Preview ready with ${json.data.generatedCount} slot(s)`, tone: 'success' });
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not preview exam timetable.', tone: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runGenerator() {
+    if (!form.examName || !form.startDate || !form.endDate || form.classIds.length === 0) {
+      toast({ title: 'Fill exam name, class selection, and date range first.', tone: 'error' });
+      return;
+    }
+    if (form.periods.some((period) => !period.label || !period.startTime || !period.endTime || period.startTime >= period.endTime)) {
+      toast({ title: 'Each custom exam period needs a valid label and time range.', tone: 'error' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/academics/exam-timetable/generator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, action: 'generate' }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || 'Could not auto-generate exam timetable.');
+      toast({ title: json.data.invigilatorsGenerated ? `Generated ${json.data.generatedCount} exam slot(s) and invigilators` : `Generated ${json.data.generatedCount} exam slot(s)`, tone: 'success' });
+      setPreview(null);
+      await load();
+    } catch (e: any) {
+      toast({ title: e?.message || 'Could not auto-generate exam timetable.', tone: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading || !setup) return <Skeletons />;
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardContent className="p-5">
+          {schoolLevelActivation && (
+            <div className="mb-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 dark:border-green-900/30 dark:bg-green-950/20 dark:text-green-200">
+              <p className="font-semibold">Level-aware Timetable Generation</p>
+              <p className="mt-1 text-xs text-green-800 dark:text-green-300">
+                Exam auto-generation is most relevant where structured subject loads are active. Subject Selection appears only for Junior/Senior School, and Senior Pathways appear only for Senior School.
+              </p>
+            </div>
+          )}
+          <Badge tone="blue">First version</Badge>
+          <h2 className="mt-2 text-lg font-black tracking-tight text-navy-950 dark:text-navy-50">Exam timetable auto-generator</h2>
+          <p className="mt-1 max-w-3xl text-sm text-navy-500 dark:text-navy-400">
+            This version generates exam papers for all subjects already taught in the selected classes, using class/form-aware subject paper design where set. That means one subject can produce multiple papers such as Insha, Oral, Practical, or other custom labels.
+          </p>
+          {schoolLevelActivation?.isSeniorSchool ? (
+            <p className="mt-2 text-xs text-blue-700 dark:text-blue-300">Senior School is active, so the generator expects richer subject-paper structures and pathway-sensitive exam planning later.</p>
+          ) : schoolLevelActivation?.isJuniorSchool ? (
+            <p className="mt-2 text-xs text-blue-700 dark:text-blue-300">Junior School is active, so subject-selection-aware exam planning matters, but full Senior School pathway complexity stays lighter.</p>
+          ) : (
+            <p className="mt-2 text-xs text-blue-700 dark:text-blue-300">For lower levels, the generator stays simpler and avoids unnecessary pathway-heavy complexity.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Build exam run</CardTitle>
+            <p className="text-xs text-navy-400">Set the classes, date range, and custom periods. NEYO will generate the first exam timetable draft for those classes.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label>Exam name</Label>
+              <Input value={form.examName} onChange={(e) => setForm((p) => ({ ...p, examName: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label>Start date</Label><Input type="date" value={form.startDate} onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))} /></div>
+              <div><Label>End date</Label><Input type="date" value={form.endDate} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))} /></div>
+            </div>
+            <div>
+              <Label>Selected classes</Label>
+              <div className="mt-2 max-h-36 overflow-y-auto rounded-xl border border-navy-100 p-3 dark:border-navy-800">
+                <div className="grid grid-cols-2 gap-2">
+                  {setup.classes.map((klass) => {
+                    const checked = form.classIds.includes(klass.id);
+                    return (
+                      <label key={klass.id} className="flex items-center gap-2 text-xs text-navy-700 dark:text-navy-200">
+                        <input type="checkbox" checked={checked} onChange={(e) => setForm((p) => ({ ...p, classIds: e.target.checked ? [...new Set([...p.classIds, klass.id])] : p.classIds.filter((id) => id !== klass.id) }))} />
+                        <span>{klass.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label>Custom exam periods</Label>
+              <div className="mt-2 space-y-2">
+                {form.periods.map((period, index) => (
+                  <div key={index} className="grid grid-cols-[1.1fr_0.9fr_0.9fr_auto] gap-2">
+                    <Input value={period.label} onChange={(e) => setForm((p) => ({ ...p, periods: p.periods.map((item, i) => i === index ? { ...item, label: e.target.value } : item) }))} placeholder="Morning 1" />
+                    <Input type="time" value={period.startTime} onChange={(e) => setForm((p) => ({ ...p, periods: p.periods.map((item, i) => i === index ? { ...item, startTime: e.target.value } : item) }))} />
+                    <Input type="time" value={period.endTime} onChange={(e) => setForm((p) => ({ ...p, periods: p.periods.map((item, i) => i === index ? { ...item, endTime: e.target.value } : item) }))} />
+                    <Button variant="ghost" onClick={() => setForm((p) => ({ ...p, periods: p.periods.length > 1 ? p.periods.filter((_, i) => i !== index) : p.periods }))}>Remove</Button>
+                  </div>
+                ))}
+                <Button variant="secondary" onClick={() => setForm((p) => ({ ...p, periods: [...p.periods, { label: `Period ${p.periods.length + 1}`, startTime: schoolLevelActivation?.isSeniorSchool ? '14:00' : '13:30', endTime: schoolLevelActivation?.isSeniorSchool ? '16:00' : '15:30' }] }))}>Add Period</Button>
+              </div>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Optional generation note" />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-navy-600 dark:text-navy-300">
+              <input type="checkbox" checked={form.autoGenerateInvigilators} onChange={(e) => setForm((p) => ({ ...p, autoGenerateInvigilators: e.target.checked }))} className="h-4 w-4 rounded border-navy-300 text-green-600 focus:ring-green-500" />
+              Generate invigilators immediately after building the timetable
+            </label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button variant="secondary" onClick={previewGenerator} disabled={!canManage || saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />} Preview Timetable
+              </Button>
+              <Button onClick={runGenerator} disabled={!canManage || saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Generate Exam Timetable
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Recent generated runs</CardTitle>
+            <p className="text-xs text-navy-400">Shows the latest exam timetable auto-generation runs and how many exam slots were produced.</p>
+          </CardHeader>
+          <CardContent>
+            {preview && (
+              <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 dark:border-green-900/30 dark:bg-green-950/20">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-bold text-green-900 dark:text-green-200">Preview: {preview.examName}</p>
+                  <Badge tone="green">{preview.generatedCount} slot(s)</Badge>
+                </div>
+                <p className="mt-1 text-xs text-green-800 dark:text-green-300">{preview.startDate} → {preview.endDate}</p>
+                <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
+                  {preview.slots.map((slot: any, index: number) => (
+                    <div key={`${slot.classId}-${slot.subjectId}-${slot.examDate}-${slot.startTime}-${index}`} className="rounded-xl border border-green-200 bg-white px-3 py-2 text-xs text-green-900 dark:border-green-900/30 dark:bg-navy-900 dark:text-green-200">
+                      <p className="font-semibold">{setup.classes.find((klass) => klass.id === slot.classId)?.name || 'Class'} · {slot.paperName || 'Paper'} · {slot.examDate} · {slot.startTime}-{slot.endTime}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {setup.runs.length === 0 ? (
+              <EmptyState icon={Sparkles} title="No generated exam runs yet" description="Build the first exam run on the left to generate a timetable draft." />
+            ) : (
+              <div className="space-y-3 max-h-[760px] overflow-y-auto pr-1">
+                {setup.runs.map((run) => (
+                  <div key={run.id} className="rounded-2xl border border-navy-100 p-4 dark:border-navy-800">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold text-navy-950 dark:text-navy-50">{run.examName}</p>
+                          <Badge tone="blue">{run.generatedCount} slot(s)</Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">{run.startDate} → {run.endDate} · by {run.createdByName}</p>
+                        <p className="mt-1 text-[11px] text-navy-400">Classes: {run.classIds.map((id) => setup.classes.find((klass) => klass.id === id)?.name).filter(Boolean).join(', ')}</p>
+                        <p className="mt-1 text-[11px] text-navy-400">Periods: {run.periods.map((period) => `${period.label} ${period.startTime}-${period.endTime}`).join(' · ')}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }

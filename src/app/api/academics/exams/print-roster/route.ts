@@ -16,8 +16,8 @@ export async function GET(req: NextRequest) {
     for (const ex of exams) {
       for (const res of ex.results) {
         raw.push({
-          className: res.student.schoolClass ? \`\${res.student.schoolClass.level} \${res.student.schoolClass.stream || ""}\` : "Unknown",
-          studentName: \`\${res.student.firstName} \${res.student.lastName}\`,
+          className: res.student.schoolClass ? `${res.student.schoolClass.level} ${res.student.schoolClass.stream || ""}` : "Unknown",
+          studentName: `${res.student.firstName} ${res.student.lastName}`,
           admNo: res.student.admissionNo,
           mark: Math.round((res.marks / Math.max(1, ex.maxMarks)) * 100)
         });

@@ -1,54 +1,85 @@
 import { db } from "@/lib/db";
-import { SessionUser } from "@/lib/core/session";
+import type { SessionUser } from "@/lib/core/session";
+
+export class EcosystemTrendsError extends Error {
+  constructor(public code: "FORBIDDEN", message: string) {
+    super(message);
+    this.name = "EcosystemTrendsError";
+  }
+}
+
+function assertFounderOps(user: SessionUser) {
+  if (user.role !== "SUPER_ADMIN") {
+    throw new EcosystemTrendsError("FORBIDDEN", "Only NEYO Ops can access global trends.");
+  }
+}
+
+function pct(part: number, total: number) {
+  return total > 0 ? Math.round((part / total) * 100) : 0;
+}
 
 export async function getAnonymousEducationTrends(user: SessionUser) {
-  if (user.role !== "SUPER_ADMIN") {
-    throw new Error("FORBIDDEN: Only NEYO Ops can access global trends.");
-  }
+  assertFounderOps(user);
 
-  // 1. Global Platform Adoption
-  const totalSchools = await db.tenant.count();
-  const totalStudents = await db.student.count({ where: { status: "ACTIVE" } });
-  
-  // 2. Most Popular Senior School Pathways
-  const pathwayAllocations = await db.studentPathwayPreference.groupBy({
-    by: ['pathwayId'],
-    _count: { studentId: true },
-    where: { isAllocated: true }
-  });
-  
-  // Resolve pathway names (anonymized, grouping by code/name)
-  const pathways = await db.pathway.findMany({ select: { id: true, name: true, code: true } });
-  const pathwayMap = new Map(pathways.map(p => [p.id, p.name]));
-  
+  const [
+    totalSchools,
+    totalStudents,
+    totalAttendanceRecords,
+    absentRecords,
+    competencyTotal,
+    competencyStruggling,
+    competencyMeeting,
+    totalTalentRecords,
+    communityHours,
+    portfolioApproved,
+    assessmentPlans,
+    pathwayAllocations,
+    activityCategories,
+  ] = await Promise.all([
+    db.tenant.count(),
+    db.student.count({ where: { status: "ACTIVE" } }),
+    db.attendanceRecord.count(),
+    db.attendanceRecord.count({ where: { status: "A" } }),
+    db.competencyEvidence.count({ where: { approved: true } }),
+    db.competencyEvidence.count({ where: { approved: true, level: { in: [1, 2] } } }),
+    db.competencyEvidence.count({ where: { approved: true, level: { in: [3, 4] } } }),
+    db.talentRecord.count(),
+    db.communityServiceActivity.aggregate({ _sum: { hours: true }, where: { status: "APPROVED" } }),
+    db.portfolioItem.count({ where: { status: "APPROVED" } }),
+    db.assessmentPlan.count(),
+    db.studentPathwayPreference.groupBy({ by: ["pathwayId"], _count: { pathwayId: true }, where: { isAllocated: true } }),
+    db.activityCategory.findMany({ select: { name: true } }),
+  ]);
+
+  const globalAttendanceRate = totalAttendanceRecords > 0
+    ? Math.round(((totalAttendanceRecords - absentRecords) / totalAttendanceRecords) * 100)
+    : 0;
+
+  const pathwayRows = await db.pathway.findMany({ select: { id: true, code: true, name: true } });
+  const pathwayMap = new Map(pathwayRows.map((p) => [p.id, { code: p.code, name: p.name }]));
   const popularPathways = pathwayAllocations
-    .map(p => ({
-      name: pathwayMap.get(p.pathwayId) || "Unknown",
-      count: p._count.studentId
-    }))
+    .map((row) => {
+      const found = pathwayMap.get(row.pathwayId);
+      return {
+        code: found?.code || "PATHWAY",
+        label: found?.name || "Unknown pathway",
+        count: row._count.pathwayId,
+      };
+    })
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
-  // 3. Global Attendance Averages
-  const totalAttendanceRecords = await db.attendanceRecord.count();
-  const absentRecords = await db.attendanceRecord.count({ where: { status: "A" } });
-  const globalAttendanceRate = totalAttendanceRecords > 0 
-    ? Math.round(((totalAttendanceRecords - absentRecords) / totalAttendanceRecords) * 100) 
-    : 0;
-
-  // 4. Competency Health (Global)
-  // How many evaluations are Below/Approaching vs Meeting/Exceeding
-  const competencyTotal = await db.competencyEvidence.count();
-  const competencyStruggling = await db.competencyEvidence.count({ where: { level: { in: [1, 2] } } });
-  const competencyMeeting = await db.competencyEvidence.count({ where: { level: { in: [3, 4] } } });
-
-  // 5. Co-Curricular Engagement
-  const totalTalentRecords = await db.talentRecord.count();
-  const totalCommunityServiceHoursRes = await db.communityServiceActivity.aggregate({
-    _sum: { hours: true },
-    where: { status: "APPROVED" }
-  });
-  const globalCommunityServiceHours = totalCommunityServiceHoursRes._sum.hours || 0;
+  const clubKeywords = ["club", "stem", "music", "drama", "sports", "games", "agriculture", "community"];
+  const clubDistributionMap = new Map<string, number>();
+  for (const row of activityCategories) {
+    const lower = row.name.toLowerCase();
+    const match = clubKeywords.find((k) => lower.includes(k));
+    const key = match ? match.toUpperCase() : "OTHER";
+    clubDistributionMap.set(key, (clubDistributionMap.get(key) || 0) + 1);
+  }
+  const clubs = [...clubDistributionMap.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
 
   return {
     adoption: {
@@ -58,16 +89,27 @@ export async function getAnonymousEducationTrends(user: SessionUser) {
     attendance: {
       globalAttendanceRate,
       recordsAnalyzed: totalAttendanceRecords,
+      absentPct: pct(absentRecords, totalAttendanceRecords),
     },
     competencies: {
       totalEvaluations: competencyTotal,
-      strugglingPct: competencyTotal > 0 ? Math.round((competencyStruggling / competencyTotal) * 100) : 0,
-      meetingPct: competencyTotal > 0 ? Math.round((competencyMeeting / competencyTotal) * 100) : 0,
+      strugglingPct: pct(competencyStruggling, competencyTotal),
+      meetingPct: pct(competencyMeeting, competencyTotal),
     },
     pathways: popularPathways,
     coCurricular: {
       totalTalentRecords,
-      globalCommunityServiceHours
-    }
+      globalCommunityServiceHours: communityHours._sum.hours || 0,
+      clubCategoryDistribution: clubs,
+    },
+    ecosystem: {
+      approvedPortfolioItems: portfolioApproved,
+      assessmentPlans,
+    },
+    privacy: {
+      mode: "ANONYMOUS_AGGREGATE_ONLY",
+      returnsSchoolNames: false,
+      returnsLearnerNames: false,
+    },
   };
 }

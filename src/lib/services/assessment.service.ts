@@ -255,6 +255,8 @@ export async function updateAssessmentType(user: SessionUser, input: AssessmentT
         ...(parsed.scoreMode !== undefined ? { scoreMode: parsed.scoreMode } : {}),
         ...(parsed.defaultMaxMarks !== undefined ? { defaultMaxMarks: parsed.defaultMaxMarks ?? null } : {}),
         ...(parsed.defaultWeight !== undefined ? { defaultWeight: parsed.defaultWeight } : {}),
+        ...(parsed.effectiveFrom !== undefined ? { effectiveFrom: parsed.effectiveFrom ?? null } : {}),
+        ...(parsed.effectiveTo !== undefined ? { effectiveTo: parsed.effectiveTo ?? null } : {}),
         ...(parsed.evidenceAllowed !== undefined ? { evidenceAllowed: parsed.evidenceAllowed } : {}),
         ...(parsed.requiresModeration !== undefined ? { requiresModeration: parsed.requiresModeration } : {}),
         ...(parsed.active !== undefined ? { active: parsed.active } : {}),

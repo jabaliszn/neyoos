@@ -29,6 +29,8 @@ import {
   Activity,
   BookOpen,
   Users,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,6 +65,9 @@ export interface LearnerJourneyEntryView {
   verificationStatus: (typeof LEARNER_JOURNEY_VERIFICATION)[number];
   status?: string | null;
   href?: string | null;
+  pinned?: boolean;
+  pinVisibility?: (typeof LEARNER_JOURNEY_VISIBILITY)[number] | null;
+  pinNote?: string | null;
 }
 
 export interface LearnerJourneySummaryView {
@@ -492,7 +497,17 @@ export function LearnerJourneySourceFilterBar({
 }
 
 // ---- 5. Single Timeline Entry ---------------------------------------------
-export function LearnerJourneyEntryCard({ entry }: { entry: LearnerJourneyEntryView }) {
+export function LearnerJourneyEntryCard({
+  entry,
+  canPin = false,
+  pinBusy = false,
+  onTogglePin,
+}: {
+  entry: LearnerJourneyEntryView;
+  canPin?: boolean;
+  pinBusy?: boolean;
+  onTogglePin?: (entry: LearnerJourneyEntryView) => void;
+}) {
   const meta = SOURCE_META[entry.sourceModule];
   const SourceIcon = meta.icon;
   const visibility = visibilityBadge(entry.visibility);
@@ -521,14 +536,31 @@ export function LearnerJourneyEntryCard({ entry }: { entry: LearnerJourneyEntryV
             </div>
           </div>
 
-          {entry.href ? (
-            <a
-              href={entry.href}
-              className="inline-flex items-center gap-1 rounded-full border border-navy-200 bg-white/70 px-3 py-2 text-sm font-medium text-navy-700 transition hover:border-navy-300 hover:bg-white dark:border-navy-800 dark:bg-navy-900/50 dark:text-navy-200"
-            >
-              Open source <ArrowRight className="h-4 w-4" />
-            </a>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {canPin && onTogglePin ? (
+              <Button
+                type="button"
+                variant={entry.pinned ? "secondary" : "default"}
+                onClick={() => onTogglePin(entry)}
+                disabled={pinBusy}
+                className={cn(
+                  "rounded-full",
+                  entry.pinned ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200" : "bg-green-600 text-white hover:bg-green-500"
+                )}
+              >
+                {pinBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : entry.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                {entry.pinned ? "Unpin milestone" : "Pin milestone"}
+              </Button>
+            ) : null}
+            {entry.href ? (
+              <a
+                href={entry.href}
+                className="inline-flex items-center gap-1 rounded-full border border-navy-200 bg-white/70 px-3 py-2 text-sm font-medium text-navy-700 transition hover:border-navy-300 hover:bg-white dark:border-navy-800 dark:bg-navy-900/50 dark:text-navy-200"
+              >
+                Open source <ArrowRight className="h-4 w-4" />
+              </a>
+            ) : null}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 pt-0">
@@ -537,18 +569,50 @@ export function LearnerJourneyEntryCard({ entry }: { entry: LearnerJourneyEntryV
           <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-3 py-1 dark:bg-navy-900/40">
             <Clock3 className="h-3.5 w-3.5" /> {entry.eventType.replaceAll("_", " ")}
           </span>
+          {entry.pinned ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
+              <Pin className="h-3.5 w-3.5" /> Pinned milestone
+            </span>
+          ) : null}
+          {entry.pinned && entry.pinVisibility ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1 text-green-700 dark:bg-green-950/30 dark:text-green-200">
+              <Eye className="h-3.5 w-3.5" /> {entry.pinVisibility === "PARENT_SAFE" ? "Shared with families" : "Staff only pin"}
+            </span>
+          ) : null}
         </div>
+        {entry.pinned && entry.pinNote ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3 text-sm text-amber-900 backdrop-blur-xl dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+            <p className="font-semibold">Pinned note</p>
+            <p className="mt-1 leading-6">{entry.pinNote}</p>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
 }
 
 // ---- 6. Timeline List ------------------------------------------------------
-export function LearnerJourneyTimelineList({ entries }: { entries: LearnerJourneyEntryView[] }) {
+export function LearnerJourneyTimelineList({
+  entries,
+  canPin = false,
+  busyEntryId,
+  onTogglePin,
+}: {
+  entries: LearnerJourneyEntryView[];
+  canPin?: boolean;
+  busyEntryId?: string | null;
+  onTogglePin?: (entry: LearnerJourneyEntryView) => void;
+}) {
   return (
     <div className="space-y-4">
       {entries.map((entry) => (
-        <LearnerJourneyEntryCard key={entry.id} entry={entry} />
+        <LearnerJourneyEntryCard
+          key={entry.id}
+          entry={entry}
+          canPin={canPin}
+          pinBusy={busyEntryId === entry.id}
+          onTogglePin={onTogglePin}
+        />
       ))}
     </div>
   );

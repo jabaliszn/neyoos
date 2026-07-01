@@ -44,6 +44,7 @@ export const schoolProfileSchema = z.object({
   gpsLat: z.coerce.number().min(-90).max(90).optional().or(z.literal("")),
   gpsLng: z.coerce.number().min(-180).max(180).optional().or(z.literal("")),
   gpsRadiusM: z.coerce.number().int().min(50).max(5000).optional().or(z.literal("")),
+  educationLevelsOffered: z.array(z.enum(["ECDE", "PRIMARY", "JUNIOR_SCHOOL", "SENIOR_SCHOOL"])) .max(4).optional(),
   // G.21: DAY-only schools don't see hostel/boarding features.
   schoolType: z.enum(["DAY", "BOARDING", "DAY_AND_BOARDING"]).optional(),
   // G.24 uniform supplier/tailor (orders are relayed to them).

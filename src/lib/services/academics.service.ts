@@ -11,7 +11,7 @@ import type { SessionUser } from "@/lib/core/session";
 import type { Role } from "@/lib/core/roles";
 
 export class AcademicsError extends Error {
-  constructor(public code: "NOT_FOUND" | "DUPLICATE" | "CONFLICT" | "FORBIDDEN", message: string) {
+  constructor(public code: "NOT_FOUND" | "DUPLICATE" | "CONFLICT" | "FORBIDDEN" | "INVALID", message: string) {
     super(message);
     this.name = "AcademicsError";
   }
@@ -687,35 +687,172 @@ export async function fairSaturdaySchedule(
 export async function getLessonPlanningAnalytics(user: SessionUser, classId: string, subjectId: string) {
   return withTenant(user.tenantId, async () => {
     const tDb = tenantDb();
-    
-    // 1. How many lesson plans exist
-    const totalPlans = await tDb.lessonPlan.count({ where: { classId, subjectId } });
-    
-    // 2. How many are TAUGHT
-    const taughtPlans = await tDb.lessonPlan.count({ where: { classId, subjectId, status: "TAUGHT" } });
-    
-    // 3. How many unique strands mapped
+
+    // Scope teachers to their own plans; leadership sees the whole class/subject.
+    const planScope: Record<string, unknown> = { classId, subjectId };
+    if (user.role === "TEACHER" || user.role === "CLASS_TEACHER") planScope.teacherId = user.id;
+
+    // 1. Plans (planned vs taught)
+    const totalPlans = await tDb.lessonPlan.count({ where: planScope });
+    const taughtPlans = await tDb.lessonPlan.count({ where: { ...planScope, status: "TAUGHT" } });
+    const skippedPlans = await tDb.lessonPlan.count({ where: { ...planScope, status: "SKIPPED" } });
+
+    // 2. Strand coverage (syllabus topics)
     const strandPlans = await tDb.lessonPlan.findMany({
-      where: { classId, subjectId, strandId: { not: null } },
-      select: { strandId: true }
+      where: { ...planScope, strandId: { not: null } },
+      select: { strandId: true },
     });
-    const uniqueStrandsCovered = new Set(strandPlans.map(p => p.strandId)).size;
-    
+    const coveredStrandIds = new Set(strandPlans.map((p) => p.strandId as string));
+    const uniqueStrandsCovered = coveredStrandIds.size;
     const totalStrands = await tDb.cbcStrand.count({ where: { subjectId } });
 
-    // 4. How many unique competencies mapped
+    // 3. Competency coverage
     const compPlans = await tDb.lessonPlan.findMany({
-      where: { classId, subjectId, competencyId: { not: null } },
-      select: { competencyId: true }
+      where: { ...planScope, competencyId: { not: null } },
+      select: { competencyId: true },
     });
-    const uniqueCompetenciesTaught = new Set(compPlans.map(p => p.competencyId)).size;
+    const coveredCompetencyIds = new Set(compPlans.map((p) => p.competencyId as string));
+    const uniqueCompetenciesTaught = coveredCompetencyIds.size;
+
+    // 4. Assessment coverage + the "assessed" dimension (planned vs taught vs ASSESSED).
+    // A planned objective is "assessed" when its lesson plan is linked to an
+    // assessment plan that actually has at least one recorded result.
+    const assessPlans = await tDb.lessonPlan.findMany({
+      where: { ...planScope, assessmentPlanId: { not: null } },
+      select: { id: true, assessmentPlanId: true, strandId: true, competencyId: true },
+    });
+    const linkedAssessmentPlanIds = [...new Set(assessPlans.map((p) => p.assessmentPlanId as string))];
+    let scoredAssessmentPlanIds = new Set<string>();
+    if (linkedAssessmentPlanIds.length) {
+      const recCounts = await tDb.assessmentRecord.groupBy({
+        by: ["planId"],
+        where: { planId: { in: linkedAssessmentPlanIds } },
+        _count: { _all: true },
+      } as never) as Array<{ planId: string; _count: { _all: number } }>;
+      scoredAssessmentPlanIds = new Set(recCounts.filter((r) => r._count._all > 0).map((r) => r.planId));
+    }
+    // Objectives that were assessed = competency/strand objectives whose plan is linked to a scored assessment plan.
+    const assessedCompetencyIds = new Set<string>();
+    const assessedStrandIds = new Set<string>();
+    let assessedPlans = 0;
+    for (const p of assessPlans) {
+      if (p.assessmentPlanId && scoredAssessmentPlanIds.has(p.assessmentPlanId)) {
+        assessedPlans++;
+        if (p.competencyId) assessedCompetencyIds.add(p.competencyId);
+        if (p.strandId) assessedStrandIds.add(p.strandId);
+      }
+    }
+    const plansLinkedToAssessment = assessPlans.length;
+    const assessedObjectives = assessedCompetencyIds.size + assessedStrandIds.size;
+
+    const strandCoveragePct = totalStrands > 0 ? Math.round((uniqueStrandsCovered / totalStrands) * 100) : 0;
+    const taughtPct = totalPlans > 0 ? Math.round((taughtPlans / totalPlans) * 100) : 0;
+    const assessedPct = totalPlans > 0 ? Math.round((assessedPlans / totalPlans) * 100) : 0;
 
     return {
+      // planned vs taught vs assessed (the J.12 headline)
       totalPlans,
       taughtPlans,
+      skippedPlans,
+      assessedPlans, // plans linked to an assessment that has recorded results
+      taughtPct,
+      assessedPct,
+      // strand (syllabus topic) coverage
       uniqueStrandsCovered,
       totalStrands,
+      strandCoveragePct,
+      // competency coverage
       uniqueCompetenciesTaught,
+      // assessment coverage
+      plansLinkedToAssessment,
+      assessedObjectives,
     };
+  });
+}
+
+/** J.12 — record an observation directly from a lesson plan. */
+export async function recordLessonObservation(
+  user: SessionUser,
+  input: {
+    lessonPlanId: string;
+    studentId?: string | null;
+    strandId?: string | null;
+    competencyId?: string | null;
+    level?: number | null;
+    note: string;
+    date?: string;
+  }
+) {
+  return withTenant(user.tenantId, async () => {
+    const plan = await tenantDb().lessonPlan.findUnique({ where: { id: input.lessonPlanId } });
+    if (!plan) throw new AcademicsError("NOT_FOUND", "Lesson plan not found.");
+    if ((user.role === "TEACHER" || user.role === "CLASS_TEACHER") && plan.teacherId !== user.id)
+      throw new AcademicsError("FORBIDDEN", "You can only add observations to your own lesson plans.");
+    // If a learner is named, they must belong to this tenant (and ideally this class).
+    if (input.studentId) {
+      const student = await tenantDb().student.findUnique({ where: { id: input.studentId }, select: { id: true, classId: true } });
+      if (!student) throw new AcademicsError("INVALID", "That learner was not found.");
+      if (student.classId && plan.classId && student.classId !== plan.classId)
+        throw new AcademicsError("INVALID", "That learner is not in this lesson's class.");
+    }
+    const obs = await tenantDb().lessonObservation.create({
+      data: {
+        lessonPlanId: input.lessonPlanId,
+        studentId: input.studentId || null,
+        strandId: input.strandId || plan.strandId || null,
+        competencyId: input.competencyId || plan.competencyId || null,
+        level: input.level ?? null,
+        note: input.note,
+        teacherId: user.id,
+        teacherName: user.fullName,
+        date: input.date || plan.date,
+      } as never,
+    });
+    await audit(user, "academics.lesson_observation_recorded", "lessonObservation", obs.id, {
+      lessonPlanId: input.lessonPlanId, studentId: input.studentId || null, level: input.level ?? null,
+    });
+    return obs;
+  });
+}
+
+/** J.12 — list observations for one lesson plan (own-scoped for teachers). */
+export async function listLessonObservations(user: SessionUser, lessonPlanId: string) {
+  return withTenant(user.tenantId, async () => {
+    const plan = await tenantDb().lessonPlan.findUnique({ where: { id: lessonPlanId } });
+    if (!plan) throw new AcademicsError("NOT_FOUND", "Lesson plan not found.");
+    if ((user.role === "TEACHER" || user.role === "CLASS_TEACHER") && plan.teacherId !== user.id)
+      throw new AcademicsError("FORBIDDEN", "You can only view your own lesson plans.");
+    const rows = await tenantDb().lessonObservation.findMany({
+      where: { lessonPlanId }, orderBy: { createdAt: "desc" }, take: 200,
+    });
+    // Decorate learner names for display.
+    const studentIds = [...new Set(rows.map((r) => r.studentId).filter(Boolean))] as string[];
+    const students = studentIds.length ? await tenantDb().student.findMany({ where: { id: { in: studentIds } }, select: { id: true, firstName: true, lastName: true } }) : [];
+    const sMap = new Map(students.map((st) => [st.id, [st.firstName, st.lastName].filter(Boolean).join(" ")]));
+    return rows.map((r) => ({
+      id: r.id, date: r.date, note: r.note, level: r.level,
+      studentId: r.studentId, studentName: r.studentId ? (sMap.get(r.studentId) ?? "Learner") : "Whole class",
+      strandId: r.strandId, competencyId: r.competencyId, teacherName: r.teacherName,
+    }));
+  });
+}
+
+/** J.12 — attach learning resources/evidence to an existing lesson plan. */
+export async function addLessonResources(
+  user: SessionUser,
+  lessonPlanId: string,
+  resources: { fileUrl: string; fileName?: string }[]
+) {
+  return withTenant(user.tenantId, async () => {
+    const plan = await tenantDb().lessonPlan.findUnique({ where: { id: lessonPlanId } });
+    if (!plan) throw new AcademicsError("NOT_FOUND", "Lesson plan not found.");
+    if ((user.role === "TEACHER" || user.role === "CLASS_TEACHER") && plan.teacherId !== user.id)
+      throw new AcademicsError("FORBIDDEN", "You can only add resources to your own lesson plans.");
+    if (!resources?.length) throw new AcademicsError("INVALID", "Add at least one resource.");
+    await tenantDb().lessonResource.createMany({
+      data: resources.map((r) => ({ tenantId: user.tenantId, lessonPlanId, fileUrl: r.fileUrl, fileName: r.fileName || null })),
+    });
+    await audit(user, "academics.lesson_resources_attached", "lessonPlan", lessonPlanId, { count: resources.length });
+    return tenantDb().lessonResource.findMany({ where: { lessonPlanId }, orderBy: { createdAt: "desc" } });
   });
 }

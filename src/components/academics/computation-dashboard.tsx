@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, PlayCircle, CheckCircle2, Lock, Unlock, Mail, Bell, Settings2, Calculator } from "lucide-react";
+import { Loader2, PlayCircle, CheckCircle2, Lock, Unlock, Mail, Bell, Settings2, Calculator, Table2, X } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +9,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { Progress } from "@/components/ui/progress";
 
-export function ComputationDashboardClient({ canManage }: { canManage: boolean }) {
+export function ComputationDashboardClient({ canManage, schoolLevelActivation }: { canManage: boolean; schoolLevelActivation?: { isSeniorSchool: boolean; isJuniorSchool: boolean; educationLevelsOffered: string[] } }) {
   const [portals, setPortals] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [reportPortal, setReportPortal] = React.useState<any | null>(null);
   const { toast } = useToast();
 
   const load = React.useCallback(async () => {
@@ -86,6 +87,15 @@ export function ComputationDashboardClient({ canManage }: { canManage: boolean }
 
   return (
     <div className="space-y-6">
+      {schoolLevelActivation ? (
+        <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 dark:border-green-900/30 dark:bg-green-950/20 dark:text-green-200">
+          <p className="font-semibold">Level-aware Grading Engine</p>
+          <p className="mt-1 text-xs text-green-800 dark:text-green-300">
+            Active levels: {schoolLevelActivation.educationLevelsOffered.length > 0 ? schoolLevelActivation.educationLevelsOffered.join(', ') : 'None selected yet'}.
+            {schoolLevelActivation.isSeniorSchool ? ' Senior School is active, so subject-selection and pathway-sensitive grading workflows should be expected.' : ' Senior School grading complexity stays limited until Senior School is activated.'}
+          </p>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between border-b border-navy-100 pb-4 dark:border-navy-800">
         <div>
           <h2 className="text-xl font-black text-navy-950 dark:text-white flex items-center gap-2">
@@ -106,12 +116,12 @@ export function ComputationDashboardClient({ canManage }: { canManage: boolean }
           {portals.map((p) => {
             const isClosed = new Date(p.closeDate) < new Date();
             return (
-              <Card key={p.id} className={\`overflow-hidden \${p.status === "COMPUTING" ? "border-blue-300 ring-2 ring-blue-500/20" : ""}\`}>
+              <Card key={p.id} className={`overflow-hidden ${p.status === "COMPUTING" ? "border-blue-300 ring-2 ring-blue-500/20" : ""}`}>
                 <CardContent className="p-0">
                   <div className="p-4 bg-white dark:bg-navy-950 flex justify-between items-center">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <Badge variant={p.status === "OPEN" ? "outline" : "secondary"} className={p.status === "OPEN" ? "bg-green-50 text-green-700" : ""}>
+                        <Badge tone={p.status === "OPEN" ? "green" : "neutral"}>
                           {p.status}
                         </Badge>
                         <span className="text-xs font-semibold text-navy-500">Close Date: {new Date(p.closeDate).toLocaleString()}</span>
@@ -135,8 +145,11 @@ export function ComputationDashboardClient({ canManage }: { canManage: boolean }
                         </Button>
                       )}
                       {p.status === "RELEASED" && (
-                        <div className="flex items-center text-sm font-bold text-green-700 bg-green-50 px-3 py-1.5 rounded-full border border-green-200">
-                          <CheckCircle2 className="h-4 w-4 mr-2" /> Released to Parents
+                        <div className="flex items-center gap-2">
+                          <Button variant="secondary" onClick={() => setReportPortal(p)} className="rounded-full"><Table2 className="h-4 w-4 mr-2" /> Master report</Button>
+                          <div className="flex items-center text-sm font-bold text-green-700 bg-green-50 px-3 py-1.5 rounded-full border border-green-200">
+                            <CheckCircle2 className="h-4 w-4 mr-2" /> Released to Parents
+                          </div>
                         </div>
                       )}
                     </div>
@@ -167,6 +180,79 @@ export function ComputationDashboardClient({ canManage }: { canManage: boolean }
           })}
         </div>
       )}
+      {reportPortal && <MasterReportModal portal={reportPortal} onClose={() => setReportPortal(null)} />}
+    </div>
+  );
+}
+
+/** K.5 — Master Term Report viewer: pick a class, see each student's aggregated
+ *  subject marks + overall mean and class position. */
+function MasterReportModal({ portal, onClose }: { portal: any; onClose: () => void }) {
+  const { toast } = useToast();
+  const [classes, setClasses] = React.useState<{ id: string; level: string; stream: string | null }[]>([]);
+  const [classId, setClassId] = React.useState("");
+  const [data, setData] = React.useState<any | null>(null);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/classes").then((r) => r.json()).then((j) => { if (j.ok) { setClasses(j.data.classes); if (j.data.classes[0]) setClassId(j.data.classes[0].id); } });
+  }, []);
+
+  React.useEffect(() => {
+    if (!classId || !portal.termId) return;
+    setLoading(true);
+    fetch(`/api/academics/grading/computation?termId=${portal.termId}&classId=${classId}`)
+      .then((r) => r.json())
+      .then((j) => { if (j.ok) setData(j.data); else toast({ title: j.error?.message || "Could not load report", tone: "error" }); })
+      .finally(() => setLoading(false));
+  }, [classId, portal.termId, toast]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-4xl rounded-2xl border border-navy-100 bg-white p-6 shadow-pop dark:border-navy-800 dark:bg-navy-950" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-black text-lg">Master report — {portal.name}</h3>
+          <button onClick={onClose}><X className="h-5 w-5" /></button>
+        </div>
+        <div className="mb-3">
+          <select value={classId} onChange={(e) => setClassId(e.target.value)} className="rounded-full border border-navy-200 bg-white px-3 py-1.5 text-sm dark:border-navy-700 dark:bg-navy-900">
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.level} {c.stream ?? ""}</option>)}
+          </select>
+        </div>
+        {loading ? (
+          <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+        ) : !data || data.students.length === 0 ? (
+          <p className="py-6 text-center text-sm italic text-navy-400">No computed master report for this class yet. Run computation first.</p>
+        ) : (
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-white dark:bg-navy-950">
+                <tr className="text-left text-navy-400">
+                  <th className="p-2">Pos</th>
+                  <th className="p-2">Student</th>
+                  {data.subjects.map((s: any) => <th key={s.id} className="p-2" title={s.name}>{s.code}</th>)}
+                  <th className="p-2 font-bold">Mean</th>
+                  <th className="p-2">Grade</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-50 dark:divide-navy-800">
+                {data.students.map((st: any) => (
+                  <tr key={st.admissionNo}>
+                    <td className="p-2 font-mono">{st.overall?.rank ?? "—"}</td>
+                    <td className="p-2 font-semibold">{st.name} <span className="text-navy-400">({st.admissionNo})</span></td>
+                    {data.subjects.map((s: any) => {
+                      const cell = st.subjects.find((x: any) => x.subjectId === s.id);
+                      return <td key={s.id} className="p-2">{cell ? Math.round(cell.finalMark) : "—"}</td>;
+                    })}
+                    <td className="p-2 font-black">{st.overall ? Math.round(st.overall.finalMark) : "—"}</td>
+                    <td className="p-2">{st.overall?.letterGrade ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -112,6 +112,140 @@ export function ExamMaterialsClient({ canManage }: { canManage: boolean }) {
   );
 }
 
+/**
+ * K.16 — KNEC Document Aggregation & Export.
+ * Define a batch (target class + required document labels), aggregate which
+ * candidates are complete from their approved StudentDocuments (K.10), and
+ * export a structured manifest to hand to KNEC. Deterministic, no AI.
+ */
+export function KnecAggregationCard({ canManage }: { canManage: boolean }) {
+  const { toast } = useToast();
+  const [batches, setBatches] = React.useState<any[] | null>(null);
+  const [classes, setClasses] = React.useState<{ id: string; level: string; stream: string | null }[]>([]);
+  const [creating, setCreating] = React.useState(false);
+  const [report, setReport] = React.useState<any | null>(null);
+  const [name, setName] = React.useState("2026 KCSE Candidates Batch");
+  const [classId, setClassId] = React.useState("");
+  const [labels, setLabels] = React.useState("Birth Certificate\nKNEC Registration Form\nPassport Photo");
+  const [busy, setBusy] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    const res = await fetch("/api/exam-materials/knec-export");
+    const json = await res.json();
+    if (json.ok) setBatches(json.data.batches);
+  }, []);
+  React.useEffect(() => { load(); fetch("/api/classes").then((r) => r.json()).then((j) => j.ok && setClasses(j.data.classes)); }, [load]);
+
+  async function create() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/exam-materials/knec-export", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", name, targetClassId: classId || null, documentLabels: labels.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) }),
+      });
+      const json = await res.json();
+      if (json.ok) { toast({ title: "Batch created", tone: "success" }); setCreating(false); load(); }
+      else toast({ title: json.error?.message || "Could not create batch", tone: "error" });
+    } finally { setBusy(false); }
+  }
+
+  async function aggregate(batchId: string) {
+    const res = await fetch(`/api/exam-materials/knec-export?batchId=${batchId}`);
+    const json = await res.json();
+    if (json.ok) setReport(json.data.report);
+    else toast({ title: json.error?.message || "Could not aggregate", tone: "error" });
+  }
+
+  async function doExport(batchId: string, force: boolean) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/exam-materials/knec-export", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "export", batchId, force }),
+      });
+      const json = await res.json();
+      if (json.ok) { toast({ title: "KNEC batch exported", tone: "success" }); load(); }
+      else toast({ title: json.error?.message || "Could not export", tone: "error" });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2"><FileText className="h-5 w-5 text-blue-600" /> KNEC document aggregation</span>
+          {canManage && <Button size="sm" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New batch</Button>}
+        </CardTitle>
+        <p className="text-xs text-navy-400">Collect required candidate documents per class, see who is complete, and export a single KNEC batch manifest.</p>
+      </CardHeader>
+      <CardContent>
+        {batches === null ? (
+          <div className="space-y-2">{[0, 1].map((x) => <Skeleton key={x} className="h-16 rounded-2xl" />)}</div>
+        ) : batches.length === 0 ? (
+          <EmptyState icon={FileText} title="No KNEC batches" description="Create a batch to aggregate candidate documents for KNEC registration." action={canManage ? <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New batch</Button> : undefined} />
+        ) : (
+          <div className="space-y-2">
+            {batches.map((b) => {
+              const cls = classes.find((c) => c.id === b.targetClassId);
+              return (
+                <div key={b.id} className="rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-navy-950/40">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-navy-900 dark:text-navy-50">{b.name}</p>
+                      <p className="mt-0.5 text-xs text-navy-500 dark:text-navy-400">{cls ? `${cls.level} ${cls.stream ?? ""}`.trim() : "All active students"} · {b.documentLabels.length} required docs</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={b.status === "EXPORTED" ? "green" : "neutral"}>{b.status.toLowerCase()}</Badge>
+                      <Button size="sm" variant="secondary" onClick={() => aggregate(b.id)}>Check completeness</Button>
+                      {canManage && b.status !== "EXPORTED" && <Button size="sm" disabled={busy} onClick={() => doExport(b.id, false)}>Export</Button>}
+                      {b.exportUrl && <a href={b.exportUrl} className="inline-flex items-center gap-1 text-xs font-bold text-green-700 hover:underline"><FileText className="h-3.5 w-3.5" /> Manifest</a>}
+                    </div>
+                  </div>
+                  {report && report.batchId === b.id && (
+                    <div className="mt-3 rounded-xl bg-navy-50 p-3 text-xs dark:bg-navy-900">
+                      <p className="font-semibold">{report.completeStudents}/{report.totalStudents} candidates complete</p>
+                      <ul className="mt-2 space-y-1">
+                        {report.students.map((s: any) => (
+                          <li key={s.studentId} className="flex items-center justify-between gap-2">
+                            <span>{s.name} <span className="text-navy-400">({s.admissionNo})</span></span>
+                            {s.complete ? <Badge tone="green">complete</Badge> : <span className="text-red-600">missing: {s.missing.join(", ")}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                      {canManage && report.incompleteStudents > 0 && b.status !== "EXPORTED" && (
+                        <Button size="sm" variant="danger" className="mt-2" disabled={busy} onClick={() => doExport(b.id, true)}>Force export (partial)</Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+      {creating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 p-4 backdrop-blur-sm" onClick={() => setCreating(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-navy-100 bg-white p-6 shadow-pop dark:border-navy-800 dark:bg-navy-950" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between"><h3 className="font-bold">New KNEC batch</h3><button onClick={() => setCreating(false)}><X className="h-5 w-5" /></button></div>
+            <div className="space-y-3">
+              <div><Label className="text-xs">Batch name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+              <div>
+                <Label className="text-xs">Target class</Label>
+                <select value={classId} onChange={(e) => setClassId(e.target.value)} className="w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900">
+                  <option value="">All active students</option>
+                  {classes.map((c) => <option key={c.id} value={c.id}>{c.level} {c.stream ?? ""}</option>)}
+                </select>
+              </div>
+              <div><Label className="text-xs">Required documents (one per line)</Label><textarea value={labels} onChange={(e) => setLabels(e.target.value)} rows={4} className="w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900" /></div>
+              <Button className="w-full" disabled={busy} onClick={create}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create batch"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function CreateExamMaterialDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
   const [f, setF] = React.useState({ examName: "KCSE 2026", materialType: "APPLICATION", title: "KCSE candidate registration file", examDate: "", deadline: "", status: "PLANNED", checklist: "Candidate list\nBirth certificate copies\nPassport photos\nKNEC payment proof", hardcopyLocation: "Exam office cabinet, Shelf A", notes: "" });

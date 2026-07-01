@@ -25,10 +25,20 @@ interface Profile {
   curriculum: string; logoUrl: string; brandPrimary: string; brandAccent: string;
   socialLinks: Record<string, string>; joiningRequirements: Requirement[];
   gpsLat: number | null; gpsLng: number | null; gpsRadiusM: number | null;
+  educationLevelsOffered: string[];
+  schoolType: string;
+  uniformSupplierName: string;
+  uniformSupplierPhone: string;
 }
 
 const REQ_CATEGORIES = ["uniform", "books", "supplies", "fees", "documents", "other"];
 const SOCIALS = ["website", "facebook", "instagram", "tiktok", "youtube"];
+const EDUCATION_LEVELS = [
+  { id: "ECDE", label: "ECDE / Pre-Primary" },
+  { id: "PRIMARY", label: "Primary" },
+  { id: "JUNIOR_SCHOOL", label: "Junior School" },
+  { id: "SENIOR_SCHOOL", label: "Senior School" },
+];
 
 function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
@@ -54,6 +64,7 @@ export function SchoolProfileEditor() {
   const [isSuperAdmin, setIsSuperAdmin] = React.useState(false);
   const [appearanceSaving, setAppearanceSaving] = React.useState(false);
   const [customThemeOn, setCustomThemeOn] = React.useState(true);
+  const [activationSummary, setActivationSummary] = React.useState<any | null>(null);
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -140,10 +151,14 @@ export function SchoolProfileEditor() {
   const load = React.useCallback(async () => {
     setError(false);
     try {
-      const res = await fetch("/api/school-profile");
-      const json = await res.json();
-      if (json.ok) setP(json.data.profile);
+      const [profileRes, activationRes] = await Promise.all([
+        fetch("/api/school-profile"),
+        fetch("/api/school-level-activation"),
+      ]);
+      const [profileJson, activationJson] = await Promise.all([profileRes.json(), activationRes.json()]);
+      if (profileJson.ok) setP(profileJson.data.profile);
       else setError(true);
+      if (activationJson.ok) setActivationSummary(activationJson.data.activation);
     } catch { setError(true); }
   }, []);
   React.useEffect(() => { load(); }, [load]);

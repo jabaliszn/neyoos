@@ -10,6 +10,7 @@
 import { db } from "@/lib/db";
 import { MODULES, isModuleKey } from "@/lib/core/modules";
 import { NAVIGATION } from "@/lib/core/navigation";
+import { J_FEATURES, jFeatureKey, isJFeatureKey, J_FEATURE_PREFIX } from "@/lib/core/j-features";
 import type { SessionUser } from "@/lib/core/session";
 
 export class FlagError extends Error {
@@ -71,7 +72,8 @@ export async function listFlags() {
 /** Pause/release a module platform-wide. SUPER_ADMIN only (route-gated). */
 export async function setFlag(user: SessionUser, moduleKey: string, paused: boolean, note?: string) {
   const isFeatureKey = moduleKey.startsWith("feature:") && NAVIGATION.some((s) => s.items.some((i) => `feature:${i.href}` === moduleKey));
-  if (!isModuleKey(moduleKey) && !isFeatureKey) throw new FlagError("NOT_FOUND", "Unknown module or feature key.");
+  const isJFeature = isJFeatureKey(moduleKey);
+  if (!isModuleKey(moduleKey) && !isFeatureKey && !isJFeature) throw new FlagError("NOT_FOUND", "Unknown module or feature key.");
   const row = await db.platformFlag.upsert({
     where: { moduleKey },
     create: { moduleKey, paused, note: note ?? null, updatedBy: user.fullName },
@@ -80,10 +82,50 @@ export async function setFlag(user: SessionUser, moduleKey: string, paused: bool
   await db.auditLog.create({
     data: {
       tenantId: user.tenantId, actorId: user.id, actorName: user.fullName,
-      action: paused ? (isFeatureKey ? "platform.feature_paused" : "platform.module_paused") : (isFeatureKey ? "platform.feature_released" : "platform.module_released"),
+      action: paused
+        ? (isJFeature ? "platform.jfeature_paused" : isFeatureKey ? "platform.feature_paused" : "platform.module_paused")
+        : (isJFeature ? "platform.jfeature_released" : isFeatureKey ? "platform.feature_released" : "platform.module_released"),
       entityType: "platformFlag", entityId: row.id,
       metadata: JSON.stringify({ moduleKey, note }),
     },
   });
   return row;
+}
+
+// =============================================================================
+// Part-J feature toggles (founder 2026-06-29). Default ON (not paused).
+// =============================================================================
+
+/** All Part-J feature toggles for the NEYO Ops console (ON = not paused). */
+export async function listJFeatureFlags() {
+  const rows = await db.platformFlag.findMany({ where: { moduleKey: { startsWith: J_FEATURE_PREFIX } } });
+  const map = new Map(rows.map((r) => [r.moduleKey, r]));
+  return J_FEATURES.map((f) => {
+    const key = jFeatureKey(f.id);
+    const row = map.get(key);
+    return {
+      id: f.id,
+      moduleKey: key,
+      label: f.label,
+      description: f.description,
+      // ON = enabled = not paused. Defaults to ON when no flag row exists.
+      enabled: !(row?.paused ?? false),
+      note: row?.note ?? null,
+      updatedBy: row?.updatedBy ?? null,
+      updatedAt: row?.updatedAt ?? null,
+    };
+  });
+}
+
+/** Is a given Part-J feature currently switched OFF (paused)? Default: ON. */
+export async function isJFeaturePaused(featureId: string): Promise<boolean> {
+  const row = await db.platformFlag.findUnique({ where: { moduleKey: jFeatureKey(featureId) } });
+  return Boolean(row?.paused);
+}
+
+/** Throw a typed error if a Part-J feature is switched off — used by API guards. */
+export async function assertJFeatureEnabled(featureId: string) {
+  if (await isJFeaturePaused(featureId)) {
+    throw new FlagError("FORBIDDEN", "This feature is currently switched off by NEYO Ops. Please check back soon.");
+  }
 }

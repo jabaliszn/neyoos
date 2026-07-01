@@ -16,7 +16,7 @@ export function MarksGridClient({ examId, subjectId, classId, className }: any) 
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(\`/api/academics/grading/grid?examId=\${examId}&subjectId=\${subjectId}&classId=\${classId}\`);
+      const res = await fetch(`/api/academics/grading/grid?examId=${examId}&subjectId=${subjectId}&classId=${classId}`);
       const json = await res.json();
       if (json.ok) {
         setData(json.data);
@@ -63,7 +63,7 @@ export function MarksGridClient({ examId, subjectId, classId, className }: any) 
         });
       });
 
-      const res = await fetch(\`/api/academics/grading/grid?classId=\${classId}\`, {
+      const res = await fetch(`/api/academics/grading/grid?classId=${classId}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ examId, subjectId, results })
       });
@@ -85,7 +85,7 @@ export function MarksGridClient({ examId, subjectId, classId, className }: any) 
   if (!data) return null;
 
   return (
-    <div className={\`space-y-4 \${className}\`}>
+    <div className={`space-y-4 ${className}`}>
       <div className="flex justify-between items-center mb-2">
         <h3 className="font-bold text-navy-950 flex items-center gap-2"><FileSpreadsheet className="h-4 w-4 text-green-600"/> Marks Entry Grid</h3>
         <Button onClick={handleSave} disabled={saving} size="sm" className="rounded-full shadow-pop bg-green-600 hover:bg-green-700 text-white">
@@ -122,7 +122,7 @@ export function MarksGridClient({ examId, subjectId, classId, className }: any) 
                         type="number" 
                         value={val} 
                         onChange={(e) => handleChange(row.studentId, c.id, e.target.value)} 
-                        className={\`w-20 text-center mx-auto \${isInvalid ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500" : ""}\`}
+                        className={`w-20 text-center mx-auto ${isInvalid ? "border-red-500 bg-red-50 text-red-900 focus:ring-red-500" : ""}`}
                         placeholder="—"
                       />
                     </td>

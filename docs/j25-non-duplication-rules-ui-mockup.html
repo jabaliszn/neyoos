@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>J.25 Visual Proof Standard Mockup</title>
+  <style>
+    body { margin:0; font-family: Inter, Arial, sans-serif; background: linear-gradient(180deg,#eef4ff,#f8fbff); color:#10233f; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 32px; }
+    .badge { display:inline-block; padding:8px 14px; border-radius:999px; background:#dbeafe; color:#153e75; font-weight:700; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
+    .hero { margin-top:18px; background: rgba(255,255,255,.72); backdrop-filter: blur(16px); border:1px solid rgba(255,255,255,.7); border-radius:28px; padding:28px; box-shadow:0 20px 60px rgba(16,35,63,.12); }
+    h1 { margin:0 0 10px; font-size:36px; line-height:1.1; }
+    p { line-height:1.6; }
+    .grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:18px; margin-top:22px; }
+    .card { background: rgba(255,255,255,.76); border:1px solid rgba(255,255,255,.75); border-radius:24px; padding:22px; box-shadow:0 12px 30px rgba(16,35,63,.09); }
+    .ok { color:#136f3a; font-weight:700; }
+    .warn { color:#9a6700; font-weight:700; }
+    .no { color:#a61b1b; font-weight:700; }
+    .rule { margin:12px 0 0; padding:14px 16px; border-radius:18px; background:#f7fbff; border:1px solid #dcecff; }
+    .small { font-size:13px; color:#4a5d78; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } h1 { font-size:28px; } .wrap { padding:18px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <span class="badge">Labelled static mockup · J.25</span>
+    <div class="hero">
+      <h1>Part J Visual Proof Rule</h1>
+      <p>This mockup documents the repaired J.25 standard for visual proof in this sandboxed environment.</p>
+      <div class="rule"><strong>Rule:</strong> Every visual J feature must have a <span class="ok">visual proof artifact</span> — a <strong>real screenshot</strong> where capture is possible, otherwise a <strong>labelled static HTML mockup</strong>. <span class="no">Fake screenshots are never allowed.</span></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2 style="margin-top:0">Accepted proof</h2>
+        <p class="ok">✓ Real screenshot</p>
+        <p class="small">Use when browser capture works and the real UI can be shown honestly.</p>
+        <p class="ok">✓ Labelled static HTML mockup</p>
+        <p class="small">Use when screenshot capture is blocked by the environment but the UI still needs visual review.</p>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0">Never allowed</h2>
+        <p class="no">✗ Fake screenshot</p>
+        <p class="small">Do not fabricate a browser capture or claim one exists when it does not.</p>
+        <p class="warn">~ Partial visual evidence is acceptable only when clearly labelled</p>
+        <p class="small">The founder must always know whether they are seeing a real screenshot or a mockup.</p>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0">Why this repair was needed</h2>
+        <p>The older J.25 wording said every visual J feature required a screenshot. That was too rigid for this sandbox because browser capture is sometimes unavailable. The repaired wording matches real practice and keeps the rule honest.</p>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0">Future-chat guidance</h2>
+        <p>When continuing Part J in another chat:</p>
+        <ul style="line-height:1.7; padding-left:20px; margin:0;">
+          <li>Prefer a real screenshot first.</li>
+          <li>If impossible here, produce a labelled static mockup.</li>
+          <li>Record the proof path in the checklist and context anchor.</li>
+          <li>Never blur the difference between real and mocked visuals.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

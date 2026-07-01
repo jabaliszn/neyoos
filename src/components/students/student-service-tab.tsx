@@ -58,7 +58,9 @@ export function StudentServiceTab({ studentId }: { studentId: string }) {
           </h2>
           <p className="text-sm font-medium text-navy-500">Track volunteer work, charity, and environmental stewardship.</p>
         </div>
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-2 flex-wrap items-center">
+          <a href={`/api/students/community-service?studentId=${studentId}&format=pdf`}><Button variant="secondary"><FileText className="mr-2 h-4 w-4" /> Report PDF</Button></a>
+          <a href={`/api/students/community-service?studentId=${studentId}&format=certificate`}><Button variant="secondary">Certificate PDF</Button></a>
           <div className="text-right">
             <span className="text-xs font-semibold text-navy-500 block">Total Approved</span>
             <span className="text-xl font-black text-green-700 dark:text-green-500">{data.totalHours} hrs</span>
@@ -82,7 +84,7 @@ export function StudentServiceTab({ studentId }: { studentId: string }) {
               <CardContent className="p-4 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:border-green-800">{a.category}</Badge>
+                    <Badge tone="green" className="text-[10px]">{a.category}</Badge>
                     <span className="text-xs text-navy-400 font-semibold">{new Date(a.date).toLocaleDateString()}</span>
                   </div>
                   <h4 className="font-bold text-navy-950 dark:text-white text-base">{a.title}</h4>
@@ -104,7 +106,10 @@ export function StudentServiceTab({ studentId }: { studentId: string }) {
                     <span className="block text-2xl font-black text-navy-950 dark:text-white leading-none">{a.hours}</span>
                     <span className="text-[10px] uppercase font-bold text-navy-400 tracking-widest">Hours</span>
                   </div>
-                  <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-50" onClick={() => remove(a.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <div className="flex flex-col gap-2">
+                    <Badge tone={a.status === "APPROVED" ? "green" : a.status === "REJECTED" ? "red" : "amber"}>{a.status}</Badge>
+                    <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-50" onClick={() => remove(a.id)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -125,6 +130,9 @@ function ServiceLogDialog({ studentId, onClose, onDone }: any) {
   const [location, setLocation] = React.useState("");
   const [supervisor, setSupervisor] = React.useState("");
   const [reflection, setReflection] = React.useState("");
+  const [proofFileId, setProofFileId] = React.useState("");
+  const [competencyId, setCompetencyId] = React.useState("");
+  const [status, setStatus] = React.useState("PENDING");
   const [saving, setSaving] = React.useState(false);
   const { toast } = useToast();
 
@@ -139,7 +147,10 @@ function ServiceLogDialog({ studentId, onClose, onDone }: any) {
           hours: parseInt(hours, 10), 
           location: location || undefined, 
           supervisorName: supervisor || undefined,
-          studentReflection: reflection || undefined 
+          studentReflection: reflection || undefined,
+          proofFileId: proofFileId || undefined,
+          competencyId: competencyId || undefined,
+          status 
         })
       });
       const json = await res.json();
@@ -192,9 +203,23 @@ function ServiceLogDialog({ studentId, onClose, onDone }: any) {
             <Label>Student Reflection (Optional)</Label>
             <Input value={reflection} onChange={(e) => setReflection(e.target.value)} placeholder="What did the student learn?" />
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1"><Label>Evidence File ID (Optional)</Label><Input value={proofFileId} onChange={(e) => setProofFileId(e.target.value)} placeholder="StoredFile ID from Storage Vault" /></div>
+            <div className="space-y-1"><Label>Competency ID (Optional)</Label><Input value={competencyId} onChange={(e) => setCompetencyId(e.target.value)} placeholder="Competency to credit" /></div>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Workflow Status</Label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full h-10 rounded-xl border border-navy-200 bg-white px-3 text-sm">
+              <option value="PENDING">Pending approval</option>
+              <option value="APPROVED">Approve immediately</option>
+              <option value="REJECTED">Reject</option>
+            </select>
+          </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white rounded-full">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Log Hours"}
           </Button>

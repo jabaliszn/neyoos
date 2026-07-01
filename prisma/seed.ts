@@ -984,18 +984,34 @@ async function main() {
         update: {},
       });
     }
-    // One lesson plan from Chebet
+    // One lesson plan from Chebet — J.12: linked to a CBC strand, with a learning
+    // resource attached and a teacher observation recorded directly from the plan.
     if (chebetUser) {
       const existing = await db.lessonPlan.findFirst({ where: { tenantId: tenant.id, teacherId: chebetUser.id } });
       if (!existing) {
-        await db.lessonPlan.create({
+        const matStrand = await db.cbcStrand.upsert({
+          where: { tenantId_subjectId_name: { tenantId: tenant.id, subjectId: subjMap.get("MAT")!, name: "Algebraic Expressions" } },
+          update: {},
+          create: { tenantId: tenant.id, subjectId: subjMap.get("MAT")!, name: "Algebraic Expressions", learningOutcome: "Solve quadratic equations using a range of methods." },
+        });
+        const plan = await db.lessonPlan.create({
           data: {
             tenantId: tenant.id, teacherId: chebetUser.id, teacherName: chebetUser.fullName,
             subjectId: subjMap.get("MAT")!, classId: f2eClass.id,
             date: new Date(Date.now() + 3 * 3600_000 + 24 * 3600_000).toISOString().slice(0, 10),
             topic: "Quadratic equations — completing the square",
-            objectives: "Learners can solve x² + bx + c = 0 by completing the square.",
+            objectives: "Learners can solve x\u00b2 + bx + c = 0 by completing the square.",
             activities: "Worked examples on the board; pair exercise from KLB Bk 3 p.47.",
+            strandId: matStrand.id,
+            resources: { create: [{ tenantId: tenant.id, fileUrl: "https://www.youtube.com/watch?v=2ZzuZvz33X0", fileName: "Completing the square \u2014 worked video" }] },
+          },
+        });
+        await db.lessonObservation.create({
+          data: {
+            tenantId: tenant.id, lessonPlanId: plan.id, strandId: matStrand.id,
+            note: "Whole class engaged; about 6 learners still confuse the sign when halving b.",
+            level: 3, teacherId: chebetUser.id, teacherName: chebetUser.fullName,
+            date: new Date(Date.now() + 3 * 3600_000 + 24 * 3600_000).toISOString().slice(0, 10),
           },
         });
       }
@@ -2142,6 +2158,62 @@ trailer<</Root 1 0 R>>
     }
 
     console.log("✓ Seeded J.7: portfolio timeline items for Achieng and Atieno (approved + submitted, linked to competencies/subjects, export-ready).");
+  }
+
+  // ---- J.13 Parent Growth Dashboard (Chunk 8 seed) -----------------------
+  {
+    const achiengUser13 = await db.user.findFirst({ where: { tenantId: tenant.id, email: "achieng@karibuhigh.ac.ke" } });
+    const achieng13 = achiengUser13
+      ? await db.student.findFirst({ where: { tenantId: tenant.id, userId: achiengUser13.id } })
+      : await db.student.findFirst({ where: { tenantId: tenant.id, firstName: "Achieng" } });
+    const teacher13 = await db.user.findFirst({ where: { tenantId: tenant.id, email: "f.chebet@karibuhigh.ac.ke" } })
+      || await db.user.findFirst({ where: { tenantId: tenant.id, role: "TEACHER" } });
+    const currentTerm13 = await db.academicTerm.findFirst({ where: { tenantId: tenant.id, current: true } });
+
+    if (achieng13 && teacher13) {
+      // A teacher-set goal the parent can acknowledge.
+      const goalTitle = "Read aloud with confidence in class";
+      const existingGoal = await db.studentGoal.findFirst({ where: { tenantId: tenant.id, studentId: achieng13.id, title: goalTitle } });
+      if (!existingGoal) {
+        await db.studentGoal.create({
+          data: {
+            tenantId: tenant.id, studentId: achieng13.id, teacherId: teacher13.id,
+            termId: currentTerm13?.id ?? null,
+            category: "ACADEMIC", title: goalTitle,
+            description: "Achieng will read one short passage aloud each week to build fluency and confidence. Please encourage reading at home.",
+            targetDate: new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10),
+            status: "ACTIVE",
+          },
+        });
+      }
+      // A parent-visible, ACTIVE assessment with a FUTURE due date (so the calendar shows it).
+      const mat13 = await db.subject.findFirst({ where: { tenantId: tenant.id, code: "MAT" } });
+      const atype13 = await db.assessmentType.findFirst({ where: { tenantId: tenant.id } });
+      if (achieng13.classId && atype13) {
+        const planTitle = "Term project: Quadratics in real life";
+        const existingPlan = await db.assessmentPlan.findFirst({ where: { tenantId: tenant.id, title: planTitle, classId: achieng13.classId } });
+        if (!existingPlan) {
+          await db.assessmentPlan.create({
+            data: {
+              tenantId: tenant.id, assessmentTypeId: atype13.id,
+              subjectId: mat13?.id ?? null, classId: achieng13.classId,
+              year: currentTerm13?.year ?? 2026, term: currentTerm13?.term ?? 2,
+              title: planTitle, description: "A short project applying quadratics to everyday situations.",
+              dueDate: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
+              maxMarks: 30, status: "ACTIVE", visibleToParents: true,
+              createdById: teacher13.id, createdByName: teacher13.fullName,
+            },
+          });
+        }
+      }
+      // Ensure the goal-acknowledgement feature is explicitly ON for this school.
+      await db.tenantModule.upsert({
+        where: { tenantId_moduleKey: { tenantId: tenant.id, moduleKey: "parent_goal_ack" } },
+        update: { enabled: true },
+        create: { tenantId: tenant.id, moduleKey: "parent_goal_ack", enabled: true },
+      });
+      console.log("✓ Seeded J.13: parent growth dashboard — 1 teacher goal + 1 parent-visible upcoming assessment for Achieng (goal-ack ON).");
+    }
   }
 }
 

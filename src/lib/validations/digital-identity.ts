@@ -19,3 +19,10 @@ export const transferPassportRequestSchema = z.object({
 });
 
 export type TransferPassportRequestInput = z.infer<typeof transferPassportRequestSchema>;
+
+
+export const transferPassportRedeemSchema = z.object({
+  accessCode: z.string().trim().min(8, "Access code is required."),
+});
+
+export type TransferPassportRedeemInput = z.infer<typeof transferPassportRedeemSchema>;

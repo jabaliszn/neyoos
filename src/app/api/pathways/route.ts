@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { requirePermission } from "@/lib/core/session";
+import { requireRevenueFeature } from "@/lib/services/tier-gating.service";
 import { ok, fail, handleError } from "@/lib/api/respond";
 import { pathwaySchema } from "@/lib/validations/pathways";
 import { getPathways, createPathway, PathwayError } from "@/lib/services/pathway.service";
@@ -7,6 +8,7 @@ import { getPathways, createPathway, PathwayError } from "@/lib/services/pathway
 export async function GET(req: NextRequest) {
   try {
     const user = await requirePermission("academics.view");
+    await requireRevenueFeature(user, "pathway_guidance");
     const pathways = await getPathways(user);
     return ok({ data: pathways });
   } catch (error) {
@@ -17,6 +19,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requirePermission("academics.manage");
+    await requireRevenueFeature(user, "pathway_guidance");
     const body = await req.json();
     const data = pathwaySchema.parse(body);
     const pathway = await createPathway(user, data);

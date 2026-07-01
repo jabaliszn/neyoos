@@ -32,6 +32,7 @@ export const LEARNER_JOURNEY_VERIFICATION = ["VERIFIED", "PENDING", "NOT_REQUIRE
 
 export const LEARNER_JOURNEY_READ_PERMISSIONS = ["academics.view", "exam.view", "student.view"] as const satisfies readonly Permission[];
 export const LEARNER_JOURNEY_STAFF_VIEW_PERMISSIONS = ["academics.view", "exam.view", "student.view"] as const satisfies readonly Permission[];
+export const LEARNER_JOURNEY_PIN_PERMISSIONS = ["academics.manage", "exam.enter_marks", "exam.publish", "student.edit"] as const satisfies readonly Permission[];
 
 export const learnerJourneyQuerySchema = z.object({
   studentId: z.string().min(1, "studentId is required"),
@@ -63,6 +64,22 @@ export const learnerJourneyEntrySchema = z.object({
 }).strict();
 export type LearnerJourneyEntryInput = z.input<typeof learnerJourneyEntrySchema>;
 
+export const learnerJourneyPinSchema = z.object({
+  studentId: z.string().min(1, "studentId is required"),
+  entryId: z.string().trim().min(1, "entryId is required").max(120),
+  sourceModule: z.enum(LEARNER_JOURNEY_SOURCES),
+  sourceRecordId: optionalText(120),
+  note: optionalText(280),
+  visibility: z.enum(LEARNER_JOURNEY_VISIBILITY).default("STAFF"),
+}).strict();
+export type LearnerJourneyPinInput = z.input<typeof learnerJourneyPinSchema>;
+
+export const learnerJourneyUnpinSchema = z.object({
+  studentId: z.string().min(1, "studentId is required"),
+  entryId: z.string().trim().min(1, "entryId is required").max(120),
+}).strict();
+export type LearnerJourneyUnpinInput = z.input<typeof learnerJourneyUnpinSchema>;
+
 function roleHasAny(role: Role, permissions: readonly Permission[]) {
   return permissions.some((permission) => can(role, permission));
 }
@@ -88,6 +105,11 @@ export function userCanReadParentSafeLearnerJourney(user: Pick<SessionUser, "rol
   return userCanReadLearnerJourney(user);
 }
 
+export function userCanPinLearnerJourney(user: Pick<SessionUser, "role" | "secondaryRole">) {
+  const hasStaffIdentity = !roleIsParentOrStudent(user.role) || (!!user.secondaryRole && !roleIsParentOrStudent(user.secondaryRole));
+  return hasStaffIdentity && userHasAnyPermission(user, LEARNER_JOURNEY_PIN_PERMISSIONS);
+}
+
 export function userCanAccessLearnerJourneyMode(user: Pick<SessionUser, "role" | "secondaryRole">, mode: (typeof LEARNER_JOURNEY_MODES)[number]) {
   return mode === "staff" ? userCanReadStaffLearnerJourney(user) : userCanReadParentSafeLearnerJourney(user);
 }
@@ -98,5 +120,6 @@ export function learnerJourneyAccessMatrix() {
     readAny: roleHasAny(role, LEARNER_JOURNEY_READ_PERMISSIONS),
     readStaff: !roleIsParentOrStudent(role) && roleHasAny(role, LEARNER_JOURNEY_STAFF_VIEW_PERMISSIONS),
     readParentSafe: roleHasAny(role, LEARNER_JOURNEY_READ_PERMISSIONS),
+    pinMilestones: !roleIsParentOrStudent(role) && roleHasAny(role, LEARNER_JOURNEY_PIN_PERMISSIONS),
   }));
 }

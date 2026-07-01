@@ -500,6 +500,9 @@ async function main() {
     if (parentTimeline.entries.some((entry) => entry.visibility !== "PARENT_SAFE")) {
       throw new Error("Parent learner journey should only contain parent-safe entries.");
     }
+    if (parentTimeline.entries.some((entry) => entry.pinned)) {
+      throw new Error("Parent learner journey should not show staff-only pins by default.");
+    }
     if (!parentTitles.includes(`${tag} Published Exam`) || parentTitles.includes(`${tag} Internal Exam`)) {
       throw new Error("Parent learner journey should include only published exam milestones.");
     }

@@ -8,6 +8,7 @@
  */
 import { NextRequest } from "next/server";
 import { requireUser } from "@/lib/core/session";
+import { requireRevenueFeature } from "@/lib/services/tier-gating.service";
 import { ok, fail, handleError } from "@/lib/api/respond";
 import { skillsPassportActionSchema } from "@/lib/validations/skills-passport";
 import {
@@ -21,6 +22,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const user = await requireUser();
+    await requireRevenueFeature(user, "skills_passport");
     const studentId = req.nextUrl.searchParams.get("studentId");
     if (!studentId) return fail("INVALID", "studentId parameter is required.", 422);
 
@@ -33,6 +35,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser();
+    await requireRevenueFeature(user, "skills_passport");
     const input = skillsPassportActionSchema.parse(await req.json());
     switch (input.action) {
       case "record_skill_rating":

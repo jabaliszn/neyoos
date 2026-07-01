@@ -52,6 +52,7 @@ export const ADD_ONS: AddOnDef[] = [
   { key: "custom_reports", name: "Modular Report Builder", pricePerTerm: 1500, description: "Design infinite custom no-code report card layouts." },
   { key: "advanced_analytics", name: "Advanced School Analytics", pricePerTerm: 5000, description: "Systemic insights, attendance-performance correlations, and intervention alerts." },
   { key: "pathway_guidance", name: "Career Discovery & Pathways", pricePerTerm: 2000, description: "Track student interests and map Senior School pathways." },
+  { key: "transfer_passport", name: "Inter-School Transfer Passport", pricePerTerm: 1800, description: "Premium portable learner transfer record between schools (trust feature)." },
 ];
 
 const CORE = ["students", "attendance", "finance", "academics", "staff"];
@@ -116,7 +117,8 @@ export const PLANS: PlanDef[] = [
     perStudentPerTerm: 0,
     limits: { students: 5000, staff: 500, smsPerTerm: 0 },
     // Elite implicitly unlocks premium Part J features
-    includedModules: [...CORE, "library", "lms", "hostel", "transport", "inventory", "cafeteria", "skills_passport", "custom_reports", "advanced_analytics", "pathway_guidance"],
+    // Elite bundles every premium Part-J revenue feature (J.23).
+    includedModules: [...CORE, "library", "lms", "hostel", "transport", "inventory", "cafeteria", "extra_storage", "skills_passport", "custom_reports", "advanced_analytics", "pathway_guidance", "transfer_passport"],
     maxAddOns: 15,
     overageAllowance: 1.25,
     support: "Priority support + onboarding",

@@ -10,6 +10,7 @@
  */
 import { NextRequest } from "next/server";
 import { requireUser } from "@/lib/core/session";
+import { assertJFeatureEnabled } from "@/lib/services/platform-flags.service";
 import { ok, fail, handleError } from "@/lib/api/respond";
 import { portfolioActionSchema } from "@/lib/validations/portfolio";
 import {
@@ -27,6 +28,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const user = await requireUser();
+    await assertJFeatureEnabled("J.7");
     const studentId = req.nextUrl.searchParams.get("studentId");
     if (!studentId) return fail("INVALID", "studentId parameter is required.", 422);
 
@@ -43,6 +45,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser();
+    await assertJFeatureEnabled("J.7");
     const input = portfolioActionSchema.parse(await req.json());
     switch (input.action) {
       case "submit_item":

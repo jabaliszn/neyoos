@@ -35,6 +35,8 @@ export async function POST(req: NextRequest) {
         subjectId: body.subjectId,
         lessonsPerWeek: Number(body.lessonsPerWeek),
         teacherId: body.teacherId || null,
+        doubleCount: body.doubleCount !== undefined ? Number(body.doubleCount) : undefined,
+        allowSplitDouble: body.allowSplitDouble !== undefined ? Boolean(body.allowSplitDouble) : undefined,
       });
       return ok(result);
     }

@@ -173,8 +173,8 @@ function CreatePortalDialog({ subjects, onClose, onDone }: any) {
                   <div key={s.id} className="flex items-center justify-between p-2 border border-navy-100 rounded-lg dark:border-navy-800 bg-navy-50/30 dark:bg-navy-900/10">
                     <span className="text-xs font-semibold">{s.name} ({s.code})</span>
                     <div className="flex items-center gap-1">
-                      <Button size="sm" variant={isC ? "default" : "outline"} className={\`h-6 text-[10px] px-2 \${isC ? "bg-red-600 hover:bg-red-700" : ""}\`} onClick={() => toggle(s.id, true)}>Compulsory</Button>
-                      <Button size="sm" variant={isE ? "default" : "outline"} className={\`h-6 text-[10px] px-2 \${isE ? "bg-green-600 hover:bg-green-700" : ""}\`} onClick={() => toggle(s.id, false)}>Elective</Button>
+                      <Button size="sm" variant={isC ? "default" : "outline"} className={`h-6 text-[10px] px-2 ${isC ? "bg-red-600 hover:bg-red-700" : ""}`} onClick={() => toggle(s.id, true)}>Compulsory</Button>
+                      <Button size="sm" variant={isE ? "default" : "outline"} className={`h-6 text-[10px] px-2 ${isE ? "bg-green-600 hover:bg-green-700" : ""}`} onClick={() => toggle(s.id, false)}>Elective</Button>
                     </div>
                   </div>
                 )
@@ -197,7 +197,7 @@ function SelectionReportDialog({ portalId, onClose }: any) {
   const [data, setData] = React.useState<any>(null);
   
   React.useEffect(() => {
-    fetch(\`/api/academics/subject-selection?portalId=\${portalId}\`)
+    fetch(`/api/academics/subject-selection?portalId=${portalId}`)
       .then(r => r.json())
       .then(j => { if (j.ok) setData(j.data); });
   }, [portalId]);

@@ -78,14 +78,31 @@ const assessmentTypeFields = z
     scoreMode: z.enum(ASSESSMENT_SCORE_MODES).default("MIXED"),
     defaultMaxMarks: z.coerce.number().int().min(1).max(1000).optional(),
     defaultWeight: z.coerce.number().int().min(0).max(100).default(0),
+    // J.20 — assessment templates carry effective dates so a school can version
+    // its assessment definitions across curriculum updates (e.g. CBC 2026 vs 2027).
+    effectiveFrom: optionalDateYmd,
+    effectiveTo: optionalDateYmd,
     evidenceAllowed: z.boolean().default(true),
     requiresModeration: z.boolean().default(true),
     active: z.boolean().default(true),
   })
   .strict();
 
-export const assessmentTypeSchema = assessmentTypeFields;
-export const assessmentTypeUpdateSchema = assessmentTypeFields.partial().extend({ id: z.string().min(1) }).strict();
+const assessmentTypeEffectiveDatesValid = (value: { effectiveFrom?: string; effectiveTo?: string }) =>
+  !value.effectiveFrom || !value.effectiveTo || value.effectiveTo >= value.effectiveFrom;
+
+export const assessmentTypeSchema = assessmentTypeFields.refine(assessmentTypeEffectiveDatesValid, {
+  message: "Effective end date cannot be before the start date.",
+  path: ["effectiveTo"],
+});
+export const assessmentTypeUpdateSchema = assessmentTypeFields
+  .partial()
+  .extend({ id: z.string().min(1) })
+  .strict()
+  .refine(assessmentTypeEffectiveDatesValid, {
+    message: "Effective end date cannot be before the start date.",
+    path: ["effectiveTo"],
+  });
 export type AssessmentTypeInput = z.input<typeof assessmentTypeSchema>;
 export type AssessmentTypeUpdateInput = z.input<typeof assessmentTypeUpdateSchema>;
 

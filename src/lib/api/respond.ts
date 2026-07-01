@@ -22,6 +22,8 @@ import { WebhookError } from "@/lib/services/webhook.service";
 import { CalendarError } from "@/lib/services/calendar.service";
 import { ReceptionError } from "@/lib/services/reception.service";
 import { StudentError } from "@/lib/services/student.service";
+import { PathwayError } from "@/lib/services/pathway.service";
+import { TalentError } from "@/lib/services/talent.service";
 import { ImportError } from "@/lib/services/student-import.service";
 import { AttendanceError } from "@/lib/services/attendance.service";
 import { PromotionError } from "@/lib/services/promotion.service";
@@ -29,6 +31,11 @@ import { AdmissionError } from "@/lib/services/admission.service";
 import { EntranceExamPaperError } from "@/lib/services/entrance-exam.service";
 import { StaffAttendanceError } from "@/lib/services/staff-attendance.service";
 import { AcademicsError } from "@/lib/services/academics.service";
+import { GrowthError } from "@/lib/services/parent-growth.service";
+import { DigitalIdentityError } from "@/lib/services/digital-identity.service";
+import { ComplianceError } from "@/lib/services/retention.service";
+import { TierGatingError } from "@/lib/services/tier-gating.service";
+import { FeatureGrantError } from "@/lib/services/feature-grants.service";
 import { CurriculumError } from "@/lib/services/curriculum.service";
 import { AssessmentError } from "@/lib/services/assessment.service";
 import { CompetencyError } from "@/lib/services/competency.service";
@@ -80,6 +87,7 @@ import { RubricError } from "@/lib/services/rubric.service";
 import { SkillsPassportError } from "@/lib/services/skills-passport.service";
 import { PortfolioError } from "@/lib/services/portfolio.service";
 import { LearnerJourneyError } from "@/lib/services/learner-journey.service";
+import { GlobalTemplateError } from "@/lib/services/global-curriculum.service";
 import { TenantIsolationError } from "@/lib/core/tenant-db";
 import { captureError } from "@/lib/observability/capture";
 import { RateLimitError } from "@/lib/security/rate-limit";
@@ -161,6 +169,20 @@ export function handleError(err: unknown) {
         : err.code === "CONTENT_MODERATED"
         ? 422
         : 403;
+    return fail(err.code, err.message, status);
+  }
+
+  // Talent problems.
+  if (err instanceof TalentError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 : err.code === "CONFLICT" ? 409 : err.code === "FORBIDDEN" ? 403 : 400;
+    return fail(err.code, err.message, status);
+  }
+
+  // Pathway problems.
+  if (err instanceof PathwayError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 : err.code === "CONFLICT" ? 409 : err.code === "FORBIDDEN" ? 403 : 400;
     return fail(err.code, err.message, status);
   }
 
@@ -249,6 +271,35 @@ export function handleError(err: unknown) {
   // Academics (B.4).
   if (err instanceof AcademicsError) {
     const status = err.code === "NOT_FOUND" ? 404 : err.code === "DUPLICATE" ? 409 : err.code === "FORBIDDEN" ? 403 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // J.13 parent growth dashboard.
+  if (err instanceof GrowthError) {
+    const status = err.code === "NOT_FOUND" ? 404 : err.code === "FORBIDDEN" ? 403 : err.code === "DISABLED" ? 403 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // J.14 digital identity & transfer passport.
+  if (err instanceof DigitalIdentityError) {
+    const status = err.code === "NOT_FOUND" ? 404 : err.code === "FORBIDDEN" ? 403 : err.code === "DISABLED" ? 403 : err.code === "EXPIRED" ? 410 : 422;
+    return fail(err.code, err.message, status, err.fields);
+  }
+
+  // J.22 compliance — ODPC lawful-basis / data-minimisation guard.
+  if (err instanceof ComplianceError) {
+    const status = err.code === "FORBIDDEN" ? 403 : 400;
+    return fail(err.code, err.message, status, err.fields);
+  }
+
+  // J.23 revenue tier-gating — feature requires a higher plan / add-on / grant.
+  if (err instanceof TierGatingError) {
+    return fail("PAYMENT_REQUIRED", err.message, 402, { featureKey: err.featureKey });
+  }
+
+  // J.23 per-school manual feature grant errors.
+  if (err instanceof FeatureGrantError) {
+    const status = err.code === "NOT_FOUND" ? 404 : 400;
     return fail(err.code, err.message, status);
   }
 
@@ -588,6 +639,15 @@ export function handleError(err: unknown) {
       err.code === "NOT_FOUND" ? 404 :
       err.code === "FORBIDDEN" ? 403 :
       err.code === "TOO_LARGE" ? 413 : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // J.21 NEYO Ops curriculum template library.
+  if (err instanceof GlobalTemplateError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 :
+      err.code === "FORBIDDEN" ? 403 :
+      err.code === "CONFLICT" ? 409 : 422;
     return fail(err.code, err.message, status);
   }
 

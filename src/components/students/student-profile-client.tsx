@@ -299,6 +299,12 @@ export function StudentProfileClient({ initial, canEdit, isCurriculumEngineEnabl
           
           {/* Talent Tracking */}
           <StudentTalentTab studentId={s.id} />
+
+          {/* Community Service */}
+          <StudentServiceTab studentId={s.id} />
+
+          {/* Career Discovery */}
+          <StudentCareerTab studentId={s.id} />
           
           {/* Senior School Pathway */}
           <StudentPathwayTab studentId={s.id} />

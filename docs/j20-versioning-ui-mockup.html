@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NEYO — J.20 Curriculum Versioning (Labelled Mockup)</title>
+<style>
+  :root{
+    --navy-950:#0b1120; --navy-900:#111a2e; --navy-800:#1c2740; --navy-700:#2a3656;
+    --navy-500:#64748b; --navy-300:#cbd5e1; --navy-100:#e6ebf4; --navy-50:#f4f7fc;
+    --green-50:#ecfdf5; --green-100:#d1fae5; --green-600:#16a34a; --green-700:#15803d;
+    --amber-50:#fffbeb; --amber-100:#fef3c7; --amber-600:#d97706; --amber-700:#b45309;
+    --red-50:#fef2f2; --red-100:#fee2e2; --red-600:#dc2626; --red-700:#b91c1c;
+    --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:linear-gradient(160deg,#eef2fb,#dfe7f6);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--navy-950);padding:32px;}
+  .note{max-width:1080px;margin:0 auto 20px;padding:12px 16px;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:13px;font-weight:600;}
+  .wrap{max-width:1080px;margin:0 auto;background:#fff;border-radius:24px;box-shadow:0 24px 60px rgba(11,17,32,.14);overflow:hidden;border:1px solid var(--navy-100);}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 26px;background:var(--navy-950);color:#fff;}
+  .topbar .brand{font-weight:900;letter-spacing:.04em;}
+  .topbar .ctx{font-size:12px;color:#9fb0d0;}
+  .tabs{display:flex;gap:6px;padding:14px 26px 0;border-bottom:1px solid var(--navy-100);background:var(--navy-50);}
+  .tab{padding:9px 14px;font-size:13px;font-weight:600;color:var(--navy-500);border-radius:10px 10px 0 0;}
+  .tab.active{color:var(--navy-950);background:#fff;border:1px solid var(--navy-100);border-bottom-color:#fff;}
+  .body{padding:26px;}
+  .head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--navy-100);padding-bottom:16px;margin-bottom:20px;}
+  .head h2{margin:0;font-size:20px;font-weight:900;display:flex;align-items:center;gap:8px;}
+  .head p{margin:4px 0 0;font-size:13px;color:var(--navy-500);font-weight:500;}
+  .btn{border:none;border-radius:999px;padding:9px 16px;font-size:13px;font-weight:600;cursor:default;display:inline-flex;align-items:center;gap:7px;}
+  .btn-secondary{background:#fff;color:var(--navy-800);border:1px solid var(--navy-300);}
+  .btn-primary{background:rgba(34,197,94,.85);color:#fff;border:1px solid rgba(74,222,128,.3);}
+  .btn-sm{padding:6px 12px;font-size:12px;}
+  .timeline{position:relative;padding-left:8px;}
+  .timeline:before{content:"";position:absolute;left:20px;top:0;bottom:0;width:2px;background:var(--navy-100);}
+  .row{display:flex;align-items:center;gap:22px;margin-bottom:16px;position:relative;}
+  .dot{width:40px;height:40px;border-radius:999px;display:flex;align-items:center;justify-content:center;border:4px solid #fff;z-index:2;flex:0 0 auto;font-size:16px;}
+  .dot.active{background:var(--green-100);color:var(--green-600);}
+  .dot.draft{background:var(--amber-100);color:var(--amber-600);}
+  .dot.arch{background:var(--navy-100);color:var(--navy-500);}
+  .card{flex:1;border:1px solid var(--navy-100);border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(11,17,32,.05);}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;padding:16px;background:#fff;}
+  .card .foot{display:flex;gap:8px;align-items:center;padding:12px 16px;background:var(--navy-50);border-top:1px solid var(--navy-100);}
+  .badge{display:inline-flex;align-items:center;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:600;}
+  .badge-green{background:var(--green-100);color:var(--green-700);}
+  .badge-amber{background:var(--amber-100);color:var(--amber-700);}
+  .badge-neutral{background:var(--navy-100);color:var(--navy-700);}
+  .badge-blue{background:var(--blue-100);color:var(--blue-700);}
+  .vlabel{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--navy-500);text-transform:uppercase;}
+  .vtitle{font-size:17px;font-weight:800;margin:4px 0 2px;}
+  .vmeta{font-size:12px;color:var(--navy-500);}
+  .pill{background:var(--navy-50);border:1px solid var(--navy-100);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;color:var(--navy-600);}
+  .modal{margin-top:30px;border:1px dashed var(--navy-300);border-radius:18px;padding:18px;background:rgba(255,255,255,.7);backdrop-filter:blur(8px);}
+  .modal h4{margin:0 0 4px;font-size:14px;font-weight:900;}
+  .diffbox{border-radius:12px;padding:12px;font-size:13px;margin-top:8px;}
+  .diff-unchanged{background:var(--navy-50);border:1px solid var(--navy-100);}
+  .diff-added{background:var(--green-50);border:1px solid var(--green-100);color:var(--green-700);}
+  .diff-removed{background:var(--red-50);border:1px solid var(--red-100);color:var(--red-700);}
+  .diff-renamed{background:var(--amber-50);border:1px solid var(--amber-100);color:var(--amber-700);}
+  .diff-warn{background:var(--blue-50);border:1px solid var(--blue-100);color:var(--blue-700);font-size:12px;}
+  .diffbox ul{margin:6px 0 0;padding-left:20px;font-size:12px;}
+  .states{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:30px;}
+  .state{border:1px solid var(--navy-100);border-radius:14px;padding:16px;background:#fff;}
+  .state .lab{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--blue-600);}
+  .footer{padding:14px 26px;text-align:center;font-size:12px;color:var(--navy-500);border-top:1px solid var(--navy-100);background:var(--navy-50);}
+  .sectionlabel{max-width:1080px;margin:26px auto 8px;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--navy-500);}
+</style>
+</head>
+<body>
+
+<div class="note">⚠️ This is a <strong>labelled static mockup</strong> (inline styles only) — not a live screenshot. The browser/Chromium environment is unavailable, so per project honesty rules we do not fake screenshots. It illustrates the real component <code>curriculum-version-manager.tsx</code> proven by <code>scripts/j20-versioning-fullstack-test.ts</code>.</div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">NEYO · Academics</div>
+    <div class="ctx">Karibu High School · Nairobi · CBC / 8-4-4</div>
+  </div>
+  <div class="tabs">
+    <div class="tab">Subjects</div>
+    <div class="tab">Terms</div>
+    <div class="tab active">Curriculum Versions</div>
+    <div class="tab">Pathways</div>
+    <div class="tab">Reports</div>
+  </div>
+
+  <div class="body">
+    <div class="head">
+      <div>
+        <h2>⎇ Curriculum Versioning</h2>
+        <p>Draft, preview, and deploy curriculum updates without breaking historical reports.</p>
+      </div>
+      <button class="btn btn-secondary">⬇ Import from NEYO Library</button>
+    </div>
+
+    <!-- DATA STATE -->
+    <div class="timeline">
+      <div class="row">
+        <div class="dot active">✓</div>
+        <div class="card">
+          <div class="top">
+            <div>
+              <span class="badge badge-green">ACTIVE</span>
+              <span class="vlabel" style="margin-left:8px;">CBC 2026</span>
+              <div class="vtitle">CBC Kenya</div>
+              <div class="vmeta">Effective: 2026-01-01</div>
+            </div>
+            <span class="pill">9 Learning Areas</span>
+          </div>
+          <div class="foot">
+            <button class="btn btn-secondary btn-sm">⎇ Draft Next Update</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="dot draft">◔</div>
+        <div class="card">
+          <div class="top">
+            <div>
+              <span class="badge badge-amber">DRAFT</span>
+              <span class="vlabel" style="margin-left:8px;">CBC 2027 Update</span>
+              <div class="vtitle">CBC Kenya</div>
+              <div class="vmeta">Not yet effective</div>
+            </div>
+            <span class="pill">10 Learning Areas</span>
+          </div>
+          <div class="foot">
+            <button class="btn btn-secondary btn-sm">👁 Preview Diff</button>
+            <button class="btn btn-primary btn-sm">▶ Publish Live</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="dot arch">🗄</div>
+        <div class="card">
+          <div class="top">
+            <div>
+              <span class="badge badge-neutral">ARCHIVED</span>
+              <span class="vlabel" style="margin-left:8px;">8-4-4 Legacy</span>
+              <div class="vtitle">8-4-4 Legacy</div>
+              <div class="vmeta">Effective: 2018-01-01 — 2025-12-31 · kept for historical reports</div>
+            </div>
+            <span class="pill">12 Learning Areas</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MIGRATION PREVIEW MODAL -->
+    <div class="modal">
+      <h4>Preview Migration Changes (modal)</h4>
+      <div style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;font-weight:800;">
+        <span class="badge badge-neutral">CBC 2026</span> → <span class="badge badge-blue">CBC 2027 Update</span>
+      </div>
+      <div class="diffbox diff-unchanged"><strong>Unchanged Areas:</strong> 8</div>
+      <div class="diffbox diff-added"><strong>Added (+1):</strong>
+        <ul><li>Coding &amp; Robotics</li></ul>
+      </div>
+      <div class="diffbox diff-renamed"><strong>Renamed (1):</strong>
+        <ul><li>Home Science → Life Skills &amp; Wellbeing</li></ul>
+      </div>
+      <div class="diffbox diff-warn">
+        Existing reports keep the curriculum version they were issued under. Only future reports will use this new version.
+        <div style="margin-top:4px;font-weight:700;">3 historical report template(s) stay pinned to CBC 2026.</div>
+      </div>
+    </div>
+
+    <!-- FOUR UX STATES -->
+    <div class="states">
+      <div class="state"><div class="lab">1 · Loading</div><p style="color:var(--navy-500);font-size:13px;">◍ Spinner while versions load…</p></div>
+      <div class="state"><div class="lab">2 · Empty</div><p style="color:var(--navy-500);font-size:13px;">No curriculum versions yet. Your active curriculum will appear here.</p></div>
+      <div class="state"><div class="lab">3 · Error</div><p style="color:var(--red-700);font-size:13px;">Failed to load versions. <span class="badge badge-neutral">Try again</span></p></div>
+      <div class="state"><div class="lab">4 · Data</div><p style="color:var(--navy-500);font-size:13px;">Timeline of ACTIVE / DRAFT / ARCHIVED versions (shown above).</p></div>
+    </div>
+  </div>
+
+  <div class="footer">Powered by NEYO · neyo.co.ke</div>
+</div>
+
+</body>
+</html>

@@ -3,6 +3,7 @@ import { Compass } from "lucide-react";
 import { requirePageUser } from "@/lib/core/page-guards";
 import { effectivePermissionsForUser } from "@/lib/core/session";
 import { CurriculumEngineClient } from "@/components/curriculum/curriculum-engine-client";
+import { getSchoolLevelActivationSummary } from "@/lib/services/school-profile.service";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export default async function CurriculumSettingsPage() {
   const effective = await effectivePermissionsForUser(user);
   const canRead = effective.includes("academics.view") || effective.includes("tenant.manage_settings");
   if (!canRead) redirect("/forbidden");
+  const schoolLevelActivation = await getSchoolLevelActivationSummary(user.tenantId);
 
   return (
     <div className="w-full space-y-6">
@@ -29,6 +31,13 @@ export default async function CurriculumSettingsPage() {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 dark:border-green-900/30 dark:bg-green-950/20 dark:text-green-200">
+        <p className="font-semibold">Level-aware Curriculum</p>
+        <p className="mt-1 text-xs text-green-800 dark:text-green-300">
+          Active levels: {schoolLevelActivation.educationLevelsOffered.length > 0 ? schoolLevelActivation.educationLevelsOffered.join(', ') : 'None selected yet'}.
+          {schoolLevelActivation.isSeniorSchool ? ' Senior School is active, so pathway-aware curriculum configuration should be expected.' : ' Senior School pathway complexity stays hidden until Senior School is activated in School Profile.'}
+        </p>
+      </div>
       <CurriculumEngineClient />
     </div>
   );

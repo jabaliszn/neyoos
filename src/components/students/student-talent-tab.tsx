@@ -46,7 +46,7 @@ export function StudentTalentTab({ studentId }: { studentId: string }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-black text-navy-950 dark:text-white">Talent Tracking</h2>
-          <p className="text-sm font-medium text-navy-500">Coach evaluations and co-curricular progression records.</p>
+          <p className="text-sm font-medium text-navy-500">Coach evaluations, club activity links, and co-curricular progression records.</p>
         </div>
         <Button onClick={() => setOpen(true)} className="rounded-full shadow-pop"><Plus className="mr-2 h-4 w-4" /> Add Record</Button>
       </div>
@@ -63,7 +63,7 @@ export function StudentTalentTab({ studentId }: { studentId: string }) {
             <div key={record.id} className="flex flex-col md:flex-row gap-4 p-4 rounded-2xl border border-navy-100 bg-white dark:border-navy-800 dark:bg-navy-950">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <Badge variant="secondary" className="text-[10px]">{record.talentArea.category}</Badge>
+                  <Badge tone="neutral" className="text-[10px]">{record.talentArea.category}</Badge>
                   <span className="text-xs font-semibold text-navy-500">{new Date(record.dateRecorded).toLocaleDateString()}</span>
                 </div>
                 <h4 className="font-bold text-lg text-navy-950 dark:text-white">{record.talentArea.name}</h4>
@@ -92,8 +92,20 @@ function AddTalentRecordDialog({ studentId, areas, onClose, onDone }: any) {
   const [areaId, setAreaId] = React.useState("");
   const [score, setScore] = React.useState("");
   const [notes, setNotes] = React.useState("");
+  const [portfolioItemId, setPortfolioItemId] = React.useState("");
+  const [portfolioItems, setPortfolioItems] = React.useState<any[]>([]);
   const [saving, setSaving] = React.useState(false);
   const { toast } = useToast();
+
+  React.useEffect(() => {
+    // Load this learner's portfolio items so the coach can link evidence.
+    fetch(`/api/portfolio?studentId=${studentId}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.ok && json.data?.timeline?.items) setPortfolioItems(json.data.timeline.items);
+      })
+      .catch(() => {});
+  }, [studentId]);
 
   async function save() {
     if (!areaId) return toast({ title: "Please select a talent area", tone: "error" });
@@ -102,15 +114,16 @@ function AddTalentRecordDialog({ studentId, areas, onClose, onDone }: any) {
       const res = await fetch("/api/talents/records", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          studentId, 
-          talentAreaId: areaId, 
-          score: score ? parseInt(score, 10) : undefined, 
-          notes: notes || undefined 
+        body: JSON.stringify({
+          studentId,
+          talentAreaId: areaId,
+          score: score ? parseInt(score, 10) : undefined,
+          notes: notes || undefined,
+          portfolioItemId: portfolioItemId || undefined,
         }),
       });
       const json = await res.json();
-      if (json.ok) { toast({ title: "Record added", tone: "success" }); onDone(); }
+      if (json.ok) { toast({ title: "Record added — also added to Skills Passport", tone: "success" }); onDone(); }
       else toast({ title: json.error?.message || "Failed", tone: "error" });
     } catch {
       toast({ title: "Network error", tone: "error" });
@@ -126,7 +139,7 @@ function AddTalentRecordDialog({ studentId, areas, onClose, onDone }: any) {
         <div className="space-y-4 py-4">
           <div className="space-y-1">
             <Label>Talent Area</Label>
-            <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="w-full h-10 rounded-xl border border-navy-200 bg-white px-3 text-sm">
+            <select value={areaId} onChange={(e) => setAreaId(e.target.value)} className="w-full h-10 rounded-xl border border-navy-200 bg-white px-3 text-sm dark:border-navy-700 dark:bg-navy-950">
               <option value="">Select...</option>
               {areas.map((a: any) => <option key={a.id} value={a.id}>{a.name} ({a.category})</option>)}
             </select>
@@ -139,9 +152,17 @@ function AddTalentRecordDialog({ studentId, areas, onClose, onDone }: any) {
             <Label>Coach/Teacher Notes</Label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Progress observations..." />
           </div>
+          <div className="space-y-1">
+            <Label>Link portfolio evidence — Optional</Label>
+            <select value={portfolioItemId} onChange={(e) => setPortfolioItemId(e.target.value)} className="w-full h-10 rounded-xl border border-navy-200 bg-white px-3 text-sm dark:border-navy-700 dark:bg-navy-950">
+              <option value="">No evidence linked</option>
+              {portfolioItems.map((it: any) => <option key={it.id} value={it.id}>{it.title} ({it.category})</option>)}
+            </select>
+            <p className="text-[11px] text-navy-400">This record is also added to the learner's Skills Passport.</p>
+          </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="rounded-full">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Record"}</Button>
         </DialogFooter>
       </DialogContent>

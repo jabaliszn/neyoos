@@ -12,6 +12,7 @@
  */
 import { NextRequest } from "next/server";
 import { requireUser } from "@/lib/core/session";
+import { assertJFeatureEnabled } from "@/lib/services/platform-flags.service";
 import { ok, handleError } from "@/lib/api/respond";
 import { assessmentActionSchema } from "@/lib/validations/assessment";
 import {
@@ -34,6 +35,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const user = await requireUser();
+    await assertJFeatureEnabled("J.3");
     const planId = req.nextUrl.searchParams.get("planId");
     if (planId) return ok({ sheet: await assessmentSheet(user, planId) });
     return ok({ board: await assessmentBoard(user) });
@@ -45,6 +47,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser();
+    await assertJFeatureEnabled("J.3");
     const body = await req.json();
     const input = assessmentActionSchema.parse(body);
 

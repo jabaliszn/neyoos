@@ -38,7 +38,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { formatKES } from "@/lib/utils";
 
-const TABS = ["Overview", "Build log", "Metrics", "Cadence", "Interviews", "Platform Flags", "Business Operations", "Ecosystem Trends"] as const;
+const TABS = ["Overview", "Build log", "Metrics", "Cadence", "Interviews", "Platform Flags", "Feature Toggles", "Revenue Grants", "Curriculum Library", "Business Operations", "Ecosystem Trends"] as const;
 type Tab = (typeof TABS)[number];
 
 type Dashboard = {
@@ -766,6 +766,9 @@ export function FounderOpsClient() {
       {tab === "Cadence" && <Card><CardHeader><CardTitle>Founder rhythm cadence</CardTitle></CardHeader><CardContent><CadenceTab rows={data.entries} value={entry} setValue={setEntry} saving={saving} onSave={() => mutate("upsert_entry", { ...entry, completedAt: entry.completedAt ? new Date(entry.completedAt).toISOString() : null, decisions: lines(entry.decisionsText), actionItems: actionItems(entry.actionItemsText) }, "Founder cadence entry saved")} onDelete={(id: string) => remove("entries", id)} /></CardContent></Card>}
       {tab === "Interviews" && <InterviewsTab rows={data.interviews} value={interview} setValue={setInterview} saving={saving} onSave={() => mutate("create_interview", { ...interview, painPoints: lines(interview.painPointsText), quotes: lines(interview.quotesText), opportunities: lines(interview.opportunitiesText) }, "Customer interview saved")} onDelete={(id: string) => remove("interviews", id)} />}
       {tab === "Platform Flags" && <PlatformFlagsTab flags={flags} toggling={saving} onToggle={toggleFlag} />}
+      {tab === "Feature Toggles" && <JFeatureTogglesTab />}
+      {tab === "Revenue Grants" && <RevenueGrantsOpsTab />}
+      {tab === "Curriculum Library" && <CurriculumLibraryOpsTab />}
       
       {tab === "Business Operations" && (
         <BusinessOperationsTab
@@ -2301,4 +2304,353 @@ function BusinessOperationsTab({
 function TwoCol({ form, list }: { form: React.ReactNode; list: React.ReactNode }) { return <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">{form}{list}</div>; }
 function Rows({ title, rows, empty, main, sub, section, onDelete }: any) {
   return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent>{rows.length===0?<EmptyState icon={Plus} title={empty} description="Create the first record from the form."/>:<div className="space-y-3">{rows.map((r:any)=><div key={r.id} className="rounded-2xl border border-navy-100 bg-white/70 p-3 dark:border-navy-800 dark:bg-navy-900/60"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-navy-900 dark:text-navy-50">{r[main]}</p><p className="mt-1 line-clamp-2 text-sm text-navy-500 dark:text-navy-400">{r[sub] || fmtDate(r.dateKey || r.periodStart || r.scheduledFor || r.interviewDate)}</p></div><Button size="sm" variant="ghost" onClick={()=>onDelete(r.id)} className="text-red-600"><Trash2 className="h-4 w-4"/></Button></div>{r.status?<Badge className="mt-3" tone={statusTone(r.status)}>{r.status}</Badge>:null}</div>)}</div>}</CardContent></Card>;
+}
+
+// =============================================================================
+// Part-J Feature Toggles (founder 2026-06-29) — switch each Part-J feature
+// ON/OFF platform-wide before launch. Default ON.
+// =============================================================================
+function JFeatureTogglesTab() {
+  const { toast } = useToast();
+  const [features, setFeatures] = React.useState<any[] | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/ops/j-features");
+      const json = await res.json();
+      if (json.ok) setFeatures(json.data.features);
+      else setError(json.error?.message || "Failed to load feature toggles");
+    } catch {
+      setError("Failed to load feature toggles");
+    }
+  }, []);
+
+  React.useEffect(() => { void load(); }, [load]);
+
+  async function toggle(id: string, enabled: boolean) {
+    setBusyId(id);
+    try {
+      const res = await fetch("/api/ops/j-features", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, enabled }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: `${id} ${enabled ? "switched ON" : "switched OFF"}`, tone: "success" });
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed", tone: "error" });
+      }
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Part-J feature toggles</CardTitle>
+        <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">Switch each Part-J feature ON or OFF for every school before launch. Default is ON. Changes are audit logged.</p>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+            {error} <Button size="sm" variant="secondary" className="ml-2" onClick={() => void load()}>Retry</Button>
+          </div>
+        ) : features === null ? (
+          <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}</div>
+        ) : features.length === 0 ? (
+          <EmptyState icon={Sliders} title="No Part-J features registered" description="Add features to the J-feature registry first." />
+        ) : (
+          <div className="space-y-3">
+            {features.map((f) => (
+              <div key={f.id} className="flex items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white/70 p-4 dark:border-navy-800 dark:bg-navy-900/60">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-widest text-navy-500">{f.id}</span>
+                    <p className="font-semibold text-navy-900 dark:text-navy-50">{f.label}</p>
+                    <Badge tone={f.enabled ? "green" : "red"}>{f.enabled ? "ON" : "OFF"}</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-navy-500 dark:text-navy-400">{f.description}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant={f.enabled ? "secondary" : "primary"}
+                  disabled={busyId === f.id}
+                  onClick={() => toggle(f.id, !f.enabled)}
+                >
+                  {busyId === f.id ? "…" : f.enabled ? "Switch OFF" : "Switch ON"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// =============================================================================
+// J.21 — NEYO Ops Curriculum Template Library management.
+// Create / publish / announce / delete company-level curriculum templates.
+// =============================================================================
+function CurriculumLibraryOpsTab() {
+  const { toast } = useToast();
+  const [templates, setTemplates] = React.useState<any[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const empty = { name: "", country: "Kenya", context: "", version: "v1", description: "", status: "DRAFT", changeNote: "", learningAreasText: "" };
+  const [form, setForm] = React.useState<any>(empty);
+
+  const load = React.useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/ops/curriculum-templates");
+      const json = await res.json();
+      if (json.ok) setTemplates(json.data);
+      else setError(json.error?.message || "Failed to load templates");
+    } catch {
+      setError("Failed to load templates");
+    }
+  }, []);
+
+  React.useEffect(() => { void load(); }, [load]);
+
+  function parseAreas(text: string) {
+    // each line: "Code | Name | optional description"
+    return text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+      const [code, name, description] = l.split("|").map((s) => s.trim());
+      return { code: code || name, name: name || code, description: description || null };
+    });
+  }
+
+  async function save(status: "DRAFT" | "PUBLISHED") {
+    if (!form.name || form.name.length < 2) return toast({ title: "Template name required", tone: "error" });
+    setSaving(true);
+    try {
+      const res = await fetch("/api/ops/curriculum-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name, country: form.country, context: form.context || null,
+          version: form.version, description: form.description || null, status,
+          changeNote: form.changeNote || null, learningAreas: parseAreas(form.learningAreasText),
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: status === "PUBLISHED" ? "Template published" : "Template saved as draft", tone: "success" });
+        setForm(empty);
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed", tone: "error" });
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function announce(id: string) {
+    const note = window.prompt("What changed in this update? (shown to schools)");
+    if (!note) return;
+    const res = await fetch(`/api/ops/curriculum-templates?id=${id}&action=announce`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ changeNote: note }),
+    });
+    if (res.ok) { toast({ title: "Update announced to schools", tone: "success" }); await load(); }
+    else toast({ title: "Failed to announce", tone: "error" });
+  }
+
+  async function remove(id: string) {
+    if (!window.confirm("Delete this template?")) return;
+    const res = await fetch(`/api/ops/curriculum-templates?id=${id}`, { method: "DELETE" });
+    if (res.ok) { toast({ title: "Template deleted", tone: "success" }); await load(); }
+    else toast({ title: "Failed to delete", tone: "error" });
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>New curriculum template</CardTitle>
+          <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">Create a company-level template (CBC Kenya, 8-4-4 legacy, or custom) that schools can adopt.</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="CBC Kenya Junior School" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1"><Label>Country</Label><Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} /></div>
+            <div className="space-y-1"><Label>Version</Label><Input value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} placeholder="2026 Release" /></div>
+          </div>
+          <div className="space-y-1"><Label>Context</Label><Input value={form.context} onChange={(e) => setForm({ ...form, context: e.target.value })} placeholder="Grade 7-9" /></div>
+          <div className="space-y-1"><Label>Description</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+          <div className="space-y-1">
+            <Label>Learning areas (one per line: Code | Name | description)</Label>
+            <textarea value={form.learningAreasText} onChange={(e) => setForm({ ...form, learningAreasText: e.target.value })} rows={5}
+              className="w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900"
+              placeholder={"MAT | Mathematics | Core math\nENG | English Language | Core language"} />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" disabled={saving} onClick={() => save("DRAFT")}>Save draft</Button>
+            <Button variant="primary" disabled={saving} onClick={() => save("PUBLISHED")}>Publish to schools</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Existing templates</CardTitle></CardHeader>
+        <CardContent>
+          {error ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">{error}</div>
+          ) : templates === null ? (
+            <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 w-full rounded-2xl" />)}</div>
+          ) : templates.length === 0 ? (
+            <EmptyState icon={Plus} title="No templates yet" description="Create and publish the first curriculum template." />
+          ) : (
+            <div className="space-y-3">
+              {templates.map((t) => (
+                <div key={t.id} className="rounded-2xl border border-navy-100 bg-white/70 p-3 dark:border-navy-800 dark:bg-navy-900/60">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-navy-900 dark:text-navy-50">{t.name}</p>
+                        <Badge tone={t.status === "PUBLISHED" ? "green" : "neutral"}>{t.status}</Badge>
+                        <span className="text-xs font-bold uppercase tracking-widest text-navy-500">{t.version}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-navy-500 dark:text-navy-400">{t.context || t.country}{t.changeNote ? ` · Latest note: ${t.changeNote}` : ""}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      {t.status === "PUBLISHED" && <Button size="sm" variant="secondary" onClick={() => announce(t.id)}>Announce update</Button>}
+                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(t.id)}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// =============================================================================
+// J.23 — Revenue Grants (founder 2026-06-29).
+// Manually grant a premium revenue feature to a specific school for free
+// (comp / pilot / VIP), regardless of their plan. Audit logged.
+// Pricing itself stays editable under the "Business Operations" tab.
+// =============================================================================
+function RevenueGrantsOpsTab() {
+  const { toast } = useToast();
+  const [data, setData] = React.useState<{ features: any[]; grants: Record<string, string[]>; schools: any[] } | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [schoolId, setSchoolId] = React.useState<string>("");
+  const [busyKey, setBusyKey] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/ops/feature-grants");
+      const json = await res.json();
+      if (json.ok) {
+        setData(json.data);
+        if (!schoolId && json.data.schools?.[0]) setSchoolId(json.data.schools[0].id);
+      } else setError(json.error?.message || "Failed to load feature grants");
+    } catch {
+      setError("Failed to load feature grants");
+    }
+  }, [schoolId]);
+
+  React.useEffect(() => { void load(); }, [load]);
+
+  async function setGrant(featureKey: string, granted: boolean) {
+    if (!schoolId) return;
+    setBusyKey(featureKey);
+    try {
+      const res = await fetch("/api/ops/feature-grants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId: schoolId, featureKey, granted }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: `${granted ? "Granted" : "Revoked"} ${featureKey}`, tone: "success" });
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed", tone: "error" });
+      }
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  const granted = (data && schoolId && Array.isArray(data.grants[schoolId])) ? data.grants[schoolId] : [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Revenue grants — comp a premium feature to one school</CardTitle>
+        <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
+          Manually unlock a paid feature for a specific school (pilot / VIP), regardless of plan or add-ons.
+          A school gets a feature if its plan includes it, it bought the add-on, OR you grant it here. Audit logged.
+          Edit prices under <span className="font-semibold">Business Operations</span>; switch features OFF entirely under <span className="font-semibold">Feature Toggles</span>.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+            {error} <Button size="sm" variant="secondary" className="ml-2" onClick={() => void load()}>Retry</Button>
+          </div>
+        ) : data === null ? (
+          <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}</div>
+        ) : data.schools.length === 0 ? (
+          <EmptyState icon={Users} title="No schools yet" description="Schools will appear here once they are onboarded." />
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="grant-school">School</Label>
+              <select
+                id="grant-school"
+                value={schoolId}
+                onChange={(e) => setSchoolId(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900"
+              >
+                {data.schools.map((sc) => (
+                  <option key={sc.id} value={sc.id}>{sc.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-3">
+              {data.features.map((f) => {
+                const isGranted = granted.includes(f.key);
+                return (
+                  <div key={f.key} className="flex items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white/70 p-4 dark:border-navy-800 dark:bg-navy-900/60">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-navy-400" />
+                        <p className="font-semibold text-navy-900 dark:text-navy-50">{f.label}</p>
+                        <Badge tone={isGranted ? "green" : "neutral"}>{isGranted ? "GRANTED" : "Plan/add-on only"}</Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-navy-500 dark:text-navy-400">{f.description}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isGranted ? "secondary" : "primary"}
+                      disabled={busyKey === f.key || !schoolId}
+                      onClick={() => setGrant(f.key, !isGranted)}
+                    >
+                      {busyKey === f.key ? "…" : isGranted ? "Revoke grant" : "Grant free"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }

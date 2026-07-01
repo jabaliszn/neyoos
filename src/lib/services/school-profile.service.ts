@@ -25,6 +25,7 @@ export interface SchoolProfile {
   gpsLat: number | null;
   gpsLng: number | null;
   gpsRadiusM: number | null;
+  educationLevelsOffered: string[];
   schoolType: string; // G.21: DAY | BOARDING | DAY_AND_BOARDING
   uniformSupplierName: string; // G.24
   uniformSupplierPhone: string;
@@ -61,6 +62,7 @@ export async function getSchoolProfile(tenantId: string): Promise<SchoolProfile>
     gpsLat: t.gpsLat,
     gpsLng: t.gpsLng,
     gpsRadiusM: t.gpsRadiusM,
+    educationLevelsOffered: parseJson<string[]>(t.educationLevelsOffered, []),
     schoolType: t.schoolType,
     uniformSupplierName: t.uniformSupplierName ?? "",
     uniformSupplierPhone: t.uniformSupplierPhone ?? "",
@@ -97,6 +99,7 @@ export async function updateSchoolProfile(
       ...(input.gpsLat !== undefined ? { gpsLat: input.gpsLat === "" ? null : input.gpsLat } : {}),
       ...(input.gpsLng !== undefined ? { gpsLng: input.gpsLng === "" ? null : input.gpsLng } : {}),
       ...(input.gpsRadiusM !== undefined ? { gpsRadiusM: input.gpsRadiusM === "" ? null : input.gpsRadiusM } : {}),
+      ...(input.educationLevelsOffered !== undefined ? { educationLevelsOffered: JSON.stringify(input.educationLevelsOffered) } : {}),
       // G.21 school type + G.24 uniform supplier.
       ...(input.schoolType !== undefined ? { schoolType: input.schoolType } : {}),
       ...(input.uniformSupplierName !== undefined ? { uniformSupplierName: input.uniformSupplierName || null } : {}),
@@ -125,4 +128,34 @@ export async function updateSchoolProfile(
   });
 
   return getSchoolProfile(tenantId);
+}
+
+export interface SchoolLevelActivationSummary {
+  educationLevelsOffered: string[];
+  isEcde: boolean;
+  isPrimary: boolean;
+  isJuniorSchool: boolean;
+  isSeniorSchool: boolean;
+  isMixedSchool: boolean;
+  shouldShowPathwayTools: boolean;
+  shouldShowSubjectSelectionTools: boolean;
+}
+
+export async function getSchoolLevelActivationSummary(tenantId: string): Promise<SchoolLevelActivationSummary> {
+  const profile = await getSchoolProfile(tenantId);
+  const levels = profile.educationLevelsOffered ?? [];
+  const isEcde = levels.includes("ECDE");
+  const isPrimary = levels.includes("PRIMARY");
+  const isJuniorSchool = levels.includes("JUNIOR_SCHOOL");
+  const isSeniorSchool = levels.includes("SENIOR_SCHOOL");
+  return {
+    educationLevelsOffered: levels,
+    isEcde,
+    isPrimary,
+    isJuniorSchool,
+    isSeniorSchool,
+    isMixedSchool: levels.length > 1,
+    shouldShowPathwayTools: isSeniorSchool,
+    shouldShowSubjectSelectionTools: isJuniorSchool || isSeniorSchool,
+  };
 }

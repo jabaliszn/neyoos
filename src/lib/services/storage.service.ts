@@ -190,6 +190,45 @@ export async function devPut(key: string, body: Buffer, contentType: string) {
   await provider.putObject(key, body, contentType);
 }
 
+/**
+ * Store a SERVER-GENERATED artifact (e.g. a KNEC export manifest, K.16).
+ * Unlike user uploads this is not type-restricted to images/PDF — it is produced
+ * by NEYO itself. The bytes are encrypted with the tenant key and recorded in
+ * StoredFile so the Storage Vault still owns them. Returns the stored file row.
+ */
+export async function storeGeneratedArtifact(
+  tenantId: string,
+  uploadedById: string,
+  input: { buffer: Buffer; fileName: string; contentType: string; category?: string }
+) {
+  if (input.buffer.length > MAX_BYTES) {
+    throw new StorageError("TOO_LARGE", "Generated artifact exceeds 10MB.");
+  }
+  const category = input.category ?? "generated";
+  const key = buildKey(tenantId, category, input.contentType, input.fileName);
+  const encrypted = await encryptBufferForTenant(tenantId, input.buffer);
+  const { url } = await provider.putObject(key, encrypted.encrypted, "application/octet-stream");
+  const providerName = await providerNameForTenant(tenantId);
+  return db.storedFile.create({
+    data: {
+      tenantId,
+      key,
+      url,
+      fileName: input.fileName,
+      contentType: input.contentType,
+      size: input.buffer.length,
+      category,
+      provider: providerName,
+      providerObjectId: key,
+      encrypted: true,
+      encryptionMode: encrypted.encryptionMode,
+      checksumSha256: encrypted.checksumSha256,
+      wrappedKeyRef: encrypted.wrappedKeyRef,
+      uploadedById,
+    },
+  });
+}
+
 /** Read an object's bytes (serving). */
 export async function readObject(key: string) {
   const obj = await provider.getObject(key);

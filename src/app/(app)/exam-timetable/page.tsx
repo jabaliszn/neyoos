@@ -4,7 +4,7 @@ import { examTimetableBoard } from "@/lib/services/exam-timetable.service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CalendarDays } from "lucide-react";
-import { ExamMaterialsClient } from "@/components/exams/exam-materials-client";
+import { ExamMaterialsClient, KnecAggregationCard } from "@/components/exams/exam-materials-client";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,7 @@ export default async function ExamTimetablePage() {
         </CardContent>
       </Card>
       <ExamMaterialsClient canManage={canManage} />
+      <KnecAggregationCard canManage={canManage} />
     </div>
   );
 }

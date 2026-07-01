@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NEYO — J.22 Compliance, Consent & Data Safety (UI mockup)</title>
+</head>
+<body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:#e6ebf5;-webkit-font-smoothing:antialiased;">
+  <div style="max-width:1080px;margin:0 auto;padding:32px 20px 56px;">
+
+    <!-- header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:8px;">
+      <div>
+        <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#7c8db5;font-weight:700;">NEYO School OS · Part J</div>
+        <h1 style="margin:6px 0 0;font-size:26px;font-weight:800;color:#fff;">J.22 — Compliance, Consent &amp; Data Safety</h1>
+      </div>
+      <span style="display:inline-block;padding:7px 14px;border-radius:999px;background:rgba(34,197,94,.16);color:#86efac;border:1px solid rgba(34,197,94,.35);font-weight:700;font-size:13px;">COMPLETED · re-verified 2026-06-29</span>
+    </div>
+    <p style="color:#9fb0d4;margin:0 0 26px;font-size:14px;">Static labelled mockup (no live data). Inline styles only.</p>
+
+    <!-- toggle card -->
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:18px;padding:22px;margin-bottom:20px;backdrop-filter:blur(14px);box-shadow:0 10px 40px rgba(0,0,0,.35);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+        <div>
+          <div style="font-size:12px;color:#7c8db5;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">NEYO Ops → Feature Toggles</div>
+          <div style="font-size:17px;font-weight:700;color:#fff;margin-top:4px;">J.22 · Compliance, Consent &amp; Data Safety</div>
+          <div style="font-size:13px;color:#9fb0d4;margin-top:3px;">Transfer-passport consent, ODPC data-minimisation, retention &amp; export audit.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:13px;color:#86efac;font-weight:700;">ON</span>
+          <div style="width:52px;height:30px;border-radius:999px;background:#22c55e;position:relative;">
+            <div style="position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px;font-size:12px;color:#7c8db5;">Default = ON. SUPER_ADMIN can switch OFF before launch — schools then see a friendly "switched off by NEYO Ops" message.</div>
+    </div>
+
+    <!-- transfer consent card -->
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:18px;padding:22px;margin-bottom:20px;backdrop-filter:blur(14px);">
+      <div style="font-size:12px;color:#7c8db5;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">Transfer Passport · ODPC lawful-basis gate</div>
+
+      <label style="display:block;font-size:13px;color:#c7d3ee;font-weight:600;margin-bottom:6px;">Consenting parent / guardian <span style="color:#fb7185;">*required</span></label>
+      <div style="background:#0e1729;border:1px solid rgba(255,255,255,.12);border-radius:11px;padding:11px 14px;color:#fff;font-size:14px;margin-bottom:6px;">Otieno Brian</div>
+      <div style="font-size:12px;color:#86efac;margin-bottom:18px;">✓ Lawful basis recorded · consent date stamped automatically</div>
+
+      <label style="display:block;font-size:13px;color:#c7d3ee;font-weight:600;margin-bottom:8px;">Data modules to transfer <span style="color:#7c8db5;font-weight:400;">(data minimisation — only what you tick is carried)</span></label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <span style="padding:6px 12px;border-radius:999px;background:rgba(59,130,246,.18);border:1px solid rgba(59,130,246,.4);color:#93c5fd;font-size:13px;font-weight:600;">✓ Academic</span>
+        <span style="padding:6px 12px;border-radius:999px;background:rgba(59,130,246,.18);border:1px solid rgba(59,130,246,.4);color:#93c5fd;font-size:13px;font-weight:600;">✓ Attendance</span>
+        <span style="padding:6px 12px;border-radius:999px;background:rgba(251,191,36,.16);border:1px solid rgba(251,191,36,.4);color:#fcd34d;font-size:13px;font-weight:600;">⚠ Medical (sensitive)</span>
+        <span style="padding:6px 12px;border-radius:999px;background:rgba(251,191,36,.16);border:1px solid rgba(251,191,36,.4);color:#fcd34d;font-size:13px;font-weight:600;">⚠ Discipline (sensitive)</span>
+        <span style="padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.18);color:#6b7a9e;font-size:13px;">Portfolio</span>
+        <span style="padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.18);color:#6b7a9e;font-size:13px;">Talent</span>
+      </div>
+      <div style="font-size:12px;color:#fcd34d;margin-bottom:18px;">⚠ Sensitive medical / discipline data is excluded unless explicitly ticked here.</div>
+
+      <button style="background:#22c55e;color:#04210f;border:none;border-radius:11px;padding:12px 20px;font-weight:800;font-size:14px;cursor:pointer;">Generate transfer passport</button>
+      <div style="margin-top:10px;font-size:12px;color:#fb7185;">Without a guardian name the button is blocked — server returns "ODPC lawful basis missing".</div>
+    </div>
+
+    <!-- audit + retention row -->
+    <div style="display:flex;gap:20px;flex-wrap:wrap;">
+      <!-- audit -->
+      <div style="flex:1;min-width:300px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:18px;padding:22px;backdrop-filter:blur(14px);">
+        <div style="font-size:12px;color:#7c8db5;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">Full audit trail</div>
+        <div style="font-size:13px;color:#c7d3ee;line-height:1.9;">
+          <div>🟢 <b style="color:#fff;">passport_generated</b> · Principal · 3 modules</div>
+          <div>🟢 <b style="color:#fff;">passport_exported</b> · PDF · Principal <span style="color:#86efac;">(NEW)</span></div>
+          <div>🟢 <b style="color:#fff;">passport_redeemed</b> · Nairobi High</div>
+          <div>🟡 <b style="color:#fff;">payload_purged</b> · Retention Cron</div>
+        </div>
+      </div>
+      <!-- retention -->
+      <div style="flex:1;min-width:300px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:18px;padding:22px;backdrop-filter:blur(14px);">
+        <div style="font-size:12px;color:#7c8db5;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">Data retention · daily 04:00 EAT</div>
+        <div style="font-size:13px;color:#c7d3ee;line-height:1.9;">
+          <div>⏱ Expired passport payloads wiped → <b style="color:#fff;">2</b></div>
+          <div>🗑 Stale draft portfolio purged → <b style="color:#fff;">1</b></div>
+          <div style="margin-top:8px;color:#86efac;font-size:12px;">✓ Engine now actually runs (was dead code).</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:34px;text-align:center;color:#5b6b8f;font-size:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:18px;">
+      Powered by NEYO · neyo.co.ke
+    </div>
+  </div>
+</body>
+</html>

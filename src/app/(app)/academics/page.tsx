@@ -2,6 +2,7 @@ import { requirePagePermission } from "@/lib/core/page-guards";
 import { can } from "@/lib/core/permissions";
 import { AcademicsClient } from "@/components/academics/academics-client";
 import { isCurriculumEngineEnabled } from "@/lib/services/launch-control.service";
+import { getSchoolLevelActivationSummary } from "@/lib/services/school-profile.service";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function AcademicsPage() {
   const canAppointHod = principalOwnerRoles.includes(user.role) || (user.secondaryRole ? principalOwnerRoles.includes(user.secondaryRole) : false);
   const isScopedHod = !canAppointHod && (user.role === "HOD" || user.secondaryRole === "HOD");
   const isCurriculumEngineEnabledFlag = await isCurriculumEngineEnabled();
+  const schoolLevelActivation = await getSchoolLevelActivationSummary(user.tenantId);
 
   return (
     <div className="space-y-6">
@@ -24,7 +26,13 @@ export default async function AcademicsPage() {
           Subjects, departments, term dates, the weekly timetable and lesson plans.
         </p>
       </div>
-      <AcademicsClient canManage={canManage} canAppointHod={canAppointHod} isScopedHod={isScopedHod} isCurriculumEngineEnabled={isCurriculumEngineEnabledFlag} />
+      <AcademicsClient
+        canManage={canManage}
+        canAppointHod={canAppointHod}
+        isScopedHod={isScopedHod}
+        isCurriculumEngineEnabled={isCurriculumEngineEnabledFlag}
+        schoolLevelActivation={schoolLevelActivation}
+      />
     </div>
   );
 }

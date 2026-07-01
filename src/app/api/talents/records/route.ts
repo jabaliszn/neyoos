@@ -6,7 +6,7 @@ import { getStudentTalentRecords, recordStudentTalent, TalentError } from "@/lib
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await requirePermission("students.view");
+    const user = await requirePermission("student.view");
     const studentId = req.nextUrl.searchParams.get("studentId");
     if (!studentId) return fail("INVALID", "studentId required", 400);
     const records = await getStudentTalentRecords(user, studentId);
