@@ -109,3 +109,17 @@ export const addDocumentSchema = z.object({
 });
 
 export const addGuardianSchema = guardianInputSchema;
+
+// M.3 — Class teachers (and anyone with student.edit) can correct an EXISTING
+// guardian's phone/email/relationship — separate from addGuardianSchema
+// because every field is optional (a partial edit) and there's no createLogin
+// / isPrimary toggle here (that stays on the dedicated set_primary action).
+export const updateGuardianSchema = z.object({
+  fullName: z.string().trim().min(2, "Guardian name is required.").max(80).optional(),
+  phone: kePhone.optional(),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  nationalId: z.string().trim().max(20).optional().or(z.literal("")),
+  relationship: z.enum(["Parent", "Mother", "Father", "Guardian", "Other"]).optional(),
+});
+export type UpdateGuardianInput = z.infer<typeof updateGuardianSchema>;
+

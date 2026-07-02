@@ -19,3 +19,8 @@ scripts/worker.ts
 
 # Vercel link metadata
 .vercel
+
+# TypeScript incremental build cache (must never be committed —
+# a stale cache can hide real type errors from `tsc --noEmit`)
+*.tsbuildinfo
+

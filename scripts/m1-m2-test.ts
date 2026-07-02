@@ -1,19 +1,15 @@
-import { PrismaClient } from "@prisma/client";
+/**
+ * DEPRECATED 2026-07-01 — this script was found during a full-stack audit to
+ * assert NOTHING (it just printed a count and a margin value and always
+ * "passed" regardless of correctness). It also only ever exercised M.2, never
+ * M.1 at all, and used hardcoded 0.8/1.2 KES prices that have since been
+ * moved into NEYO Ops-configurable settings.
+ *
+ * The real, assertion-based full-stack test for BOTH M.1 (Referral Engine)
+ * and M.2 (SMS Margin Revenue) is scripts/m1-m2-fullstack-test.ts — run that
+ * one instead. This file is kept only so old references to it don't 404;
+ * it delegates straight through.
+ */
+import { execSync } from "node:child_process";
 
-const db = new PrismaClient();
-
-async function main() {
-  const khTenant = await db.tenant.findUnique({ where: { slug: "karibu-high" } });
-  if (!khTenant) throw new Error("Tenant not found");
-
-  // 4. Test M.2 SMS Margins
-  const { sendSms } = await import("../src/lib/notifications/sms");
-  // Force a dummy send that triggers the tracking hook (using the proper options argument)
-  await sendSms("+254711000000", "Testing M.2 Margins", { tenantId: khTenant.id });
-
-  const margins = await db.smsMarginLedger.findMany({ where: { tenantId: khTenant.id } });
-  console.log("✓ M.2 SMS Margins logged:", margins.length, "entries. Latest margin KES:", margins[0]?.marginKes);
-
-}
-
-main().catch(console.error).finally(() => db.$disconnect());
+execSync("./node_modules/.bin/tsx scripts/m1-m2-fullstack-test.ts", { stdio: "inherit" });

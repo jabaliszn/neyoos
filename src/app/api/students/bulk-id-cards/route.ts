@@ -1,17 +1,24 @@
 /**
- * G.10/G.8 Bulk Student ID Cards PDF download.
- * POST { studentIds: string[] } -> application/pdf attachment. Permission: student.view.
+ * G.10/G.8/N.1 Bulk Student ID Cards PDF download.
+ * POST { studentIds: string[], layout?: "single" | "batch-a4" } -> application/pdf
+ * attachment. Permission: student.view.
+ *
+ * N.1 — "batch-a4" (the new default) packs a DENSE grid of cards onto real
+ * A4 sheets with dashed cut-lines, auto-fitting as many cards as physically
+ * fit at the chosen card size — a school prints on ordinary paper and cuts
+ * the cards apart, no card-stock printer required. "single" keeps the
+ * original one-card-per-page behavior for schools with a card printer.
  */
 import { NextRequest } from "next/server";
 import { requirePermission } from "@/lib/core/session";
-import { handleError, ok } from "@/lib/api/respond";
+import { handleError } from "@/lib/api/respond";
 import { db } from "@/lib/db";
 import { canViewStudent, StudentError } from "@/lib/services/student.service";
-import { buildStudentIdCardPdf } from "@/lib/services/document.service";
-import { renderStudentIdCardsPdf, StudentIdCard } from "@/lib/documents/student-id-pdf";
+import { renderStudentIdCardsPdf, renderStudentIdCardsBatchA4Pdf, StudentIdCard } from "@/lib/documents/student-id-pdf";
 import { qrDataUrl, verifyUrl } from "@/lib/documents/qr";
 import { issueVerification } from "@/lib/services/document.service";
 import { getDocumentDesign } from "@/lib/services/document-design.service";
+import { logoAsDataUrl } from "@/lib/documents/school-stamp";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +31,16 @@ export async function POST(req: NextRequest) {
     const width = body.width ? Number(body.width) : design.idCardWidthMm;
     const height = body.height ? Number(body.height) : design.idCardHeightMm;
     const template = body.template || design.idTemplate;
+    const layout: "single" | "batch-a4" = body.layout === "single" ? "single" : "batch-a4";
+    const showStamp = body.showStamp !== undefined ? Boolean(body.showStamp) : design.idStampEnabled;
 
     if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
       return new Response("Invalid student IDs", { status: 422 });
     }
 
     const tenant = await db.tenant.findUniqueOrThrow({ where: { id: user.tenantId } });
+    const logoDataUrl = showStamp ? await logoAsDataUrl(tenant.logoUrl) : null;
+    const issuedDateText = new Date().toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
 
     // Filter students where the user has permission check
     const allowedCards: StudentIdCard[] = [];
@@ -54,7 +65,8 @@ export async function POST(req: NextRequest) {
         user.tenantId,
         "student_id",
         `Student ID Card — ${studentName} (${student.admissionNo})`,
-        payload
+        payload,
+        student.id
       );
 
       const className = student.schoolClass
@@ -74,6 +86,8 @@ export async function POST(req: NextRequest) {
         verifyCode: code,
         qrDataUrl: await qrDataUrl(verifyUrl(code)),
         logoUrl: tenant.logoUrl,
+        logoDataUrl,
+        issuedDateText,
       });
     }
 
@@ -81,8 +95,10 @@ export async function POST(req: NextRequest) {
       throw new StudentError("NOT_FOUND", "No accessible students found.");
     }
 
-    const pdf = await renderStudentIdCardsPdf(allowedCards, { width, height, template });
-    const fileName = `Bulk-ID-Cards-${allowedCards.length}.pdf`;
+    const pdf = layout === "batch-a4"
+      ? await renderStudentIdCardsBatchA4Pdf(allowedCards, { width, height, template, showStamp })
+      : await renderStudentIdCardsPdf(allowedCards, { width, height, template, showStamp });
+    const fileName = `Bulk-ID-Cards-${allowedCards.length}${layout === "batch-a4" ? "-A4-sheets" : ""}.pdf`;
 
     return new Response(new Uint8Array(pdf), {
       headers: {

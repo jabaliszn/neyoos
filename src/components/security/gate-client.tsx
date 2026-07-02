@@ -10,7 +10,7 @@
 import * as React from "react";
 import {
   DoorClosed, X, Loader2, AlertCircle, Plus, Search, Siren, UserCheck,
-  CheckCircle2, Ban, OctagonAlert,
+  CheckCircle2, Ban, OctagonAlert, ScanLine,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { FileUpload, type UploadedFile } from "@/components/ui/file-upload";
 import { StudentSearchSelect } from "@/components/students/student-search-select";
+import { QrScanStation } from "@/components/security/qr-scan-station";
 
 interface Pass { id: string; passNo: string; studentName: string; admissionNo: string; reason: string; leaveAt: string; returnBy: string | null; escortName: string | null; status: string; issuedById: string; issuedByName: string; approvedByName: string | null; usedAt: string | null }
 interface Panic { id: string; kind: string; location: string; note: string | null; raisedByName: string; resolvedAt: string | null; resolvedBy: string | null; smsSent: number; createdAt: string }
@@ -31,12 +32,12 @@ interface StudentOpt { id: string; name: string; admissionNo: string }
 
 const PASS_TONE: Record<string, "green" | "amber" | "red" | "neutral"> = { ACTIVE: "green", PENDING: "amber", USED: "neutral", CANCELLED: "red", EXPIRED: "amber" };
 
-export function GateClient({ canManage, canPanic, canIssuePass, canApprovePass, currentUserId }: { canManage: boolean; canPanic: boolean; canIssuePass: boolean; canApprovePass: boolean; currentUserId: string }) {
+export function GateClient({ canManage, canPanic, canIssuePass, canApprovePass, currentUserId, canScanAttendance = false, canScanPayment = false }: { canManage: boolean; canPanic: boolean; canIssuePass: boolean; canApprovePass: boolean; currentUserId: string; canScanAttendance?: boolean; canScanPayment?: boolean }) {
   const { toast } = useToast();
   const [passes, setPasses] = React.useState<Pass[] | null>(null);
   const [panics, setPanics] = React.useState<Panic[]>([]);
   const [error, setError] = React.useState(false);
-  const [tab, setTab] = React.useState<"passes" | "pickup" | "panic">("passes");
+  const [tab, setTab] = React.useState<"passes" | "pickup" | "panic" | "scan">("passes");
   const [students, setStudents] = React.useState<StudentOpt[]>([]);
   const [dialog, setDialog] = React.useState<"pass" | "pickup" | "panic" | "altPickup" | null>(null);
   const [checkNo, setCheckNo] = React.useState("");
@@ -185,6 +186,7 @@ export function GateClient({ canManage, canPanic, canIssuePass, canApprovePass, 
     { key: "passes" as const, label: "Gate passes", icon: DoorClosed },
     { key: "pickup" as const, label: "Pickup authorisation", icon: UserCheck },
     { key: "panic" as const, label: "Emergency", icon: Siren },
+    ...((canScanAttendance || canScanPayment) ? [{ key: "scan" as const, label: "Scan ID", icon: ScanLine }] : []),
   ];
 
   return (
@@ -396,6 +398,10 @@ export function GateClient({ canManage, canPanic, canIssuePass, canApprovePass, 
             </Card>
           )}
         </div>
+      )}
+
+      {tab === "scan" && (canScanAttendance || canScanPayment) && (
+        <QrScanStation canMarkAttendance={canScanAttendance} canLookupPayment={canScanPayment} />
       )}
 
       {dialog === "pass" && <PassDialog students={students} onClose={() => setDialog(null)} onDone={() => { setDialog(null); load(); }} />}

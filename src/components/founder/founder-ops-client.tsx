@@ -27,6 +27,13 @@ import {
   Link2,
   HardDrive,
   ShieldCheck,
+  Gift,
+  MessageCircle,
+  XCircle,
+  ScanLine,
+  KeyRound,
+  Ban,
+  Coins,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,7 +45,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { formatKES } from "@/lib/utils";
 
-const TABS = ["Overview", "Build log", "Metrics", "Cadence", "Interviews", "Platform Flags", "Feature Toggles", "Revenue Grants", "Curriculum Library", "Business Operations", "Ecosystem Trends"] as const;
+const TABS = ["Overview", "Build log", "Metrics", "Cadence", "Interviews", "Platform Flags", "Feature Toggles", "Revenue Grants", "Revenue Ops", "Bundi Import", "Curriculum Library", "Business Operations", "Ecosystem Trends"] as const;
 type Tab = (typeof TABS)[number];
 
 type Dashboard = {
@@ -768,6 +775,8 @@ export function FounderOpsClient() {
       {tab === "Platform Flags" && <PlatformFlagsTab flags={flags} toggling={saving} onToggle={toggleFlag} />}
       {tab === "Feature Toggles" && <JFeatureTogglesTab />}
       {tab === "Revenue Grants" && <RevenueGrantsOpsTab />}
+      {tab === "Revenue Ops" && <RevenueOpsTab />}
+      {tab === "Bundi Import" && <BundiImportOpsTab />}
       {tab === "Curriculum Library" && <CurriculumLibraryOpsTab />}
       
       {tab === "Business Operations" && (
@@ -2652,5 +2661,610 @@ function RevenueGrantsOpsTab() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// =============================================================================
+// PART M — Revenue Ops (repaired to true full-stack 2026-07-01).
+// M.1 Referral Engine: centrally configure the referral discount % and
+// on/off switch, watch schools convert, and see every earned/applied/expired
+// credit in one real ledger. M.2 SMS Margins: centrally configure NEYO's
+// buy/sell price per SMS and see real margin revenue collected across every
+// school. Both read/write the real `/api/ops/revenue` endpoint — no
+// placeholders, no simulated numbers.
+// =============================================================================
+type RevenueOpsData = {
+  rules: { enabled: boolean; discountPct: number; rewardBothSides: boolean; minimumPaidTermsBeforeReward: number; notes: string };
+  config: { costPerSmsKes: number; pricePerSmsKes: number; billingWindow: "MONTHLY" | "TERMLY" | "YEARLY" };
+  referrals: {
+    totalReferredSchools: number;
+    totalCreditsIssued: number;
+    pending: number;
+    applied: number;
+    expired: number;
+    recentCredits: { id: string; schoolName: string; role: string; counterpartName: string; discountPct: number; status: string; appliedAmountKes: number | null; appliedAt: string | null; createdAt: string }[];
+  };
+  smsMargins: {
+    totalMessages: number;
+    totalMarginKes: number;
+    byStatus: { status: string; messageCount: number; marginKes: number }[];
+    topSchools: { tenantId: string; schoolName: string; messageCount: number; marginKes: number }[];
+  };
+};
+
+function RevenueOpsTab() {
+  const { toast } = useToast();
+  const [data, setData] = React.useState<RevenueOpsData | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [savingRules, setSavingRules] = React.useState(false);
+  const [savingConfig, setSavingConfig] = React.useState(false);
+  const [busyCreditId, setBusyCreditId] = React.useState<string | null>(null);
+
+  // Local editable copies so typing doesn't fight the server state.
+  const [rulesForm, setRulesForm] = React.useState<RevenueOpsData["rules"] | null>(null);
+  const [configForm, setConfigForm] = React.useState<RevenueOpsData["config"] | null>(null);
+
+  const load = React.useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/ops/revenue");
+      const json = await res.json();
+      if (json.ok) {
+        setData(json.data);
+        setRulesForm(json.data.rules);
+        setConfigForm(json.data.config);
+      } else {
+        setError(json.error?.message || "Failed to load revenue ops.");
+      }
+    } catch {
+      setError("Failed to load revenue ops.");
+    }
+  }, []);
+
+  React.useEffect(() => { void load(); }, [load]);
+
+  async function saveRules() {
+    if (!rulesForm) return;
+    setSavingRules(true);
+    try {
+      const res = await fetch("/api/ops/revenue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_referral_rules", data: rulesForm }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: "Referral rules saved", tone: "success" });
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed to save referral rules", tone: "error" });
+      }
+    } finally {
+      setSavingRules(false);
+    }
+  }
+
+  async function saveConfig() {
+    if (!configForm) return;
+    setSavingConfig(true);
+    try {
+      const res = await fetch("/api/ops/revenue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_sms_margin_config", data: configForm }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: "SMS margin config saved", tone: "success" });
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed to save SMS margin config", tone: "error" });
+      }
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  async function expireCredit(creditId: string) {
+    setBusyCreditId(creditId);
+    try {
+      const res = await fetch("/api/ops/revenue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "expire_credit", creditId }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: "Credit expired", tone: "success" });
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed to expire credit", tone: "error" });
+      }
+    } finally {
+      setBusyCreditId(null);
+    }
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+        {error} <Button size="sm" variant="secondary" className="ml-2" onClick={() => void load()}>Retry</Button>
+      </div>
+    );
+  }
+
+  if (data === null || rulesForm === null || configForm === null) {
+    return <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* M.1 — Referral Engine */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Gift className="h-5 w-5 text-green-600" /> M.1 — NEYO Referral Engine</CardTitle>
+          <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
+            A school invites another school. The reward is credited automatically and ONLY after the referred school makes a REAL PAID NEYO subscription payment — never for a free/demo/trial account.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex items-center justify-between rounded-2xl border border-navy-100 bg-white/70 p-4 dark:border-navy-800 dark:bg-navy-900/60">
+              <div>
+                <p className="font-semibold text-navy-900 dark:text-navy-50">Referral program</p>
+                <p className="text-xs text-navy-500 dark:text-navy-400">Master ON/OFF switch for the whole engine.</p>
+              </div>
+              <Button
+                size="sm"
+                variant={rulesForm.enabled ? "secondary" : "primary"}
+                onClick={() => setRulesForm({ ...rulesForm, enabled: !rulesForm.enabled })}
+              >
+                {rulesForm.enabled ? "ON — turn off" : "OFF — turn on"}
+              </Button>
+            </div>
+            <div className="flex items-center justify-between rounded-2xl border border-navy-100 bg-white/70 p-4 dark:border-navy-800 dark:bg-navy-900/60">
+              <div>
+                <p className="font-semibold text-navy-900 dark:text-navy-50">Reward both sides</p>
+                <p className="text-xs text-navy-500 dark:text-navy-400">Credit the referrer too (not just the new school).</p>
+              </div>
+              <Button
+                size="sm"
+                variant={rulesForm.rewardBothSides ? "secondary" : "primary"}
+                onClick={() => setRulesForm({ ...rulesForm, rewardBothSides: !rulesForm.rewardBothSides })}
+              >
+                {rulesForm.rewardBothSides ? "Both sides" : "Referred only"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="referral-discount">Discount % (each side)</Label>
+              <Input
+                id="referral-discount"
+                type="number"
+                min={0}
+                max={50}
+                step={1}
+                value={Math.round(rulesForm.discountPct * 100)}
+                onChange={(e) => setRulesForm({ ...rulesForm, discountPct: Math.max(0, Math.min(50, Number(e.target.value))) / 100 })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="referral-min-terms">Minimum paid terms before reward</Label>
+              <Input
+                id="referral-min-terms"
+                type="number"
+                min={0}
+                max={12}
+                step={1}
+                value={rulesForm.minimumPaidTermsBeforeReward}
+                onChange={(e) => setRulesForm({ ...rulesForm, minimumPaidTermsBeforeReward: Math.max(0, Number(e.target.value)) })}
+              />
+            </div>
+          </div>
+
+          <Button onClick={saveRules} disabled={savingRules}>
+            {savingRules ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save referral rules
+          </Button>
+
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-navy-100 bg-white/70 p-4 text-center dark:border-navy-800 dark:bg-navy-900/60">
+              <p className="text-2xl font-black text-navy-950 dark:text-white">{data.referrals.totalReferredSchools}</p>
+              <p className="text-xs text-navy-500 dark:text-navy-400">Schools referred</p>
+            </div>
+            <div className="rounded-2xl border border-navy-100 bg-white/70 p-4 text-center dark:border-navy-800 dark:bg-navy-900/60">
+              <p className="text-2xl font-black text-amber-600">{data.referrals.pending}</p>
+              <p className="text-xs text-navy-500 dark:text-navy-400">Pending credits</p>
+            </div>
+            <div className="rounded-2xl border border-navy-100 bg-white/70 p-4 text-center dark:border-navy-800 dark:bg-navy-900/60">
+              <p className="text-2xl font-black text-green-600">{data.referrals.applied}</p>
+              <p className="text-xs text-navy-500 dark:text-navy-400">Applied credits</p>
+            </div>
+            <div className="rounded-2xl border border-navy-100 bg-white/70 p-4 text-center dark:border-navy-800 dark:bg-navy-900/60">
+              <p className="text-2xl font-black text-navy-400">{data.referrals.expired}</p>
+              <p className="text-xs text-navy-500 dark:text-navy-400">Expired credits</p>
+            </div>
+          </div>
+
+          {data.referrals.recentCredits.length === 0 ? (
+            <EmptyState icon={Gift} title="No referral credits yet" description="Credits appear here the moment a referred school makes its first real paid NEYO subscription payment." />
+          ) : (
+            <div className="space-y-2">
+              {data.referrals.recentCredits.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white/70 p-3 dark:border-navy-800 dark:bg-navy-900/60">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-navy-900 dark:text-navy-50">{c.schoolName}</p>
+                      <Badge tone={c.role === "REFERRER" ? "blue" : "green"}>{c.role}</Badge>
+                      <Badge tone={c.status === "APPLIED" ? "green" : c.status === "EXPIRED" ? "neutral" : "amber"}>{c.status}</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
+                      {Math.round(c.discountPct * 100)}% — {c.role === "REFERRER" ? `referred ${c.counterpartName}` : `referred by ${c.counterpartName}`}
+                      {c.appliedAmountKes ? ` · KES ${c.appliedAmountKes.toLocaleString()} applied` : ""}
+                    </p>
+                  </div>
+                  {c.status === "PENDING" && (
+                    <Button size="sm" variant="secondary" disabled={busyCreditId === c.id} onClick={() => expireCredit(c.id)}>
+                      {busyCreditId === c.id ? "…" : <><XCircle className="h-4 w-4" /> Expire</>}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* M.2 — SMS Margin Revenue */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-blue-600" /> M.2 — SMS Margin Revenue</CardTitle>
+          <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
+            NEYO buys SMS from Africa's Talking at cost and sells to schools at a markup. Configure both prices here — every real SMS send is tracked in this ledger.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <Label htmlFor="sms-cost">NEYO cost per SMS (KES)</Label>
+              <Input
+                id="sms-cost"
+                type="number"
+                min={0}
+                step={0.05}
+                value={configForm.costPerSmsKes}
+                onChange={(e) => setConfigForm({ ...configForm, costPerSmsKes: Math.max(0, Number(e.target.value)) })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="sms-price">School price per SMS (KES)</Label>
+              <Input
+                id="sms-price"
+                type="number"
+                min={0}
+                step={0.05}
+                value={configForm.pricePerSmsKes}
+                onChange={(e) => setConfigForm({ ...configForm, pricePerSmsKes: Math.max(0, Number(e.target.value)) })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="sms-window">Billing window</Label>
+              <select
+                id="sms-window"
+                value={configForm.billingWindow}
+                onChange={(e) => setConfigForm({ ...configForm, billingWindow: e.target.value as "MONTHLY" | "TERMLY" | "YEARLY" })}
+                className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900"
+              >
+                <option value="MONTHLY">Monthly</option>
+                <option value="TERMLY">Termly</option>
+                <option value="YEARLY">Yearly</option>
+              </select>
+            </div>
+          </div>
+
+          <Button onClick={saveConfig} disabled={savingConfig}>
+            {savingConfig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save SMS pricing
+          </Button>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-navy-100 bg-white/70 p-4 text-center dark:border-navy-800 dark:bg-navy-900/60">
+              <p className="text-2xl font-black text-navy-950 dark:text-white">{data.smsMargins.totalMessages.toLocaleString()}</p>
+              <p className="text-xs text-navy-500 dark:text-navy-400">Total SMS sent</p>
+            </div>
+            <div className="rounded-2xl border border-navy-100 bg-white/70 p-4 text-center dark:border-navy-800 dark:bg-navy-900/60">
+              <p className="text-2xl font-black text-green-600">{formatKES(data.smsMargins.totalMarginKes)}</p>
+              <p className="text-xs text-navy-500 dark:text-navy-400">Total margin revenue</p>
+            </div>
+          </div>
+
+          {data.smsMargins.topSchools.length === 0 ? (
+            <EmptyState icon={MessageCircle} title="No SMS sent yet" description="Margin revenue will appear here once schools start sending real SMS." />
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-navy-400">Top schools by margin</p>
+              {data.smsMargins.topSchools.map((s) => (
+                <div key={s.tenantId} className="flex items-center justify-between rounded-2xl border border-navy-100 bg-white/70 p-3 dark:border-navy-800 dark:bg-navy-900/60">
+                  <p className="font-semibold text-navy-900 dark:text-navy-50">{s.schoolName}</p>
+                  <p className="text-sm text-navy-500 dark:text-navy-400">{s.messageCount.toLocaleString()} SMS · {formatKES(s.marginKes)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// M.5 — Bundi Handwritten Import (NEYO Ops console)
+// ---------------------------------------------------------------------------
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-navy-100 bg-warm-50 p-3 text-center dark:border-navy-800 dark:bg-navy-900">
+      <p className="text-lg font-semibold text-navy-900 dark:text-navy-50">{value}</p>
+      <p className="text-xs text-navy-500 dark:text-navy-400">{label}</p>
+    </div>
+  );
+}
+
+interface BundiConfig {
+  enabled: boolean;
+  provider: "NONE" | "OPENAI_VISION" | "GOOGLE_VISION" | "ANTHROPIC_VISION";
+  model: string;
+  usdToKes: number;
+  maxPagesPerSession: number;
+  notes: string;
+}
+interface BundiCode {
+  id: string;
+  code: string;
+  tenantId: string | null;
+  tenantName: string | null;
+  maxUses: number | null;
+  usedCount: number;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  note: string | null;
+  issuedByName: string;
+  createdAt: string;
+}
+interface BundiUsage {
+  totalSessions: number;
+  totalCostKes: number;
+  totalPromptTokens: number;
+  totalOutputTokens: number;
+  byStatus: Record<string, number>;
+  topSchools: { tenantName: string; sessions: number; costKes: number }[];
+}
+interface BundiOpsData { config: BundiConfig; codes: BundiCode[]; usage: BundiUsage; }
+
+function BundiImportOpsTab() {
+  const { toast } = useToast();
+  const [data, setData] = React.useState<BundiOpsData | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [configForm, setConfigForm] = React.useState<BundiConfig | null>(null);
+  const [savingConfig, setSavingConfig] = React.useState(false);
+  const [minting, setMinting] = React.useState(false);
+  const [busyCodeId, setBusyCodeId] = React.useState<string | null>(null);
+  const [mintTenantId, setMintTenantId] = React.useState("");
+  const [mintMaxUses, setMintMaxUses] = React.useState("1");
+  const [mintNote, setMintNote] = React.useState("");
+
+  const load = React.useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/ops/bundi-import");
+      const json = await res.json();
+      if (json.ok) {
+        setData(json.data);
+        setConfigForm(json.data.config);
+      } else {
+        setError(json.error?.message || "Failed to load Bundi import ops.");
+      }
+    } catch {
+      setError("Failed to load Bundi import ops.");
+    }
+  }, []);
+
+  React.useEffect(() => { void load(); }, [load]);
+
+  async function saveConfig() {
+    if (!configForm) return;
+    setSavingConfig(true);
+    try {
+      const res = await fetch("/api/ops/bundi-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_config", data: configForm }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: "Bundi import config saved", tone: "success" });
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed to save config", tone: "error" });
+      }
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  async function mintCode() {
+    setMinting(true);
+    try {
+      const res = await fetch("/api/ops/bundi-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mint_code",
+          data: {
+            tenantId: mintTenantId.trim() || undefined,
+            maxUses: mintMaxUses.trim() ? Number(mintMaxUses) : null,
+            note: mintNote.trim() || undefined,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: `Unlock code minted: ${json.data.code.code}`, description: "Share this with the school — it won't be shown again in full here, but stays visible in the list.", tone: "success" });
+        setMintTenantId(""); setMintNote("");
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed to mint code", tone: "error" });
+      }
+    } finally {
+      setMinting(false);
+    }
+  }
+
+  async function revokeCode(codeId: string) {
+    setBusyCodeId(codeId);
+    try {
+      const res = await fetch("/api/ops/bundi-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "revoke_code", data: { codeId } }),
+      });
+      const json = await res.json();
+      if (json.ok) { toast({ title: "Unlock code revoked", tone: "success" }); await load(); }
+      else toast({ title: json.error?.message || "Failed to revoke", tone: "error" });
+    } finally {
+      setBusyCodeId(null);
+    }
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300">
+        {error}
+        <Button size="sm" variant="secondary" onClick={load}><RefreshCw className="h-4 w-4" /> Retry</Button>
+      </div>
+    );
+  }
+  if (!data || !configForm) {
+    return <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="skeleton h-24 w-full rounded-2xl" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><ScanLine className="h-4 w-4 text-green-600" /> Provider configuration</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-navy-500 dark:text-navy-400">
+            Bundi&apos;s handwriting reader stays OFF (and every school sees an honest &ldquo;not configured&rdquo; message) until a real provider is wired in and enabled here. No feature ever fabricates extracted rows.
+          </p>
+          <label className="flex items-center gap-2 text-sm font-medium text-navy-700 dark:text-navy-200">
+            <input type="checkbox" checked={configForm.enabled} onChange={(e) => setConfigForm({ ...configForm, enabled: e.target.checked })} className="h-4 w-4 rounded border-navy-300 text-green-600" />
+            Enable Bundi handwriting extraction
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-navy-500">Provider</label>
+              <select value={configForm.provider} onChange={(e) => setConfigForm({ ...configForm, provider: e.target.value as BundiConfig["provider"] })} className="w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900">
+                <option value="NONE">None selected</option>
+                <option value="OPENAI_VISION">OpenAI (vision)</option>
+                <option value="GOOGLE_VISION">Google Cloud Vision / Gemini</option>
+                <option value="ANTHROPIC_VISION">Anthropic Claude (vision)</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-navy-500">Model name</label>
+              <input value={configForm.model} onChange={(e) => setConfigForm({ ...configForm, model: e.target.value })} placeholder="e.g. gpt-4o" className="w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-navy-500">USD → KES rate</label>
+              <input type="number" value={configForm.usdToKes} onChange={(e) => setConfigForm({ ...configForm, usdToKes: Number(e.target.value) })} className="w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-navy-500">Max pages per session</label>
+              <input type="number" value={configForm.maxPagesPerSession} onChange={(e) => setConfigForm({ ...configForm, maxPagesPerSession: Number(e.target.value) })} className="w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900" />
+            </div>
+          </div>
+          <p className="text-xs text-navy-400">
+            The real provider API key belongs in Settings → Developer → Integration Credentials (&ldquo;Bundi provider key&rdquo;), the same encrypted vault as every other integration — never here.
+          </p>
+          <Button onClick={saveConfig} disabled={savingConfig}>
+            {savingConfig ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save configuration
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Coins className="h-4 w-4 text-green-600" /> Usage & cost</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile label="Sessions" value={String(data.usage.totalSessions)} />
+            <StatTile label="Total cost" value={`KES ${data.usage.totalCostKes.toFixed(2)}`} />
+            <StatTile label="Prompt tokens" value={data.usage.totalPromptTokens.toLocaleString()} />
+            <StatTile label="Output tokens" value={data.usage.totalOutputTokens.toLocaleString()} />
+          </div>
+          {data.usage.topSchools.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold text-navy-500">Top schools by spend</p>
+              <ul className="space-y-1.5">
+                {data.usage.topSchools.map((s) => (
+                  <li key={s.tenantName} className="flex items-center justify-between rounded-xl border border-navy-100 px-3 py-2 text-sm dark:border-navy-800">
+                    <span>{s.tenantName}</span>
+                    <span className="text-navy-500">{s.sessions} session{s.sessions === 1 ? "" : "s"} · KES {s.costKes.toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-4 w-4 text-green-600" /> Unlock codes</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <input value={mintTenantId} onChange={(e) => setMintTenantId(e.target.value)} placeholder="Tenant ID (blank = company-wide)" className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900 sm:col-span-2" />
+            <input value={mintMaxUses} onChange={(e) => setMintMaxUses(e.target.value)} placeholder="Max uses (blank = unlimited)" className="rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900" />
+            <Button onClick={mintCode} disabled={minting}>
+              {minting ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Mint code
+            </Button>
+          </div>
+          <input value={mintNote} onChange={(e) => setMintNote(e.target.value)} placeholder="Internal note, e.g. Pilot: Karibu High" className="w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-900" />
+
+          {data.codes.length === 0 ? (
+            <p className="text-sm text-navy-400">No unlock codes minted yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {data.codes.map((c) => {
+                const exhausted = c.maxUses !== null && c.usedCount >= c.maxUses;
+                const expired = c.expiresAt && new Date(c.expiresAt) < new Date();
+                const dead = Boolean(c.revokedAt) || exhausted || expired;
+                return (
+                  <li key={c.id} className="flex items-center justify-between rounded-xl border border-navy-100 px-3 py-2.5 text-sm dark:border-navy-800">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <code className="font-mono font-semibold text-navy-900 dark:text-navy-50">{c.code}</code>
+                        {c.revokedAt && <Badge tone="red">Revoked</Badge>}
+                        {!c.revokedAt && exhausted && <Badge tone="amber">Used up</Badge>}
+                        {!c.revokedAt && !exhausted && expired && <Badge tone="amber">Expired</Badge>}
+                        {!dead && <Badge tone="green">Active</Badge>}
+                      </div>
+                      <p className="mt-0.5 text-xs text-navy-400">
+                        {c.tenantName ?? "Any school"} · {c.usedCount}/{c.maxUses ?? "∞"} uses · minted by {c.issuedByName}
+                        {c.note ? ` · ${c.note}` : ""}
+                      </p>
+                    </div>
+                    {!c.revokedAt && (
+                      <Button size="sm" variant="ghost" onClick={() => revokeCode(c.id)} disabled={busyCodeId === c.id}>
+                        {busyCodeId === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />} Revoke
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

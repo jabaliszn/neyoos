@@ -69,13 +69,19 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
   const [idPrinting, setIdPrinting] = React.useState(false);
   const [documentTemplate, setDocumentTemplate] = React.useState("modern");
   const [poweredByNeyo, setPoweredByNeyo] = React.useState(true);
+  // N.1 — dense batch-A4 layout (default) vs one-card-per-page for card printers.
+  const [idLayout, setIdLayout] = React.useState<"batch-a4" | "single">("batch-a4");
+  const [idStampEnabled, setIdStampEnabled] = React.useState(false);
 
   // Student Newsletter customizations (A4 eco-multi up)
   const [newsOpen, setNewsOpen] = React.useState(false);
   const [newsTitle, setNewsTitle] = React.useState("End of Term Newsletter");
   const [newsContent, setNewsContent] = React.useState("Dear Parent/Guardian,\n\nWe would like to thank you for your support this term. Please note that the school re-opens on September 5th, 2026. Have a safe and happy holiday!\n\nRegards,\nPrincipal's Office");
   const [newsPersonalized, setNewsPersonalized] = React.useState(true);
-  const [newsFormat, setNewsFormat] = React.useState("2-up");
+  const [newsFormat, setNewsFormat] = React.useState<"1-up" | "2-up" | "4-up">("2-up");
+  // N.3 — real server-rendered PDF generation state (replaces the old
+  // client-side window.print() HTML generator).
+  const [newsPrinting, setNewsPrinting] = React.useState(false);
 
   // G.8 Polish — Saved filters / saved views state
   const [savedViews, setSavedViews] = React.useState<any[]>([]);
@@ -103,6 +109,7 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
         setIdTemplate(j.data.idTemplate);
         setDocumentTemplate(j.data.documentTemplate);
         setPoweredByNeyo(j.data.poweredByNeyo);
+        setIdStampEnabled(Boolean(j.data.idStampEnabled));
       }
     }).catch(() => {});
   }, []);
@@ -240,6 +247,7 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
         documentTemplate,
         smallTimetableLogo: true,
         poweredByNeyo,
+        idStampEnabled,
       }),
     });
     const json = await res.json();
@@ -263,6 +271,8 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
           width: Number(idWidth),
           height: Number(idHeight),
           template: idTemplate,
+          layout: idLayout,
+          showStamp: idStampEnabled,
         }),
       });
 
@@ -272,7 +282,7 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `NEYO-Custom-ID-Cards-${studentIds.length}.pdf`;
+      a.download = `NEYO-Custom-ID-Cards-${studentIds.length}${idLayout === "batch-a4" ? "-A4-sheets" : ""}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -280,7 +290,9 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
       
       toast({
         title: `Generated ${studentIds.length} ID Cards!`,
-        description: `Measurements: ${idWidth} x ${idHeight} mm (${idTemplate} template)`,
+        description: idLayout === "batch-a4"
+          ? `Dense A4 cutting sheets — ${idWidth} x ${idHeight} mm cards (${idTemplate} template)`
+          : `Measurements: ${idWidth} x ${idHeight} mm (${idTemplate} template)`,
         tone: "success",
       });
       setIdPrintOpen(false);
@@ -295,250 +307,60 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
     }
   }
 
-  function handlePrintNewsletter() {
+  async function handlePrintNewsletter() {
     if (!students || students.length === 0) {
       toast({ title: "No students loaded to print.", tone: "error" });
       return;
     }
-    
-    const win = window.open("", "_blank");
-    if (!win) {
-      toast({ title: "Pop-up blocked! Please allow popups to print newsletters.", tone: "error" });
-      return;
-    }
-
-    const brandColor = tenant?.brandPrimary || "#1c2740";
-    const GREEN_ACCENT = "#1f9d5f";
-    const MUTED_COLOR = "#677fab";
-    const schoolLogoHtml = tenant?.logoUrl 
-      ? `<img src="${tenant.logoUrl}" style="height: 32px; object-fit: contain; margin-right: 10px;" />`
-      : "";
-
-    let cardsHtml = "";
-    
-    // Eco Paper-Saver pagination logic
-    // 2-up (A5 size) means 2 cards per sheet. 
-    // 4-up (A6 size) means 4 cards per sheet.
-    // 1-up (A4 size) means 1 card per sheet.
-    const itemsPerPage = newsFormat === "4-up" ? 4 : newsFormat === "2-up" ? 2 : 1;
-    
-    for (let index = 0; index < students.length; index += itemsPerPage) {
-      const pageStudents = students.slice(index, index + itemsPerPage);
-      
-      let pageHtml = `<div class="a4-page">`;
-      let gridClass = newsFormat === "4-up" ? "grid-4" : newsFormat === "2-up" ? "grid-2" : "grid-1";
-      pageHtml += `<div class="grid ${gridClass}">`;
-      
-      pageStudents.forEach((st) => {
-        let content = newsContent;
-        if (newsPersonalized) {
-          content = content
-            .replace(/\{\{student_name\}\}/g, st.name)
-            .replace(/\{\{admission_no\}\}/g, st.admissionNo);
-        } else {
-          content = content
-            .replace(/\{\{student_name\}\}/g, "Parent/Guardian")
-            .replace(/\{\{admission_no\}\}/g, "Student");
-        }
-        
-        const contentParagraphs = content.split("\n\n").map(p => `<p style="margin: 0 0 10px 0; line-height: 1.5;">${p.replace(/\n/g, "<br/>")}</p>`).join("");
-
-        pageHtml += `
-          <div class="newsletter-card">
-            <div class="header">
-              <div class="school-header">
-                ${schoolLogoHtml}
-                <div>
-                  <div class="school-name">${tenant?.name || "School Update"}</div>
-                  <div class="school-motto">${tenant?.motto || ""}</div>
-                </div>
-              </div>
-              <div class="newsletter-title">${newsTitle}</div>
-            </div>
-            <div class="content">
-              ${contentParagraphs}
-            </div>
-            <div class="footer-block">
-              <div class="signature">
-                <div class="sign-line">Signed / Stamped</div>
-                <div class="sign-by">Administration</div>
-              </div>
-              <div class="trademark">Powered by NEYO</div>
-            </div>
-          </div>
-        `;
+    setNewsPrinting(true);
+    try {
+      const studentIds = students.map((s) => s.id);
+      const res = await fetch("/api/students/print-newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentIds,
+          title: newsTitle,
+          body: newsContent,
+          personalized: newsPersonalized,
+          format: newsFormat,
+        }),
       });
-      
-      pageHtml += `</div></div>`;
-      cardsHtml += pageHtml;
-    }
 
-    win.document.write(`
-      <html>
-      <head>
-        <title>NEYO Personalized Newsletter Station</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f1f5f9;
-            color: #1e293b;
-          }
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
-          @media print {
-            body { background: #fff; }
-            .a4-page {
-              page-break-after: always;
-              height: 297mm;
-              width: 210mm;
-              box-shadow: none !important;
-              margin: 0 !important;
-              border: none !important;
-              background-color: #fff !important;
-            }
-          }
-          .a4-page {
-            background-color: #fff;
-            width: 210mm;
-            height: 297mm;
-            margin: 20px auto;
-            box-sizing: border-box;
-            padding: 15mm;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e2e8f0;
-            position: relative;
-            page-break-after: always;
-          }
-          .grid {
-            display: grid;
-            gap: 12mm;
-            height: 100%;
-            width: 100%;
-            box-sizing: border-box;
-          }
-          .grid-1 {
-            grid-template-rows: 1fr;
-          }
-          .grid-2 {
-            grid-template-rows: repeat(2, 1fr);
-          }
-          .grid-4 {
-            grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: repeat(2, 1fr);
-          }
-          .newsletter-card {
-            border: 1.5px dashed #94a3b8;
-            border-radius: 12px;
-            padding: 8mm;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            box-sizing: border-box;
-            background-color: #fff;
-            position: relative;
-          }
-          .newsletter-card::after {
-            content: "✂ Cut Line";
-            position: absolute;
-            top: -8px;
-            right: 15px;
-            background: #fff;
-            padding: 0 5px;
-            font-size: 8px;
-            color: #94a3b8;
-            font-weight: bold;
-          }
-          .school-header {
-            display: flex;
-            align-items: center;
-            border-bottom: 2px solid ${brandColor};
-            padding-bottom: 3mm;
-            margin-bottom: 4mm;
-          }
-          .school-name {
-            font-size: 13px;
-            font-weight: 800;
-            color: ${brandColor};
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-          }
-          .school-motto {
-            font-size: 8px;
-            color: ${GREEN_ACCENT};
-            font-style: italic;
-            font-weight: bold;
-            margin-top: 2px;
-          }
-          .newsletter-title {
-            font-size: 14px;
-            font-weight: 800;
-            color: #0f172a;
-            margin-bottom: 4mm;
-            text-align: center;
-          }
-          .content {
-            font-size: 10.5px;
-            color: #334155;
-            flex: 1;
-          }
-          .footer-block {
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-between;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 3mm;
-            margin-top: 4mm;
-          }
-          .signature {
-            border-top: 1px dotted #94a3b8;
-            width: 40%;
-            text-align: center;
-            padding-top: 2px;
-          }
-          .sign-line {
-            font-size: 8px;
-            color: #64748b;
-            text-transform: uppercase;
-            font-weight: bold;
-          }
-          .sign-by {
-            font-size: 9px;
-            font-weight: bold;
-            color: ${brandColor};
-          }
-          .trademark {
-            font-size: 8px;
-            font-weight: 800;
-            color: #94a3b8;
-            text-transform: uppercase;
-          }
-        </style>
-      </head>
-      <body>
-        ${cardsHtml}
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 300);
-          }
-        </script>
-      </body>
-      </html>
-    `);
-    
-    win.document.close();
-    toast({
-      title: `Generated ${students.length} Personalized Newsletters!`,
-      description: `Format is ${newsFormat} with Eco-Cut guides (Paper saving active)`,
-      tone: "success",
-    });
-    setNewsOpen(false);
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        throw new Error(j?.error?.message || "Could not generate the newsletter PDF.");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `NEYO-Newsletter-${studentIds.length}-${newsFormat}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: `Generated ${studentIds.length} personalized newsletters!`,
+        description: newsFormat === "1-up"
+          ? "1 full-page letter per sheet — no cut lines needed."
+          : `${newsFormat} layout — dashed cut guides included, blank space auto-collapsed for shorter notices.`,
+        tone: "success",
+      });
+      setNewsOpen(false);
+    } catch (err: any) {
+      toast({
+        title: "Newsletter printing failed",
+        description: err.message,
+        tone: "error",
+      });
+    } finally {
+      setNewsPrinting(false);
+    }
   }
+
 
   return (
     <>
@@ -855,6 +677,29 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
                 </select>
               </div>
 
+              {/* N.1 — dense batch-A4 cutting sheets vs one card per page */}
+              <div className="space-y-1.5">
+                <Label>Print layout</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIdLayout("batch-a4")}
+                    className={`rounded-xl border px-3 py-2.5 text-left text-xs transition-colors duration-200 ease-apple ${idLayout === "batch-a4" ? "border-green-500 bg-green-50 text-green-800 dark:bg-green-950/30 dark:text-green-300" : "border-navy-200 bg-white text-navy-600 hover:border-navy-300 dark:border-navy-700 dark:bg-navy-900 dark:text-navy-300"}`}
+                  >
+                    <span className="block font-semibold">Dense A4 sheets (recommended)</span>
+                    <span className="block text-navy-400">Packs as many cards as fit per A4 page with cut lines — print on plain paper, no card-stock printer needed.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIdLayout("single")}
+                    className={`rounded-xl border px-3 py-2.5 text-left text-xs transition-colors duration-200 ease-apple ${idLayout === "single" ? "border-green-500 bg-green-50 text-green-800 dark:bg-green-950/30 dark:text-green-300" : "border-navy-200 bg-white text-navy-600 hover:border-navy-300 dark:border-navy-700 dark:bg-navy-900 dark:text-navy-300"}`}
+                  >
+                    <span className="block font-semibold">One card per page</span>
+                    <span className="block text-navy-400">For a dedicated card printer that feeds card-sized stock.</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>School document style</Label>
@@ -870,12 +715,18 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
                 </label>
               </div>
 
+              {/* N.1 — digital stamp overlay */}
+              <label className="flex items-center gap-2 text-sm text-navy-600 dark:text-navy-300">
+                <input type="checkbox" checked={idStampEnabled} onChange={(e) => setIdStampEnabled(e.target.checked)} className="h-4 w-4 rounded border-navy-300 text-green-600" />
+                Overlay the school&apos;s digital stamp on each ID card
+              </label>
+
               <div className="flex items-center gap-2.5 rounded-xl border border-navy-100 p-3 bg-navy-50/30 dark:border-navy-800">
                 <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-green-500/10 text-green-700">
                   ⚡
                 </div>
                 <div className="text-[11px] text-navy-500">
-                  <strong>Branding Active:</strong> Each ID includes the {tenant?.logoUrl ? "official school logo" : "default logo"}, barcode references, and the <strong>Powered by NEYO</strong> trade mark at the bottom.
+                  <strong>Branding Active:</strong> Each ID includes the {tenant?.logoUrl ? "official school logo" : "default logo"}, a scannable QR verification code, and the <strong>Powered by NEYO</strong> trade mark at the bottom.
                 </div>
               </div>
             </div>
@@ -908,7 +759,7 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
 
             <div className="space-y-4">
               <p className="text-xs text-navy-400">
-                Type short letters or terminal notifications, customize them with student names automatically, and print them in space-saving grid sheets (Eco Paper-Saver mode) with dotted cut guide lines to avoid wasting A4 space!
+                Type short letters or terminal notifications, customize them with student names automatically, and generate a real server-rendered PDF in space-saving grid sheets. Cut guides only appear when a sheet actually holds more than one letter, and short notices automatically collapse blank space instead of leaving a half-empty card.
               </p>
 
               <div className="space-y-1.5">
@@ -933,10 +784,10 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>A4 Grid Layout (Paper Saver)</Label>
-                  <select value={newsFormat} onChange={(e) => setNewsFormat(e.target.value)} className="w-full h-10 rounded-full border border-navy-200 bg-white px-3.5 py-2 text-sm dark:border-navy-700 dark:bg-navy-900">
-                    <option value="2-up">2-Up (2 A5 letters per A4 sheet) ✂</option>
-                    <option value="4-up">4-Up (4 A6 letters per A4 sheet) ✂</option>
-                    <option value="1-up">1-Up (1 full A4 sheet per letter)</option>
+                  <select value={newsFormat} onChange={(e) => setNewsFormat(e.target.value as "1-up" | "2-up" | "4-up")} className="w-full h-10 rounded-full border border-navy-200 bg-white px-3.5 py-2 text-sm dark:border-navy-700 dark:bg-navy-900">
+                    <option value="2-up">2-Up (2 letters per A4 sheet) ✂ cut guide</option>
+                    <option value="4-up">4-Up (4 letters per A4 sheet) ✂ cut guide</option>
+                    <option value="1-up">1-Up (1 full A4 sheet per letter, no cut guide)</option>
                   </select>
                 </div>
                 <div className="space-y-1.5 flex flex-col justify-end pb-2">
@@ -949,10 +800,10 @@ export function StudentsClient({ canCreate }: { canCreate: boolean }) {
             </div>
 
             <div className="mt-6 flex justify-end gap-2.5">
-              <Button variant="ghost" onClick={() => setNewsOpen(false)}>Cancel</Button>
-              <Button onClick={handlePrintNewsletter}>
-                <Printer className="h-4 w-4" />
-                Preview & Bulk Print ({students?.length ?? 0})
+              <Button variant="ghost" onClick={() => setNewsOpen(false)} disabled={newsPrinting}>Cancel</Button>
+              <Button onClick={handlePrintNewsletter} disabled={newsPrinting}>
+                {newsPrinting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                Generate Newsletters PDF ({students?.length ?? 0})
               </Button>
             </div>
           </div>
@@ -1137,7 +988,7 @@ function ApprovalsDialog({ onClose }: any) {
                  {r.documentLabel && <p className="text-xs font-semibold text-blue-600">{r.documentLabel}</p>}
                </div>
                <div className="flex gap-2">
-                 <Button size="sm" variant="outline" className="text-red-500" onClick={() => act(r.id, "REJECTED")}>Reject</Button>
+                 <Button size="sm" variant="secondary" className="text-red-500" onClick={() => act(r.id, "REJECTED")}>Reject</Button>
                  <Button size="sm" onClick={() => act(r.id, "APPROVED")}>Approve</Button>
                </div>
              </div>

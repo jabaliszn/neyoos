@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
     let fileName: string | undefined;
     let hasHeader = true;
     let mapping;
+    let targetClassId: string | undefined;
 
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
@@ -36,16 +37,19 @@ export async function POST(req: NextRequest) {
         rows = parseDelimited(buf.toString("utf-8"));
       }
       hasHeader = form.get("hasHeader") !== "false";
+      const targetClassRaw = form.get("targetClassId");
+      targetClassId = typeof targetClassRaw === "string" && targetClassRaw ? targetClassRaw : undefined;
     } else {
       const body = importPreviewSchema.parse(await req.json());
       source = body.source;
       fileName = body.fileName;
       hasHeader = body.hasHeader;
       mapping = body.mapping;
+      targetClassId = body.targetClassId;
       rows = body.rows ?? parseDelimited(body.text ?? "");
     }
 
-    const preview = await previewImport(user, rows, hasHeader, mapping);
+    const preview = await previewImport(user, rows, hasHeader, mapping, targetClassId);
     return ok({ source, fileName, hasHeader, rows, ...preview });
   } catch (e) {
     return handleError(e);

@@ -284,7 +284,7 @@ export async function getTimetable(user: SessionUser, classId: string) {
     return {
       slots: slots.map((s) => ({
         id: s.id, dayOfWeek: s.dayOfWeek, period: s.period,
-        subjectId: s.subjectId, subjectName: s.subject.name, subjectCode: s.subject.code,
+        subjectId: s.subjectId, subjectName: s.subject?.name ?? null, subjectCode: s.subject?.code ?? null,
         teacherId: s.teacherId, teacherName: s.teacherId ? tMap.get(s.teacherId) ?? null : null,
         venue: (s as any).venue ?? null,
         slotType: s.slotType,
@@ -304,7 +304,7 @@ export async function teacherTimetable(user: SessionUser, teacherId: string) {
     const cMap = new Map(classes.map((c) => [c.id, [c.level, c.stream].filter(Boolean).join(" ")]));
     return slots.map((s) => ({
       id: s.id, dayOfWeek: s.dayOfWeek, period: s.period,
-      subjectName: s.subject.name, subjectCode: s.subject.code,
+      subjectName: s.subject?.name ?? null, subjectCode: s.subject?.code ?? null,
       className: cMap.get(s.classId) ?? "—",
       venue: (s as any).venue ?? null,
       slotType: s.slotType,
@@ -335,8 +335,8 @@ export async function timetablePrintBundle(user: SessionUser, mode: "classes" | 
       dayOfWeek: s.dayOfWeek,
       period: s.period,
       subjectId: s.subjectId,
-      subjectName: s.subject.name,
-      subjectCode: s.subject.code,
+      subjectName: s.subject?.name ?? null,
+      subjectCode: s.subject?.code ?? null,
       teacherId: s.teacherId,
       teacherName: s.teacherId ? teacherMap.get(s.teacherId) ?? null : null,
       venue: (s as any).venue ?? null,
@@ -400,7 +400,7 @@ export async function setSlot(user: SessionUser, input: { classId: string; subje
       if (clash) {
         const cls = await tenantDb().schoolClass.findUnique({ where: { id: clash.classId } });
         const label = cls ? [cls.level, cls.stream].filter(Boolean).join(" ") : "another class";
-        throw new AcademicsError("CONFLICT", `That teacher already teaches ${clash.subject.name} in ${label} at this time.`);
+        throw new AcademicsError("CONFLICT", `That teacher already teaches ${clash.subject?.name ?? "another subject"} in ${label} at this time.`);
       }
     }
     const row = await db.timetableSlot.upsert({
@@ -417,7 +417,7 @@ export async function clearSlot(user: SessionUser, classId: string, dayOfWeek: n
   return withTenant(user.tenantId, async () => {
     if (isScopedHod(user)) {
       const existing = await tenantDb().timetableSlot.findFirst({ where: { classId, dayOfWeek, period }, select: { subjectId: true } });
-      if (existing) await assertHodSubjectAccess(user, existing.subjectId);
+      if (existing?.subjectId) await assertHodSubjectAccess(user, existing.subjectId);
     }
     await db.timetableSlot.deleteMany({ where: { tenantId: user.tenantId, classId, dayOfWeek, period } });
     return { ok: true };

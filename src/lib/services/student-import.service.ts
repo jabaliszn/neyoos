@@ -188,7 +188,7 @@ function splitFullName(v: string): { firstName: string; middleName?: string; las
 }
 
 export type RowIssue = { row: number; message: string };
-export type PreviewRow = ImportedRow & { _row: number; _issues: string[] };
+export type PreviewRow = ImportedRow & { _row: number; _issues: string[]; _customFields?: { label: string; value: string }[] };
 
 /** Apply a mapping to raw rows -> normalized candidates + per-row issues. */
 export function buildCandidates(
@@ -208,6 +208,10 @@ export function buildCandidates(
   if (!hasNames)
     throw new ImportError("NO_NAME_MAPPING", 'Map a "Full name" column, or both "First name" and "Last name".');
 
+  // M.4 — custom columns: each mapped {column, field:"custom", customLabel}
+  // is collected separately (a row can have several custom fields at once).
+  const customColumns = mapping.filter((m) => m.field === "custom" && m.customLabel);
+
   const candidates: PreviewRow[] = [];
   const issues: RowIssue[] = [];
 
@@ -215,9 +219,16 @@ export function buildCandidates(
     const rowNo = i + (hasHeader ? 2 : 1); // human row number in the sheet
     const rec: Record<string, string> = {};
     fieldFor.forEach((field, col) => {
+      if (field === "custom") return; // handled separately below
       const v = (cells[col] ?? "").trim();
       if (v) rec[field] = v;
     });
+
+    const customFields: { label: string; value: string }[] = [];
+    for (const cc of customColumns) {
+      const v = (cells[cc.column] ?? "").trim();
+      if (v) customFields.push({ label: cc.customLabel!, value: v });
+    }
 
     const rowIssues: string[] = [];
 
@@ -274,7 +285,12 @@ export function buildCandidates(
       // already flagged; row stays invalid
     }
     const ok = parsed.success && gender !== null;
-    candidates.push({ ...(parsed.success ? parsed.data : (candidate as ImportedRow)), _row: rowNo, _issues: rowIssues });
+    candidates.push({
+      ...(parsed.success ? parsed.data : (candidate as ImportedRow)),
+      _row: rowNo,
+      _issues: rowIssues,
+      _customFields: customFields,
+    });
     if (!ok) issues.push({ row: rowNo, message: rowIssues.join(" ") || "Invalid row." });
   });
 
@@ -355,7 +371,8 @@ export async function previewImport(
   user: SessionUser,
   rows: string[][],
   hasHeader: boolean,
-  mapping?: ColumnMapping
+  mapping?: ColumnMapping,
+  targetClassId?: string
 ) {
   return withTenant(user.tenantId, async () => {
     if (rows.length === 0) throw new ImportError("EMPTY", "The file has no rows.");
@@ -370,8 +387,17 @@ export async function previewImport(
       issues.push(d);
     }
 
-    // class resolution map
-    const classes = await tenantDb().schoolClass.findMany({ where: { archived: false } });
+    // M.4 — single-class-only import: verify the target class up front and
+    // skip class resolution/creation entirely; every row lands in this class.
+    let targetClass: { id: string; label: string } | null = null;
+    if (targetClassId) {
+      const cls = await tenantDb().schoolClass.findUnique({ where: { id: targetClassId } });
+      if (!cls) throw new ImportError("BAD_FILE", "The chosen class was not found.");
+      targetClass = { id: cls.id, label: [cls.level, cls.stream].filter(Boolean).join(" ") };
+    }
+
+    // class resolution map (skipped entirely in single-class-only mode)
+    const classes = targetClassId ? [] : await tenantDb().schoolClass.findMany({ where: { archived: false } });
     const byKey = new Map<string, { id: string; label: string }>();
     for (const c of classes) {
       const label = [c.level, c.stream].filter(Boolean).join(" ");
@@ -379,8 +405,10 @@ export async function previewImport(
       byKey.set(classKey(c.level), { id: c.id, label }); // "Form 2" matches single-stream
     }
     const unknownClasses = new Set<string>();
-    for (const c of candidates) {
-      if (c.className && !byKey.has(classKey(c.className))) unknownClasses.add(c.className);
+    if (!targetClassId) {
+      for (const c of candidates) {
+        if (c.className && !byKey.has(classKey(c.className))) unknownClasses.add(c.className);
+      }
     }
 
     // duplicate detection (existing DB + within file)
@@ -413,6 +441,7 @@ export async function previewImport(
       unknownClasses: [...unknownClasses], // will be CREATED on commit
       duplicateInFileRows: dupRows,
       possibleExistingRows: possibleExisting,
+      targetClass, // M.4 — set when this preview is scoped to one class only
     };
   });
 }
@@ -431,6 +460,7 @@ export async function commitImport(
     mapping: ColumnMapping;
     seedRequirements: boolean;
     skipInvalid: boolean;
+    targetClassId?: string;
   }
 ) {
   return withTenant(user.tenantId, async () => {
@@ -446,8 +476,17 @@ export async function commitImport(
     const valid = candidates.filter((c) => c._issues.length === 0);
     if (valid.length === 0) throw new ImportError("EMPTY", "No valid rows to import.");
 
-    // resolve / create classes
-    const classes = await tenantDb().schoolClass.findMany({ where: { archived: false } });
+    // M.4 — single-class-only import: every row goes into this ONE class.
+    // No class resolution from the file, no auto-creation, no ambiguity.
+    let forcedClassId: string | null = null;
+    if (input.targetClassId) {
+      const cls = await tenantDb().schoolClass.findUnique({ where: { id: input.targetClassId } });
+      if (!cls) throw new ImportError("BAD_FILE", "The chosen class was not found.");
+      forcedClassId = cls.id;
+    }
+
+    // resolve / create classes (skipped entirely in single-class-only mode)
+    const classes = forcedClassId ? [] : await tenantDb().schoolClass.findMany({ where: { archived: false } });
     const byKey = new Map<string, string>();
     for (const c of classes) {
       const label = [c.level, c.stream].filter(Boolean).join(" ");
@@ -455,24 +494,26 @@ export async function commitImport(
       byKey.set(classKey(c.level), c.id);
     }
     const tenant = await db.tenant.findUniqueOrThrow({ where: { id: user.tenantId }, select: { curriculum: true, joiningRequirements: true } });
-    for (const c of valid) {
-      if (!c.className) continue;
-      const k = classKey(c.className);
-      if (byKey.has(k)) continue;
-      // create the class: last word = stream if there are >=2 words and the
-      // remainder looks like a level ("Form 2", "Grade 4", "PP1")
-      const words = c.className.trim().split(/\s+/);
-      let level = c.className.trim();
-      let stream: string | null = null;
-      if (words.length >= 3 || (words.length === 2 && !/^\d+$/.test(words[1]))) {
-        stream = words[words.length - 1];
-        level = words.slice(0, -1).join(" ");
+    if (!forcedClassId) {
+      for (const c of valid) {
+        if (!c.className) continue;
+        const k = classKey(c.className);
+        if (byKey.has(k)) continue;
+        // create the class: last word = stream if there are >=2 words and the
+        // remainder looks like a level ("Form 2", "Grade 4", "PP1")
+        const words = c.className.trim().split(/\s+/);
+        let level = c.className.trim();
+        let stream: string | null = null;
+        if (words.length >= 3 || (words.length === 2 && !/^\d+$/.test(words[1]))) {
+          stream = words[words.length - 1];
+          level = words.slice(0, -1).join(" ");
+        }
+        const created = await tenantDb().schoolClass.create({
+          data: { level, stream, curriculum: tenant.curriculum ?? "CBC" } as never,
+        });
+        byKey.set(k, created.id);
+        byKey.set(classKey(level), created.id);
       }
-      const created = await tenantDb().schoolClass.create({
-        data: { level, stream, curriculum: tenant.curriculum ?? "CBC" } as never,
-      });
-      byKey.set(k, created.id);
-      byKey.set(classKey(level), created.id);
     }
 
     // master joining requirements (G.9)
@@ -502,12 +543,23 @@ export async function commitImport(
             lastName: c.lastName,
             gender: c.gender,
             dateOfBirth: c.dateOfBirth || null,
-            classId: c.className ? byKey.get(classKey(c.className)) ?? null : null,
+            classId: forcedClassId ?? (c.className ? byKey.get(classKey(c.className)) ?? null : null),
             upiNumber: c.upiNumber || null,
             birthCertNo: c.birthCertNo || null,
             notes: c.notes || null,
           } as never,
         });
+
+        // M.4 — write any school-defined custom fields for this row.
+        if (c._customFields && c._customFields.length > 0) {
+          await tenantDb().studentCustomField.createMany({
+            data: c._customFields.map((f) => ({
+              studentId: student.id,
+              label: f.label,
+              value: f.value,
+            })) as never,
+          });
+        }
 
         if (c.guardianName && c.guardianPhone) {
           // reuse guardian by phone if already present (siblings!)
@@ -551,6 +603,7 @@ export async function commitImport(
         createdRows: createdCount,
         failedRows: failed.length,
         errorRows: failed.length ? JSON.stringify(failed.slice(0, 200)) : null,
+        targetClassId: forcedClassId,
         createdById: user.id,
         createdByName: user.fullName,
       } as never,

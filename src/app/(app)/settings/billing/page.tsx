@@ -3,6 +3,7 @@ import { ensureSubscription } from "@/lib/services/billing.service";
 import { getAllLimitStatuses } from "@/lib/services/limits.service";
 import { getPlanFromCatalog, listPlansFromCatalog } from "@/lib/services/pricing-catalog.service";
 import { BillingManager } from "@/components/settings/billing-manager";
+import { ReferralCard } from "@/components/settings/referral-card";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ export default async function BillingSettingsPage() {
         </p>
       </div>
       <BillingManager data={data} canManage={true} />
+      <ReferralCard />
     </div>
   );
 }

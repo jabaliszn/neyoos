@@ -29,8 +29,9 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const data = savePaperResultsSchema.parse(body);
+    const normalizedResults = data.results.map((r) => ({ ...r, marksScored: r.marksScored ?? null }));
 
-    const res = await savePaperResults(user, data.examId, data.subjectId, classId, data.results);
+    const res = await savePaperResults(user, data.examId, data.subjectId, classId, normalizedResults);
     return ok({ data: res });
   } catch (error) {
     if (error instanceof GradingError) {

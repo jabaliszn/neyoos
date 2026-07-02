@@ -16,9 +16,17 @@ export default async function GatePage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight text-navy-900 dark:text-navy-50">Security</h1>
       <p className="-mt-4 text-sm text-navy-500 dark:text-navy-400">
-        Gate passes, who may pick each learner, and the emergency panic button.
+        Gate passes, who may pick each learner, the emergency panic button, and 1-tap ID scanning.
       </p>
-      <GateClient canManage={effectivePermissions.includes("security.manage")} canPanic={effectivePermissions.includes("panic.raise")} canIssuePass={canIssuePass} canApprovePass={canApprovePass} currentUserId={user.id} />
+      <GateClient
+        canManage={effectivePermissions.includes("security.manage")}
+        canPanic={effectivePermissions.includes("panic.raise")}
+        canIssuePass={canIssuePass}
+        canApprovePass={canApprovePass}
+        currentUserId={user.id}
+        canScanAttendance={effectivePermissions.includes("attendance.record")}
+        canScanPayment={effectivePermissions.includes("finance.view")}
+      />
     </div>
   );
 }

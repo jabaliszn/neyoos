@@ -22,6 +22,7 @@ async function writeAudit(
   try {
     await tenantDb().auditLog.create({
       data: {
+        tenantId: user.tenantId,
         actorId: user.id,
         actorName: user.fullName,
         action,

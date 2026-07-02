@@ -144,6 +144,33 @@ export function LearnerJourneyCard({
     }
   }
 
+  async function exportJourney() {
+    setExporting(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ studentId, mode, format: "json" });
+      const res = await fetch(`/api/learner-journey/export?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        setError(json?.error?.message || "Learner journey export failed.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `learner-journey-${studentId}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Check your connection and try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   if (loading && !timeline && !error) {
     return <div className={className}><LearnerJourneyLoadingState /></div>;
   }

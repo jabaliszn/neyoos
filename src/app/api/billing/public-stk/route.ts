@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
       message: "M-Pesa STK push initiated through NEYO central billing.",
       checkoutRequestId: result.checkoutRequestId,
       amount: result.amount,
+      fullAmount: result.fullAmount,
+      referralDiscountKes: result.referralDiscountKes,
       accountRef: result.accountRef,
       centralized: true,
     });

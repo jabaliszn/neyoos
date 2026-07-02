@@ -15,9 +15,10 @@ import type {
   ClassInput,
 } from "@/lib/validations/student";
 import { z } from "zod";
-import { guardianInputSchema } from "@/lib/validations/student";
+import { guardianInputSchema, updateGuardianSchema } from "@/lib/validations/student";
 
 type GuardianInput = z.infer<typeof guardianInputSchema>;
+type UpdateGuardianInput = z.infer<typeof updateGuardianSchema>;
 
 export class StudentError extends Error {
   constructor(public code: "NOT_FOUND" | "DUPLICATE" | "FORBIDDEN", message: string) {
@@ -590,6 +591,90 @@ export async function setPrimaryGuardian(user: SessionUser, studentId: string, g
     });
 
     return { ok: true };
+  });
+}
+
+/**
+ * M.3 — Class teachers can correct an EXISTING guardian's phone/email/name/
+ * relationship (the missing piece: NEYO could only ADD a new guardian before,
+ * never fix a wrong number on one already on file — the exact real-world case
+ * a class teacher hits when a parent gets a new SIM card). Row-scoped: the
+ * caller must have `student.edit` (enforced at the API layer) AND the target
+ * guardian must actually be linked to a student the caller can see (checked
+ * here via scopeWhere, the same fail-closed A.3.8 rule as the rest of B.1) —
+ * so a TEACHER/CLASS_TEACHER can't blindly edit a guardian belonging to a
+ * class that isn't theirs just by guessing an ID.
+ * If a linked PARENT login exists for this guardian, its phone/email are kept
+ * in sync too (so the login stays reachable — a guardian and their portal
+ * account must never silently drift apart).
+ */
+export async function updateGuardian(
+  user: SessionUser,
+  studentId: string,
+  guardianId: string,
+  input: UpdateGuardianInput
+) {
+  return withTenant(user.tenantId, async () => {
+    const scope = await scopeWhere(user);
+    const student = await tenantDb().student.findFirst({ where: { AND: [{ id: studentId }, scope] } });
+    if (!student) throw new StudentError("NOT_FOUND", "Student not found.");
+
+    const link = await tenantDb().studentGuardian.findUnique({
+      where: { studentId_guardianId: { studentId, guardianId } },
+      include: { guardian: true },
+    });
+    if (!link) throw new StudentError("NOT_FOUND", "That guardian is not linked to this learner.");
+
+    const before = link.guardian;
+    const data: Record<string, unknown> = {};
+    if (input.fullName !== undefined) data.fullName = input.fullName;
+    if (input.phone !== undefined) data.phone = input.phone;
+    if (input.email !== undefined) data.email = input.email || null;
+    if (input.nationalId !== undefined) data.nationalId = input.nationalId || null;
+
+    if (Object.keys(data).length === 0 && input.relationship === undefined) {
+      return { id: guardianId }; // nothing to change — a harmless no-op
+    }
+
+    if (Object.keys(data).length > 0) {
+      await tenantDb().guardian.update({ where: { id: guardianId }, data: data as never });
+      // Keep a linked PARENT login's contact details in sync so they can
+      // still receive their OTP / SMS on the corrected number.
+      if (before.userId) {
+        await db.user.update({
+          where: { id: before.userId },
+          data: {
+            ...(input.fullName !== undefined ? { fullName: input.fullName } : {}),
+            ...(input.phone !== undefined ? { phone: input.phone } : {}),
+            ...(input.email !== undefined ? { email: input.email || null } : {}),
+          },
+        });
+      }
+    }
+    if (input.relationship !== undefined) {
+      await tenantDb().studentGuardian.update({
+        where: { studentId_guardianId: { studentId, guardianId } },
+        data: { relationship: input.relationship },
+      });
+    }
+
+    await db.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        actorId: user.id,
+        actorName: user.fullName,
+        action: "student.guardian_updated",
+        entityType: "guardian",
+        entityId: guardianId,
+        metadata: JSON.stringify({
+          studentId,
+          before: { fullName: before.fullName, phone: before.phone, email: before.email, relationship: link.relationship },
+          after: { fullName: input.fullName ?? before.fullName, phone: input.phone ?? before.phone, email: input.email ?? before.email, relationship: input.relationship ?? link.relationship },
+        }),
+      },
+    });
+
+    return { id: guardianId };
   });
 }
 

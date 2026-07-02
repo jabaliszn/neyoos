@@ -15,6 +15,10 @@ import {
   Users,
   Trash2,
   Repeat,
+  Smartphone,
+  Copy,
+  RefreshCw,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -191,6 +195,7 @@ export function CalendarView({ canManage }: { canManage: boolean }) {
               <Download className="h-4 w-4" /> iCal
             </Button>
           </a>
+          <SyncToPhoneButton />
           {canManage && (
             <Button
               size="sm"
@@ -242,6 +247,131 @@ export function CalendarView({ canManage }: { canManage: boolean }) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * M.3 — "Sync with native mobile calendar". Unlike the old "iCal" button
+ * (a one-shot download, never updates again), this gives the user a personal
+ * webcal:// link their phone's Calendar app SUBSCRIBES to — every event
+ * added/edited/removed on NEYO shows up automatically on their phone with no
+ * further action, because the phone polls the live feed on its own schedule.
+ */
+function SyncToPhoneButton() {
+  const { toast } = useToast();
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState(false);
+  const [feed, setFeed] = React.useState<{ https: string; webcal: string; lastPolledAt: string | null; rotatedAt: string } | null>(null);
+  const [copied, setCopied] = React.useState(false);
+
+  async function load() {
+    setLoading(true);
+    setError(false);
+    try {
+      const res = await fetch("/api/calendar/feed");
+      const json = await res.json();
+      if (json.ok) setFeed(json.data);
+      else setError(true);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  React.useEffect(() => {
+    if (open && !feed) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  async function rotate() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/calendar/feed", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rotate" }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setFeed(json.data);
+        toast({ title: "New sync link generated", description: "Old links on other devices will stop working.", tone: "success" });
+      } else {
+        toast({ title: json.error?.message ?? "Could not generate a new link.", tone: "error" });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function copy() {
+    if (!feed) return;
+    navigator.clipboard?.writeText(feed.https).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+        <Smartphone className="h-4 w-4" /> Sync to phone
+      </Button>
+
+      {open && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-navy-900/40 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setOpen(false)}>
+          <div className="w-full max-w-lg overflow-y-auto rounded-3xl border border-white/60 bg-white/95 p-0 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-950/95" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-navy-100 p-5 dark:border-navy-800">
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-navy-900 dark:text-navy-50">
+                <Smartphone className="h-5 w-5 text-green-600" /> Sync with your phone
+              </h3>
+              <button onClick={() => setOpen(false)} className="rounded-full p-1.5 text-navy-400 hover:bg-navy-50 dark:hover:bg-navy-800">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-5">
+              <p className="text-sm text-navy-600 dark:text-navy-300">
+                Add this link once as a subscribed calendar in your phone&apos;s Calendar app (iPhone: Settings → Calendar → Accounts → Add Subscribed Calendar. Android/Google: Google Calendar → Settings → Add calendar → From URL). New and changed events will keep appearing automatically — you never need to download anything again.
+              </p>
+              {loading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : error ? (
+                <div className="flex items-center justify-between rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+                  Could not load your sync link.
+                  <Button size="sm" variant="secondary" onClick={load}>Retry</Button>
+                </div>
+              ) : feed ? (
+                <>
+                  <div className="flex items-center gap-2 rounded-xl border border-navy-200 bg-warm-50 px-3 py-2.5 dark:border-navy-700 dark:bg-navy-900">
+                    <code className="min-w-0 flex-1 truncate text-xs text-navy-600 dark:text-navy-300">{feed.https}</code>
+                    <Button size="sm" variant="ghost" onClick={copy} className="shrink-0">
+                      {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copied ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
+                  <a href={feed.webcal}>
+                    <Button className="w-full">
+                      <Smartphone className="h-4 w-4" /> Open in Calendar app
+                    </Button>
+                  </a>
+                  <div className="flex items-center justify-between text-xs text-navy-400">
+                    <span>
+                      {feed.lastPolledAt
+                        ? `Last synced ${new Date(feed.lastPolledAt).toLocaleString("en-KE", { dateStyle: "medium", timeStyle: "short" })}`
+                        : "Not synced by a device yet."}
+                    </span>
+                    <Button size="sm" variant="ghost" onClick={rotate} disabled={busy} title="Generate a new link — old links stop working">
+                      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} New link
+                    </Button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

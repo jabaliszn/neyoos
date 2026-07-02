@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const user = await requirePermission("academics.manage");
     const body = await req.json();
     const studentId = req.nextUrl.searchParams.get("studentId");
-    if (!studentId) return fail("INVALID", "studentId required");
+    if (!studentId) return fail("INVALID", "studentId required", 400);
     
     const data = studentPathwayAllocationSchema.parse(body);
     const pref = await allocateStudentToPathway(user, studentId, data);

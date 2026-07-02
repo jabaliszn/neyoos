@@ -6,9 +6,11 @@
  * - Religious moments are included only if the tenant opted in (A.17.3).
  * - iCal export (A.17.4) and audience invites (A.17.5) live here too.
  */
+import crypto from "crypto";
 import { db } from "@/lib/db";
 import { tenantDb } from "@/lib/core/tenant-db";
 import { notify } from "@/lib/services/notification.service";
+import { appBaseUrl } from "@/lib/notifications/email";
 import {
   KE_MOMENTS,
   type CulturalMoment,
@@ -375,4 +377,83 @@ export async function setCalendarPrefs(tenantId: string, showReligiousHolidays: 
     data: { showReligiousHolidays },
   });
   return { showReligiousHolidays };
+}
+
+// ---------------------------------------------------------------------------
+// M.3 — REAL native-mobile calendar sync.
+//
+// The old "iCal export" button only ever produced a one-shot downloaded
+// snapshot: open it once in a phone's Calendar app and it never updates
+// again. A genuine "sync with native mobile calendars" needs a STANDING
+// SUBSCRIPTION — a stable URL the phone's Calendar app polls on its own
+// schedule (Apple/Google/Outlook all support subscribing to a `webcal://`
+// or `https://.../something.ics` URL). This section adds that: each user
+// gets one revocable, opaque feed token; the public feed route (no session
+// required, like OtpCode/MagicLink) looks it up and streams LIVE .ics
+// content scoped to what that specific user is allowed to see (their role's
+// audience-targeted events + school-wide + holidays), so it always reflects
+// the real calendar, not a snapshot from whenever they first subscribed.
+// ---------------------------------------------------------------------------
+
+function newFeedToken(): string {
+  return crypto.randomBytes(24).toString("base64url");
+}
+
+/** The public, unauthenticated URL a phone's Calendar app subscribes to. */
+export function feedUrlForToken(token: string): { https: string; webcal: string } {
+  const base = appBaseUrl().replace(/\/$/, "");
+  const https = `${base}/api/calendar/feed/${token}.ics`;
+  // webcal:// tells Calendar apps "subscribe + auto-refresh", not "download once".
+  const webcal = https.replace(/^https?:\/\//, "webcal://");
+  return { https, webcal };
+}
+
+/**
+ * Get (or lazily create) this user's personal calendar feed token. Idempotent —
+ * calling it repeatedly returns the SAME token until explicitly rotated.
+ */
+export async function getOrCreateCalendarFeedToken(tenantId: string, userId: string) {
+  const existing = await db.calendarFeedToken.findUnique({ where: { userId } });
+  if (existing) return existing;
+  const token = newFeedToken();
+  return db.calendarFeedToken.create({
+    data: { tenantId, userId, token },
+  });
+}
+
+/**
+ * Rotate (invalidate + replace) a user's feed token — e.g. if they think the
+ * link leaked, or just want every device to need re-subscribing.
+ */
+export async function rotateCalendarFeedToken(tenantId: string, userId: string) {
+  const token = newFeedToken();
+  return db.calendarFeedToken.upsert({
+    where: { userId },
+    update: { token, rotatedAt: new Date() },
+    create: { tenantId, userId, token },
+  });
+}
+
+/** Revoke (delete) a user's feed token — every subscribed device stops syncing. */
+export async function revokeCalendarFeedToken(userId: string) {
+  await db.calendarFeedToken.deleteMany({ where: { userId } });
+  return { revoked: true };
+}
+
+/**
+ * PUBLIC (no session) lookup used by the feed route: resolve a raw token to
+ * its owning tenant + user + role, so the feed can be correctly scoped and
+ * privacy-safe (nobody can see another school's or another role's events
+ * just by knowing a random-looking URL segment — the token itself IS the
+ * secret, same trust model as a webhook signing secret or API key).
+ */
+export async function resolveCalendarFeedToken(token: string) {
+  const row = await db.calendarFeedToken.findUnique({
+    where: { token },
+    include: { user: { select: { id: true, tenantId: true, role: true, isActive: true } } },
+  });
+  if (!row || !row.user.isActive) return null;
+  // Best-effort "last synced" stamp — never blocks the response if it fails.
+  db.calendarFeedToken.update({ where: { id: row.id }, data: { lastPolledAt: new Date() } }).catch(() => {});
+  return { tenantId: row.user.tenantId, userId: row.user.id, role: row.user.role as Role };
 }

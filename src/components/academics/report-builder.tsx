@@ -91,7 +91,7 @@ export function ReportBuilderClient({ canManage, schoolLevelActivation }: { canM
       </div>
 
       {templates.length === 0 ? (
-        <EmptyState icon={LayoutTemplate} title="No report templates" description="Build your first custom report layout. Mix marks, competencies, attendance, talent, pathway and portfolio sections without code." action={canManage ? { label: "Create Template", onClick: () => setEditingId("NEW") } : undefined} />
+        <EmptyState icon={LayoutTemplate} title="No report templates" description="Build your first custom report layout. Mix marks, competencies, attendance, talent, pathway and portfolio sections without code." primaryAction={canManage ? { label: "Create Template", onClick: () => setEditingId("NEW") } : undefined} />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {templates.map((t) => {

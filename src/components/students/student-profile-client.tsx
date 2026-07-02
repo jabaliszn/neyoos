@@ -5,7 +5,7 @@ import {
   Phone, Mail, Hash, CalendarDays, GraduationCap,
   FileText, CheckCircle2, Circle, Plus, ShieldCheck,
   ArrowRightLeft, Download, Undo2, Loader2, X,
-  Users, Wallet, Percent, CreditCard, Award, FolderOpen,
+  Users, Wallet, Percent, CreditCard, Award, FolderOpen, Pencil,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -214,10 +214,15 @@ export function StudentProfileClient({ initial, canEdit, isCurriculumEngineEnabl
                     <span className="text-xs text-navy-400">{g.relationship}</span>
                     {g.guardian.userId && <Badge tone="blue"><ShieldCheck className="h-3 w-3" />Portal</Badge>}
                   </div>
-                  {canEdit && !g.isPrimary && (
-                    <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs text-navy-500 hover:text-green-600 dark:text-navy-400 dark:hover:text-green-500" onClick={() => setPrimary(g.guardian.id)}>
-                      Set as Primary
-                    </Button>
+                  {canEdit && (
+                    <div className="flex items-center gap-1">
+                      {!g.isPrimary && (
+                        <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs text-navy-500 hover:text-green-600 dark:text-navy-400 dark:hover:text-green-500" onClick={() => setPrimary(g.guardian.id)}>
+                          Set as Primary
+                        </Button>
+                      )}
+                      <EditGuardian studentId={s.id} guardian={g} onUpdated={refresh} />
+                    </div>
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-navy-500 dark:text-navy-400">
@@ -566,6 +571,135 @@ function AddGuardian({ studentId, onAdded }: { studentId: string; onAdded: () =>
                 <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                 <Button onClick={save} disabled={saving}>
                   {saving ? "Adding..." : "Add Guardian"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * M.3 — Fix an EXISTING guardian's details (most commonly the phone number,
+ * e.g. a parent got a new SIM card). This is deliberately separate from
+ * AddGuardian: it edits the one already on file instead of creating a new
+ * link, and any class teacher who can see this student can use it (not just
+ * leadership) — matching the checklist's "class teachers can update parent
+ * phone numbers" requirement.
+ */
+function EditGuardian({ studentId, guardian, onUpdated }: {
+  studentId: string;
+  guardian: Guardian;
+  onUpdated: () => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [f, setF] = React.useState({
+    fullName: guardian.guardian.fullName,
+    phone: guardian.guardian.phone,
+    email: guardian.guardian.email ?? "",
+    relationship: guardian.relationship,
+  });
+
+  React.useEffect(() => {
+    if (open) {
+      setF({
+        fullName: guardian.guardian.fullName,
+        phone: guardian.guardian.phone,
+        email: guardian.guardian.email ?? "",
+        relationship: guardian.relationship,
+      });
+    }
+  }, [open, guardian]);
+
+  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+
+  async function save() {
+    if (!f.fullName.trim() || !f.phone.trim()) {
+      toast({ title: "Name and phone are required", tone: "error" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/students/${studentId}/guardians`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_guardian", guardianId: guardian.guardian.id, ...f }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: "Guardian details updated", tone: "success" });
+        setOpen(false);
+        onUpdated();
+      } else {
+        toast({ title: json.error?.message || "Failed to update guardian", tone: "error" });
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 px-2.5 text-xs text-navy-500 hover:text-green-600 dark:text-navy-400 dark:hover:text-green-500"
+        onClick={() => setOpen(true)}
+        title="Edit guardian details"
+      >
+        <Pencil className="h-3.5 w-3.5" /> Edit
+      </Button>
+
+      {open && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-navy-900/40 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setOpen(false)}>
+          <div className="max-h-[min(92dvh,46rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/60 bg-white/95 p-0 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-950/95" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 mb-4 flex items-center justify-between border-b border-navy-100 bg-white/95 p-5 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-950/95">
+              <h3 className="text-lg font-semibold text-navy-900 dark:text-navy-50">Edit Guardian</h3>
+              <button onClick={() => setOpen(false)} className="rounded-full p-1.5 text-navy-400 hover:bg-navy-50 dark:hover:bg-navy-800">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 pb-5">
+              {guardian.guardian.userId && (
+                <p className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300">
+                  This guardian has a NEYO portal login — their phone/email/name will update there too, so they keep receiving OTP codes and messages.
+                </p>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Full name</Label>
+                  <Input value={f.fullName} onChange={(e) => set("fullName", e.target.value)} placeholder="e.g. Otieno Brian" autoFocus />
+                </div>
+                <div className="space-y-1">
+                  <Label>Phone number</Label>
+                  <Input value={f.phone} onChange={(e) => set("phone", e.target.value)} placeholder="e.g. 0712 345 678" />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Email (optional)</Label>
+                <Input value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="e.g. parent@gmail.com" />
+              </div>
+
+              <div className="space-y-1">
+                <Label>Relationship</Label>
+                <select value={f.relationship} onChange={(e) => set("relationship", e.target.value)} className="w-full rounded-2xl border border-navy-200 bg-white px-3.5 py-2.5 text-sm dark:border-navy-700 dark:bg-navy-900 text-navy-900 dark:text-navy-50">
+                  <option value="Parent">Parent</option>
+                  <option value="Mother">Mother</option>
+                  <option value="Father">Father</option>
+                  <option value="Guardian">Guardian</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="sticky bottom-0 -mx-5 mt-6 flex justify-end gap-2 border-t border-navy-100 bg-white/95 px-5 py-4 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-950/95">
+                <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+                <Button onClick={save} disabled={saving}>
+                  {saving ? "Saving..." : "Save changes"}
                 </Button>
               </div>
             </div>

@@ -88,7 +88,7 @@ export async function teacherHome(user: SessionUser) {
     const subjByClass = new Map<string, Set<string>>();
     for (const s of slots) {
       const set = subjByClass.get(s.classId) ?? new Set<string>();
-      set.add(s.subject.name);
+      if (s.subject) set.add(s.subject.name);
       subjByClass.set(s.classId, set);
     }
 
@@ -125,8 +125,8 @@ export async function teacherHome(user: SessionUser) {
       })),
       todayLessons: todaySlots.map((s) => ({
         period: s.period,
-        subjectName: s.subject.name,
-        subjectCode: s.subject.code,
+        subjectName: s.subject?.name ?? null,
+        subjectCode: s.subject?.code ?? null,
         className: classMap.get(s.classId) ?? "—",
         classId: s.classId,
       })),

@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
         admissionNo: pack.learner.admissionNo,
         className: pack.learner.className,
         mode: pack.export.filters.mode,
-        generatedDate: pack.export.generatedAt.slice(0, 10),
+        generatedDate: pack.manifest.generatedAt.slice(0, 10),
         verifyCode: pack.export.verifyCode,
         entries: pack.journey,
       });

@@ -266,8 +266,50 @@ export function MessagesClient() {
   const TypeIcon = (t: string) =>
     t === "ANNOUNCEMENT" ? Megaphone : t === "GROUP" ? Users : MessageSquare;
 
+  // M.3 chat UI fix: the panel height used to be a hardcoded `calc(100vh-12rem)`
+  // guess. That "12rem of stuff above it" assumption only held on desktop —
+  // on mobile the topbar + breadcrumb + any dismissible banner (e.g. "Coming
+  // soon: fees due") + the page heading stack up to MORE than 12rem, so the
+  // panel became taller than the space actually left below it. That forced
+  // the WHOLE PAGE to scroll (not just the internal message list), and the
+  // message input — which sits at the bottom of this panel — scrolled along
+  // with the page and ended up rendering underneath the sticky top bar and
+  // floating notification/install cards. Fix: measure the panel's real
+  // position on screen and size it to exactly fill the remaining viewport,
+  // so the page itself never needs to scroll — only the message list inside
+  // does, and the input bar always stays pinned at the bottom of the visible
+  // screen no matter what banners appear above it.
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const [panelHeight, setPanelHeight] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    function recalc() {
+      const el = panelRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      // leave a little breathing room at the bottom so the panel never
+      // touches the very edge of the screen (matches the page's own py-6/py-8).
+      const bottomGutter = window.innerWidth < 640 ? 16 : 24;
+      setPanelHeight(Math.max(320, window.innerHeight - top - bottomGutter));
+    }
+    recalc();
+    window.addEventListener("resize", recalc);
+    window.addEventListener("orientationchange", recalc);
+    // Re-measure once more shortly after mount: dismissible banners (e.g. the
+    // "Coming soon" strip) and web fonts can shift layout after first paint.
+    const t = window.setTimeout(recalc, 300);
+    return () => {
+      window.removeEventListener("resize", recalc);
+      window.removeEventListener("orientationchange", recalc);
+      window.clearTimeout(t);
+    };
+  }, []);
+
   return (
-    <div className="grid h-[calc(100vh-12rem)] grid-cols-1 overflow-hidden rounded-2xl border border-navy-100 bg-white dark:border-navy-800 dark:bg-navy-900 md:grid-cols-[20rem_1fr]">
+    <div
+      ref={panelRef}
+      style={panelHeight ? { height: panelHeight } : undefined}
+      className="grid h-[calc(100vh-12rem)] grid-cols-1 overflow-hidden rounded-2xl border border-navy-100 bg-white dark:border-navy-800 dark:bg-navy-900 md:grid-cols-[20rem_1fr]"
+    >
       {/* List pane */}
       <div
         className={cn(

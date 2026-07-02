@@ -20,7 +20,8 @@ export async function issueVerification(
   tenantId: string,
   docType: string,
   summary: string,
-  payload: unknown
+  payload: unknown,
+  studentId?: string
 ): Promise<string> {
   const code = crypto.randomBytes(5).toString("hex").toUpperCase(); // 10 chars
   await db.documentVerification.create({
@@ -30,6 +31,7 @@ export async function issueVerification(
       docType,
       summary,
       payloadHash: hashPayload(payload),
+      studentId: studentId ?? null,
     },
   });
   return code;
@@ -252,10 +254,13 @@ export async function buildCbcReportPdf(
 export async function buildStudentIdCardPdf(tenantId: string, studentId: string) {
   const { renderStudentIdCardsPdf } = await import("@/lib/documents/student-id-pdf");
   const { qrDataUrl, verifyUrl } = await import("@/lib/documents/qr");
+  const { getDocumentDesign } = await import("@/lib/services/document-design.service");
+  const { logoAsDataUrl } = await import("@/lib/documents/school-stamp");
 
-  const [student, tenant] = await Promise.all([
+  const [student, tenant, design] = await Promise.all([
     db.student.findFirst({ where: { id: studentId, tenantId }, include: { schoolClass: true } }),
     db.tenant.findUnique({ where: { id: tenantId } }),
+    getDocumentDesign(tenantId),
   ]);
   if (!student || !tenant) throw new Error("Student not found.");
 
@@ -271,12 +276,16 @@ export async function buildStudentIdCardPdf(tenantId: string, studentId: string)
     tenantId,
     "student_id",
     `Student ID Card — ${studentName} (${student.admissionNo})`,
-    payload
+    payload,
+    student.id
   );
 
   const className = student.schoolClass
     ? [student.schoolClass.level, student.schoolClass.stream].filter(Boolean).join(" ")
     : "Unassigned";
+
+  const logoDataUrl = design.idStampEnabled ? await logoAsDataUrl(tenant.logoUrl) : null;
+  const issuedDateText = new Date().toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
 
   const pdf = await renderStudentIdCardsPdf([{
     schoolName: tenant.name,
@@ -290,7 +299,10 @@ export async function buildStudentIdCardPdf(tenantId: string, studentId: string)
     photoUrl: student.photoUrl,
     verifyCode: code,
     qrDataUrl: await qrDataUrl(verifyUrl(code)),
-  }]);
+    logoUrl: tenant.logoUrl,
+    logoDataUrl,
+    issuedDateText,
+  }], { width: design.idCardWidthMm, height: design.idCardHeightMm, template: design.idTemplate, showStamp: design.idStampEnabled });
 
   return { pdf, fileName: `ID-${student.admissionNo}.pdf`, code };
 }
@@ -450,7 +462,7 @@ export async function buildMwalimuPackPdf(user: SessionUser) {
       where: { id: { in: slots.map((s) => s.classId) }, tenantId: user.tenantId },
     }),
     db.subject.findMany({
-      where: { id: { in: slots.map((s) => s.subjectId) }, tenantId: user.tenantId },
+      where: { id: { in: slots.map((s) => s.subjectId).filter((id): id is string => Boolean(id)) }, tenantId: user.tenantId },
     }),
   ]);
 
@@ -459,7 +471,7 @@ export async function buildMwalimuPackPdf(user: SessionUser) {
 
   const timetable = slots.map((s) => {
     const cls = classMap.get(s.classId);
-    const sub = subMap.get(s.subjectId);
+    const sub = s.subjectId ? subMap.get(s.subjectId) : undefined;
     return {
       dayOfWeek: s.dayOfWeek,
       period: s.period,

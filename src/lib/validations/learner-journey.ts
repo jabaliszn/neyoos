@@ -61,6 +61,9 @@ export const learnerJourneyEntrySchema = z.object({
   href: z.union([z.string().trim().url(), z.string().trim().startsWith("/"), z.literal(""), z.null()]).optional().transform((value) => (value ? value : undefined)),
   visibility: z.enum(LEARNER_JOURNEY_VISIBILITY),
   verificationStatus: z.enum(LEARNER_JOURNEY_VERIFICATION).default("NOT_REQUIRED"),
+  pinned: z.boolean().optional(),
+  pinVisibility: z.enum(["STAFF", "PARENT_SAFE"]).optional(),
+  pinNote: z.string().nullable().optional(),
 }).strict();
 export type LearnerJourneyEntryInput = z.input<typeof learnerJourneyEntrySchema>;
 

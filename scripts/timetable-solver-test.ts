@@ -28,7 +28,7 @@ async function main() {
   await db.classSubjectNeed.deleteMany({ where: { tenantId: principal.tenantId, classId: f2e.id } });
 
   // 1) Save Teacher Subjects association
-  await saveTeacherSubjects(principal, chebet.id, [math.id]);
+  await saveTeacherSubjects(principal, chebet.id, [{ id: math.id }]);
   const sids = await db.teacherSubject.findMany({ where: { teacherId: chebet.id } });
   assert("teacher subject mapped successfully", sids.length === 1 && sids[0].subjectId === math.id);
 

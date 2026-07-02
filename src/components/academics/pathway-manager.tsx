@@ -69,7 +69,7 @@ export function PathwayManagerClient({ subjects }: { subjects: any[] }) {
           <p className="text-sm font-medium text-navy-500 dark:text-navy-400">Define academic and career tracks for Senior School students.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={downloadReport} disabled={reporting || pathways.length === 0} className="rounded-full">
+          <Button variant="secondary" onClick={downloadReport} disabled={reporting || pathways.length === 0} className="rounded-full">
             {reporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Pathway report
           </Button>
           <Button onClick={() => setOpen(true)} className="rounded-full shadow-pop"><Plus className="mr-2 h-4 w-4" /> New Pathway</Button>
@@ -81,7 +81,7 @@ export function PathwayManagerClient({ subjects }: { subjects: any[] }) {
           icon={BookOpen}
           title="No pathways defined"
           description="Create your first pathway, like STEM or Creative Arts, and set the subject requirements students need to join."
-          action={{ label: "Create Pathway", onClick: () => setOpen(true) }}
+          primaryAction={{ label: "Create Pathway", onClick: () => setOpen(true) }}
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -93,7 +93,7 @@ export function PathwayManagerClient({ subjects }: { subjects: any[] }) {
                 <CardHeader className="pb-3 border-b border-navy-50 dark:border-navy-800">
                   <div className="flex items-start justify-between">
                     <div>
-                      <Badge variant="outline" className="mb-2 font-bold text-xs uppercase tracking-widest">{p.code}</Badge>
+                      <Badge tone="neutral" className="mb-2 font-bold text-xs uppercase tracking-widest">{p.code}</Badge>
                       <CardTitle className="text-lg">{p.name}</CardTitle>
                     </div>
                   </div>
@@ -113,7 +113,7 @@ export function PathwayManagerClient({ subjects }: { subjects: any[] }) {
                           <li key={req.id} className="text-xs flex items-center justify-between bg-navy-50 dark:bg-navy-900 rounded px-2 py-1">
                             <span className="font-semibold">{req.subject.name}</span>
                             <div className="flex items-center gap-2">
-                              {req.isCore ? <Badge variant="secondary" className="text-[9px]">CORE</Badge> : <Badge variant="outline" className="text-[9px]">ELECTIVE</Badge>}
+                              {req.isCore ? <Badge tone="green" className="text-[9px]">CORE</Badge> : <Badge tone="neutral" className="text-[9px]">ELECTIVE</Badge>}
                               {req.minScorePct ? <span className="text-green-700 font-bold">≥{req.minScorePct}%</span> : null}
                             </div>
                           </li>
@@ -217,7 +217,7 @@ function PathwayEditorDialog({ subjects, onClose, onDone }: any) {
           <div className="space-y-2 rounded-2xl border border-navy-100 p-3 dark:border-navy-800">
             <div className="flex items-center justify-between">
               <Label className="mb-0">Subject requirements</Label>
-              <Button type="button" variant="outline" size="sm" className="rounded-full text-xs" onClick={addRequirement}>
+              <Button type="button" variant="secondary" size="sm" className="rounded-full text-xs" onClick={addRequirement}>
                 <Plus className="mr-1 h-3 w-3" /> Add subject
               </Button>
             </div>
@@ -254,7 +254,7 @@ function PathwayEditorDialog({ subjects, onClose, onDone }: any) {
                       />
                       <span className="text-xs text-navy-400">%</span>
                     </div>
-                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-navy-400 hover:text-red-600" onClick={() => removeRequirement(i)}>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 w-7 text-navy-400 hover:text-red-600" onClick={() => removeRequirement(i)}>
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -264,7 +264,7 @@ function PathwayEditorDialog({ subjects, onClose, onDone }: any) {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="rounded-full">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Pathway"}</Button>
         </DialogFooter>
       </DialogContent>

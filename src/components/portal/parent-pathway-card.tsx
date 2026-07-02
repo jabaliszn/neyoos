@@ -72,8 +72,8 @@ export function ParentPathwayCard({ studentId }: { studentId: string }) {
                   <div className="flex items-center justify-between">
                     <div className="flex flex-wrap items-center gap-1">
                       <span className="font-bold text-navy-950 dark:text-white">{p.pathwayName}</span>
-                      {p.isChoice && <Badge variant="outline" className="text-[9px]">Choice #{p.choiceOrder}</Badge>}
-                      {p.isRecommended && <Badge variant="secondary" className="text-[9px]">Recommended</Badge>}
+                      {p.isChoice && <Badge tone="neutral" className="text-[9px]">Choice #{p.choiceOrder}</Badge>}
+                      {p.isRecommended && <Badge tone="green" className="text-[9px]">Recommended</Badge>}
                     </div>
                     <span className={`rounded-full px-3 py-1 text-[10px] font-bold ${READINESS_TONE[p.readiness]}`}>
                       {READINESS_LABEL[p.readiness]}

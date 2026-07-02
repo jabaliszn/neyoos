@@ -677,7 +677,9 @@ export async function pinLearnerJourneyMilestone(user: SessionUser, input: Learn
 
     await tenantDb().auditLog.create({
       data: {
+        tenantId: user.tenantId,
         actorId: user.id,
+        actorName: user.fullName,
         action: "learner_journey.milestone_pinned",
         entityType: "LearnerJourneyPin",
         entityId: pin.id,
@@ -718,7 +720,9 @@ export async function unpinLearnerJourneyMilestone(user: SessionUser, input: Lea
 
     await tenantDb().auditLog.create({
       data: {
+        tenantId: user.tenantId,
         actorId: user.id,
+        actorName: user.fullName,
         action: "learner_journey.milestone_unpinned",
         entityType: "LearnerJourneyPin",
         entityId: existing.id,
@@ -759,7 +763,9 @@ export async function exportLearnerJourneyPack(user: SessionUser, input: Learner
 
     await tenantDb().auditLog.create({
       data: {
+        tenantId: user.tenantId,
         actorId: user.id,
+        actorName: user.fullName,
         action: "learner_journey.export_generated",
         entityType: "Student",
         entityId: timeline.student.id,

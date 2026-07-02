@@ -64,7 +64,7 @@ export function ParentPortalClient({ isCurriculumEngineEnabled = false }: { isCu
   }, []);
   React.useEffect(() => { load(); }, [load]);
 
-  if (openChild) return <ChildView id={openChild} onBack={() => { setOpenChild(null); load(); }} />;
+  if (openChild) return <ChildView id={openChild} onBack={() => { setOpenChild(null); load(); }} isCurriculumEngineEnabled={isCurriculumEngineEnabled} />;
   if (error) return <LoadError onRetry={load} />;
   if (children === null) return <div className="grid gap-3 sm:grid-cols-2">{[...Array(2)].map((_, i) => <Skeleton key={i} className="h-44 rounded-2xl" />)}</div>;
 
@@ -108,7 +108,7 @@ export function ParentPortalClient({ isCurriculumEngineEnabled = false }: { isCu
   );
 }
 
-function ChildView({ id, onBack }: { id: string; onBack: () => void }) {
+function ChildView({ id, onBack, isCurriculumEngineEnabled = false }: { id: string; onBack: () => void; isCurriculumEngineEnabled?: boolean }) {
   const { toast } = useToast();
   const [data, setData] = React.useState<ChildDetail | null>(null);
   const [error, setError] = React.useState(false);

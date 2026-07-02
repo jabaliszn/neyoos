@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { dateYmd } from "./date";
 
 export const selectionPortalRuleSchema = z.object({
   minElectives: z.number().int().min(0),

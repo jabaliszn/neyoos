@@ -27,6 +27,10 @@ async function main() {
     role: principal.role as any,
     secondaryRole: principal.secondaryRole as any,
     fullName: principal.fullName,
+    neyoLoginId: principal.neyoLoginId,
+    phone: principal.phone,
+    email: principal.email,
+    language: principal.language,
   };
 
   const pack = await exportLearnerJourneyPack(user, { studentId: student.id, mode: "parent", limit: 40 });

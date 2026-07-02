@@ -46,7 +46,16 @@ export async function POST(req: NextRequest) {
     const body = schema.parse(await req.json());
     switch (body.action) {
       case "save_rule":
-        return ok(await saveAutoGroupingRule(user, body));
+        if (!body.name) return fail("INVALID", "name is required", 400);
+        return ok(await saveAutoGroupingRule(user, {
+          id: body.id,
+          name: body.name,
+          targetLevel: body.targetLevel,
+          ruleType: body.ruleType,
+          priority: body.priority,
+          active: body.active,
+          config: body.config,
+        }));
       case "save_workload":
         return ok(await saveTeacherWorkloadRule(user, body));
       case "preview":

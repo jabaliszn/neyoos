@@ -108,7 +108,7 @@ export function StudentServiceTab({ studentId }: { studentId: string }) {
                   </div>
                   <div className="flex flex-col gap-2">
                     <Badge tone={a.status === "APPROVED" ? "green" : a.status === "REJECTED" ? "red" : "amber"}>{a.status}</Badge>
-                    <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-50" onClick={() => remove(a.id)}><Trash2 className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50" onClick={() => remove(a.id)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </div>
               </CardContent>

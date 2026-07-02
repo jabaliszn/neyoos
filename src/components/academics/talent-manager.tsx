@@ -69,7 +69,7 @@ export function TalentManagerClient({ canManage }: { canManage: boolean }) {
           <p className="text-sm font-medium text-navy-500">Track and evaluate specific student talents (Music, Drama, Coding, Sports).</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={downloadReport} disabled={reporting} className="rounded-full">
+          <Button variant="secondary" onClick={downloadReport} disabled={reporting} className="rounded-full">
             {reporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Talent report
           </Button>
           {canManage && <Button onClick={() => setOpen(true)} className="rounded-full shadow-pop"><Plus className="mr-2 h-4 w-4" /> New Talent Area</Button>}
@@ -83,7 +83,7 @@ export function TalentManagerClient({ canManage }: { canManage: boolean }) {
           icon={Trophy}
           title="No talent areas defined"
           description="Create specific areas like 'Football', 'Public Speaking', or 'Piano'."
-          action={canManage ? { label: "Create Talent Area", onClick: () => setOpen(true) } : undefined}
+          primaryAction={canManage ? { label: "Create Talent Area", onClick: () => setOpen(true) } : undefined}
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -100,7 +100,7 @@ export function TalentManagerClient({ canManage }: { canManage: boolean }) {
                        <Trophy className="h-5 w-5" />}
                     </div>
                     <div>
-                      <Badge variant="outline" className="mb-1 font-bold text-[9px] uppercase tracking-widest">{a.category}</Badge>
+                      <Badge tone="neutral" className="mb-1 font-bold text-[9px] uppercase tracking-widest">{a.category}</Badge>
                       <CardTitle className="text-base">{a.name}</CardTitle>
                     </div>
                   </div>
@@ -173,7 +173,7 @@ function TalentAreaEditorDialog({ onClose, onDone }: any) {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="rounded-full">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Area"}</Button>
         </DialogFooter>
       </DialogContent>

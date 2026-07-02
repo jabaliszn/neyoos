@@ -540,7 +540,7 @@ export function LearnerJourneyEntryCard({
             {canPin && onTogglePin ? (
               <Button
                 type="button"
-                variant={entry.pinned ? "secondary" : "default"}
+                variant={entry.pinned ? "secondary" : "primary"}
                 onClick={() => onTogglePin(entry)}
                 disabled={pinBusy}
                 className={cn(

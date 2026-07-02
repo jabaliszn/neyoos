@@ -156,6 +156,7 @@ model Tenant {
   students                   Student[]
   guardians                  Guardian[]
   studentImports             StudentImport[]
+  studentCustomFields        StudentCustomField[]
   studentTransfers           StudentTransfer[]
   attendanceRecords          AttendanceRecord[]
   principalDelegationTasks   PrincipalDelegationTask[]
@@ -297,7 +298,11 @@ model Tenant {
   StudentSubjectSelection    StudentSubjectSelection[]
   PromotionRequest           PromotionRequest[]
   SmsMarginLedger            SmsMarginLedger[]
+  ReferralCredit             ReferralCredit[]
   KnecExportBatch            KnecExportBatch[]
+  BundiImportUnlockCode      BundiImportUnlockCode[]
+  BundiFieldTemplate         BundiFieldTemplate?
+  BundiImportSession         BundiImportSession[]
   MasterReportCard           MasterReportCard[]
   CombinationGroup           CombinationGroup[]
   TimetableConstraint        TimetableConstraint[]
@@ -307,6 +312,8 @@ model Tenant {
   TeacherWorkloadRule        TeacherWorkloadRule[]
   TeacherContinuityAssignment  TeacherContinuityAssignment[]
   TeacherTransferImpact      TeacherTransferImpact[]
+  CalendarFeedToken          CalendarFeedToken[]
+  QrScanEvent                QrScanEvent[]
 
   @@index([osKey])
   lessonObservations LessonObservation[]
@@ -2413,6 +2420,27 @@ model AttendanceRecord {
   @@index([tenantId, date])
 }
 
+// N.2 — QR Hardware Integration: every scan of a student's ID QR at the gate/
+// front-desk is logged here (audit trail + the actual duplicate-scan guard).
+// A scan is rejected as a duplicate if the SAME student was scanned for the
+// SAME action within the cooldown window (protects against a camera reading
+// the same code twice in one pass, or a student tapping the QR repeatedly).
+model QrScanEvent {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     Student  @relation("QrScanStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  action      String // "ATTENDANCE" | "PAYMENT_LOOKUP"
+  result      String // "OK" | "DUPLICATE" | "BLOCKED"
+  detail      String? // e.g. "Marked present" / "Already scanned 4s ago"
+  scannedById String
+  scannedByName String
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, studentId, action, createdAt])
+}
+
 // B.1 transfer-out record (school-to-school). One ACTIVE transfer per student;
 // undo soft-reverses it (keeps the row for history, marks reversedAt).
 model StudentTransfer {
@@ -2448,11 +2476,33 @@ model StudentImport {
   createdRows   Int
   failedRows    Int
   errorRows     String? // JSON [{row, message}] (null when none)
+  targetClassId String? // M.4 — set when this run imported into ONE specific class only
   createdById   String
   createdByName String
   createdAt     DateTime @default(now())
 
   @@index([tenantId, createdAt])
+}
+
+// PART M.4 — Import Engine Upgrades: schools can map spreadsheet columns
+// beyond the fixed IMPORT_FIELDS list (e.g. "House", "Sponsor", "Previous
+// School") onto a student, kept as clean labeled key/value pairs — never
+// mixed into the free-text `notes` field, and never depending on AI (the
+// school types the label once at mapping time; matching stays deterministic).
+model StudentCustomField {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  label     String // school-defined column label, e.g. "House"
+  value     String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, label])
+  @@index([tenantId, studentId])
 }
 
 // Verifiable document record (A.10). The QR on a receipt/report points to
@@ -2466,8 +2516,15 @@ model DocumentVerification {
   summary     String // human-readable one-liner shown on the verify page
   payloadHash String // sha256 of the canonical document data
   createdAt   DateTime @default(now())
+  // N.2 — when docType = "student_id", the ID card's QR resolves DIRECTLY to
+  // this real student (not just a human-readable summary string), so a gate/
+  // reception scan can trigger real 1-tap attendance/payment actions without
+  // any fragile name-matching. Null for every other docType.
+  studentId   String?
+  student     Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@index([studentId])
 }
 
 // A stored file (A.9). Tenant-owned; key is tenant-prefixed for isolation.
@@ -2797,7 +2854,8 @@ model SubscriptionPayment {
   subscriptionId    String
   subscription      Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   tenantId          String
-  amount            Int // KES
+  amount            Int // KES — the FULL undiscounted subscription amount for the period
+  referralDiscountKes Int        @default(0) // M.1 — real KES referral credit deducted from `amount` when charged
   status            String       @default("PENDING") // PENDING | PAID | FAILED
   method            String       @default("central_mpesa_stk")
   phone             String?
@@ -2888,6 +2946,7 @@ model User {
   oauthAccounts        OAuthConnectedAccount[]
   TalentRecord         TalentRecord[]
   StudentGoal          StudentGoal[]
+  calendarFeedToken    CalendarFeedToken?
 
   @@index([tenantId])
   @@index([role])
@@ -3205,6 +3264,27 @@ model CalendarEvent {
   @@index([tenantId, date])
 }
 
+// M.3 — a personal, revocable subscription token for a REAL native-mobile
+// calendar sync (webcal://): a phone's Calendar app polls the public feed URL
+// on its own schedule and gets LIVE updates, instead of the old one-shot
+// manual .ics download button. One row per (user, tenant); regenerating
+// replaces the token so any lost/leaked link stops working immediately.
+// Deliberately NOT tenant-owned (no tenantId auto-stamping needed beyond the
+// FK) since the public feed route must look this up with NO session at all.
+model CalendarFeedToken {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique // opaque random token embedded in the public feed URL
+  createdAt DateTime @default(now())
+  rotatedAt DateTime @default(now())
+  lastPolledAt DateTime? // stamped on every real feed fetch, so we can show "last synced"
+
+  @@index([tenantId])
+}
+
 // =============================================================================
 // A.18 — Receptionist Operations
 // =============================================================================
@@ -3347,6 +3427,7 @@ model Student {
   guardians                StudentGuardian[]
   documents                StudentDocument[]
   requirements             StudentRequirement[]
+  customFields             StudentCustomField[]
   transfers                StudentTransfer[]
   attendance               AttendanceRecord[]
   promisesToPay            PromiseToPay[]
@@ -3365,6 +3446,8 @@ model Student {
   StudentSubjectSelection  StudentSubjectSelection[]
   PromotionRequest         PromotionRequest[]
   learnerJourneyPins      LearnerJourneyPin[]
+  documentVerifications    DocumentVerification[]
+  qrScanEvents             QrScanEvent[]            @relation("QrScanStudent")
 
   @@unique([tenantId, admissionNo])
   @@index([tenantId])
@@ -5299,6 +5382,36 @@ model SmsMarginLedger {
   @@index([tenantId, status])
 }
 
+// PART M.1 — NEYO Referral Engine (repaired to true full-stack 2026-07-01)
+// A real, auditable credit ledger against the referring/referred school's
+// OWN NEYO subscription (SubscriptionPayment), NOT their students' school
+// fee invoices (those are a different business entirely — B.7). Each row is
+// one earned discount credit; `appliedToPaymentId` is set the moment it is
+// actually deducted off a real upcoming NEYO subscription charge.
+model ReferralCredit {
+  id       String @id @default(cuid())
+  tenantId String // the school that OWNS this credit (either side of a referral)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  role String // "REFERRER" | "REFERRED" — which side of the referral earned this credit
+  counterpartTenantId String // the other school in the referral pair (for the audit trail)
+  counterpartName     String // denormalized school name at the time the credit was earned
+
+  discountPct    Float // e.g. 0.05 = 5%, set by NEYO Ops referral rules at the time earned
+  triggerPaymentId String @unique // the SubscriptionPayment whose PAID status triggered this credit (idempotency key)
+
+  status String @default("PENDING") // PENDING | APPLIED | EXPIRED
+  appliedToPaymentId String? // the SubscriptionPayment this credit was actually deducted from
+  appliedAmountKes   Int? // the real KES amount deducted, once applied
+  appliedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([counterpartTenantId])
+}
+
 // PART K.16 — KNEC Document Aggregation
 // =============================================================================
 
@@ -5323,5 +5436,92 @@ model KnecExportBatch {
   updatedAt DateTime @updatedAt
 
   @@index([tenantId])
+}
+
+// =============================================================================
+// PART M.5 — Bundi Handwritten Import (founder-controlled premium import path)
+// =============================================================================
+// A SEPARATE, gated, manual-assist path for schools with handwritten or badly
+// structured paper registers — never a dependency of the standard CSV/Excel
+// import engine (M.4), which must keep working with zero AI involvement.
+// Access is unlock-code (or standing-approval) gated by NEYO Ops, every
+// session tracks real provider/token/cost usage, and the school describes
+// their own register columns before any AI mapping happens.
+
+// One company-issued unlock code, minted by NEYO Ops. Per-session (single
+// use) by default, matching the founder's chosen model; ALSO supports a
+// standing per-school approval (maxUses = null = unlimited until revoked)
+// for schools NEYO Ops trusts with ongoing access.
+model BundiImportUnlockCode {
+  id          String   @id @default(cuid())
+  code        String   @unique // company-issued, shown once, e.g. "BUNDI-7F3A9C"
+  tenantId    String? // null = any school may redeem (rare/manual); usually school-specific
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  maxUses     Int? // null = unlimited (standing approval) — 1 = classic one-time code
+  usedCount   Int      @default(0)
+  expiresAt   DateTime? // null = no expiry (still bounded by maxUses)
+  revokedAt   DateTime?
+  note        String? // NEYO Ops internal note, e.g. "Pilot: Karibu High, June 2026"
+  issuedById  String // NEYO Ops SUPER_ADMIN who minted it
+  issuedByName String
+  createdAt   DateTime @default(now())
+
+  sessions BundiImportSession[]
+
+  @@index([tenantId])
+}
+
+// A school's own description of their register's columns/fields BEFORE any
+// AI mapping happens (checklist requirement: "school can describe their own
+// fields to Bundi"). One saved template per tenant; editable each session.
+model BundiFieldTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String   @unique
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // JSON array of {label, description, mapsTo} the school wrote themselves,
+  // e.g. [{label:"Adm No (old book)", description:"Written top-left of each row", mapsTo:"legacyAdmissionNo"}]
+  fieldsJson  String
+  updatedById String
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
+// One handwritten-import attempt: upload -> (AI-assisted, cost-tracked)
+// extraction -> school reviews/edits every row -> commit through the SAME
+// commitImport() used by the standard engine (never a second, weaker write
+// path). Tracks real provider/token/cost so NEYO Ops has full visibility.
+model BundiImportSession {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  unlockCodeId  String
+  unlockCode    BundiImportUnlockCode @relation(fields: [unlockCodeId], references: [id])
+
+  status String @default("UPLOADED") // UPLOADED | EXTRACTING | REVIEW | COMMITTED | FAILED | CANCELLED
+
+  fileKey     String // StoredFile key of the uploaded scan/photo (A.9, encrypted at rest)
+  fileName    String
+  pageCount   Int      @default(1)
+
+  provider      String? // e.g. "openai_vision" — set once NEYO Ops configures a real provider
+  model         String? // e.g. "gpt-4o" — the exact model used, for cost auditing
+  promptTokens  Int      @default(0)
+  outputTokens  Int      @default(0)
+  costUsd       Float    @default(0) // real computed cost from the provider's own published rate
+  costKes       Float    @default(0) // converted at the rate configured in NEYO Ops
+
+  extractedRowsJson String? // raw AI output before school review: [{cells:[...], confidence}]
+  reviewedRowsJson  String? // school-edited rows, ready for commitImport()
+  errorMessage      String?
+
+  studentImportId String? // set once committed, links to the REAL StudentImport history row
+
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([unlockCodeId])
 }
 

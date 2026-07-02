@@ -79,7 +79,7 @@ export function StudentPathwayTab({ studentId }: { studentId: string }) {
           <h2 className="text-xl font-black text-navy-950 dark:text-white">Senior School Pathway</h2>
           <p className="text-sm font-medium text-navy-500">Set this learner's pathway choices, see readiness, and confirm the final allocation.</p>
         </div>
-        <Button variant="outline" className="rounded-full" onClick={() => setEditing(true)}>
+        <Button variant="secondary" className="rounded-full" onClick={() => setEditing(true)}>
           <Plus className="mr-2 h-4 w-4" /> Set preferences
         </Button>
       </div>
@@ -114,9 +114,9 @@ export function StudentPathwayTab({ studentId }: { studentId: string }) {
                   <div>
                     <h4 className="font-bold text-navy-950 dark:text-white">{r.pathwayName}</h4>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
-                      {r.isChoice && <Badge variant="outline" className="text-[9px]">Choice #{r.choiceOrder}</Badge>}
-                      {r.isRecommended && <Badge variant="secondary" className="text-[9px]">Recommended</Badge>}
-                      {r.capacity != null && <Badge variant="outline" className="text-[9px]">{r.allocatedCount}/{r.capacity}{r.seatsLeft === 0 ? " · Full" : ""}</Badge>}
+                      {r.isChoice && <Badge tone="neutral" className="text-[9px]">Choice #{r.choiceOrder}</Badge>}
+                      {r.isRecommended && <Badge tone="green" className="text-[9px]">Recommended</Badge>}
+                      {r.capacity != null && <Badge tone="neutral" className="text-[9px]">{r.allocatedCount}/{r.capacity}{r.seatsLeft === 0 ? " · Full" : ""}</Badge>}
                     </div>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-[10px] font-bold ${READINESS_TONE[r.overallReadiness]}`}>
@@ -171,12 +171,12 @@ export function StudentPathwayTab({ studentId }: { studentId: string }) {
                   </div>
                   <div>
                     <h4 className="font-bold text-navy-950 dark:text-white">{pref.pathway.name}</h4>
-                    {pref.isRecommended && <Badge variant="secondary" className="mt-1 text-[10px]">Recommended</Badge>}
+                    {pref.isRecommended && <Badge tone="green" className="mt-1 text-[10px]">Recommended</Badge>}
                   </div>
                 </div>
                 {!pref.isAllocated && (
                   <Button
-                    variant="outline" size="sm" className="rounded-full text-xs shadow-sm hover:border-green-600 hover:text-green-700 hover:bg-green-50"
+                    variant="secondary" size="sm" className="rounded-full text-xs shadow-sm hover:border-green-600 hover:text-green-700 hover:bg-green-50"
                     onClick={async () => {
                       const res = await fetch(`/api/pathways/allocate?studentId=${studentId}`, {
                         method: "POST",
@@ -270,20 +270,20 @@ function SetPreferencesDialog({ studentId, pathways, existing, onClose, onDone }
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-navy-400 hover:text-red-600" onClick={() => removeChoice(i)}>
+                <Button type="button" variant="ghost" size="sm" className="h-8 w-8 text-navy-400 hover:text-red-600" onClick={() => removeChoice(i)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
             ))
           )}
           {choices.length < 5 && pathways.length > choices.length && (
-            <Button type="button" variant="outline" size="sm" className="rounded-full text-xs" onClick={addChoice}>
+            <Button type="button" variant="secondary" size="sm" className="rounded-full text-xs" onClick={addChoice}>
               <Plus className="mr-1 h-3 w-3" /> Add choice
             </Button>
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="rounded-full">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save preferences"}</Button>
         </DialogFooter>
       </DialogContent>

@@ -6,6 +6,7 @@ import { appBaseUrl } from "@/lib/notifications/email";
 import { getPlanFromCatalog } from "@/lib/services/pricing-catalog.service";
 import { readCompanySecret, secretStatus } from "@/lib/services/company-secret.service";
 import { DEFAULT_PLAN_KEY } from "@/lib/core/plans";
+import { pendingReferralDiscountKes, markReferralCreditsApplied, processReferralRewardsForPayment, promptReferralAfterPayment } from "@/lib/services/revenue-ops.service";
 
 const TERM_DAYS = 120;
 const mock = new MockProvider();
@@ -97,7 +98,13 @@ export async function initiateCentralSubscriptionStk(input: { tenantId: string; 
   const tenant = await db.tenant.findUnique({ where: { id: input.tenantId }, include: { subscription: true } });
   if (!tenant) throw new Error("School tenant not found.");
   const sub = await ensureSubscriptionForCentralPayment(tenant.id);
-  const amount = await subscriptionRenewalAmount(tenant.id);
+  const fullAmount = await subscriptionRenewalAmount(tenant.id);
+
+  // M.1 — apply any earned, still-PENDING referral credit to reduce the REAL
+  // amount actually charged via M-Pesa STK (not a cosmetic number).
+  const { discountKes, creditIds } = await pendingReferralDiscountKes(tenant.id, fullAmount);
+  const chargeAmount = Math.max(fullAmount - discountKes, 0);
+
   const accountRef = centralAccountRef(tenant.slug);
   const periodStart = new Date();
   const periodEnd = addDays(periodStart, TERM_DAYS);
@@ -106,7 +113,8 @@ export async function initiateCentralSubscriptionStk(input: { tenantId: string; 
     data: {
       subscriptionId: sub.id,
       tenantId: tenant.id,
-      amount,
+      amount: fullAmount,
+      referralDiscountKes: discountKes,
       status: "PENDING",
       method: "central_mpesa_stk",
       phone: input.phone,
@@ -118,7 +126,7 @@ export async function initiateCentralSubscriptionStk(input: { tenantId: string; 
 
   const gateway = await centralGateway();
   const result = await gateway.provider.stkPush(gateway.creds, {
-    amount,
+    amount: chargeAmount,
     phone: input.phone,
     accountRef,
     description: `NEYO Subscription ${tenant.name}`.slice(0, 60),
@@ -130,8 +138,8 @@ export async function initiateCentralSubscriptionStk(input: { tenantId: string; 
   }
 
   const updated = await db.subscriptionPayment.update({ where: { id: payment.id }, data: { checkoutRequestId: result.checkoutRequestId } });
-  await db.auditLog.create({ data: { tenantId: tenant.id, actorName: "NEYO Billing", action: "billing.central_stk_started", entityType: "SubscriptionPayment", entityId: updated.id, metadata: JSON.stringify({ amount, accountRef, checkoutRequestId: result.checkoutRequestId, centralized: true, provider: gateway.provider.key, source: gateway.source, live: gateway.live }) } });
-  return { payment: updated, checkoutRequestId: result.checkoutRequestId, amount, accountRef };
+  await db.auditLog.create({ data: { tenantId: tenant.id, actorName: "NEYO Billing", action: "billing.central_stk_started", entityType: "SubscriptionPayment", entityId: updated.id, metadata: JSON.stringify({ fullAmount, chargeAmount, referralDiscountKes: discountKes, referralCreditIds: creditIds, accountRef, checkoutRequestId: result.checkoutRequestId, centralized: true, provider: gateway.provider.key, source: gateway.source, live: gateway.live }) } });
+  return { payment: updated, checkoutRequestId: result.checkoutRequestId, amount: chargeAmount, fullAmount, referralDiscountKes: discountKes, accountRef };
 }
 
 async function activateSubscriptionFromPayment(paymentId: string, mpesaRef: string | null, raw: unknown, resultCode = "0", resultDesc = "Success") {
@@ -151,6 +159,29 @@ async function activateSubscriptionFromPayment(paymentId: string, mpesaRef: stri
     db.subscription.update({ where: { id: payment.subscriptionId }, data: { status: "ACTIVE", currentPeriodStart: now, currentPeriodEnd: periodEnd, graceEndsAt: null } }),
   ]);
   await db.auditLog.create({ data: { tenantId: payment.tenantId, actorName: "NEYO Central M-Pesa", action: "billing.central_payment_reconnected", entityType: "SubscriptionPayment", entityId: payment.id, metadata: JSON.stringify({ mpesaRef, amount: payment.amount, centralized: true, reconnected: true }) } });
+
+  // M.1 — best-effort, never blocks activation: mark any referral credit that
+  // was used to discount THIS payment as APPLIED, and (separately) detect a
+  // brand-new qualifying referral conversion to issue fresh credits.
+  try {
+    if (payment.referralDiscountKes > 0) {
+      const usedCredits = await db.referralCredit.findMany({ where: { tenantId: payment.tenantId, status: "PENDING" }, orderBy: { createdAt: "asc" } });
+      let remaining = payment.referralDiscountKes;
+      const toApply: string[] = [];
+      for (const credit of usedCredits) {
+        if (remaining <= 0) break;
+        toApply.push(credit.id);
+        remaining -= Math.round(payment.amount * credit.discountPct);
+      }
+      if (toApply.length > 0) await markReferralCreditsApplied(toApply, payment.id, payment.referralDiscountKes);
+    }
+    await processReferralRewardsForPayment(payment.id);
+    // In-app nudge to refer another school, right after a real successful payment.
+    await promptReferralAfterPayment(payment.tenantId);
+  } catch {
+    // Referral crediting must never block a real subscription activation.
+  }
+
   return { matched: true, status: "PAID", tenantId: payment.tenantId };
 }
 

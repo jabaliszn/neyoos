@@ -29,6 +29,7 @@ export const IMPORT_FIELDS = [
   "guardianName",
   "guardianPhone",
   "notes",
+  "custom", // M.4 — school-defined extra field (needs customLabel)
   "ignore", // explicit "skip this column"
 ] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
@@ -49,13 +50,27 @@ export const HEADER_SYNONYMS: Record<Exclude<ImportField, "ignore">, string[]> =
   guardianName: ["guardianname", "parentname", "guardian", "parent", "mzazi", "fathername", "mothername", "parentguardian"],
   guardianPhone: ["guardianphone", "parentphone", "phone", "phoneno", "phonenumber", "contact", "mobile", "simu", "telephone", "parentcontact", "guardiancontact"],
   notes: ["notes", "remarks", "comment", "comments", "maelezo"],
+  // "custom" is never auto-mapped by header text — a school always chooses it
+  // explicitly and types its own label, so no synonym guessing applies here.
+  custom: [],
 };
 
 /** One column mapping decision: spreadsheet column index -> student field. */
+/**
+ * M.4 — a column can map to one of the fixed IMPORT_FIELDS, OR to "custom"
+ * with a school-provided label (e.g. "House", "Sponsor", "Previous School").
+ * Custom values are stored as clean labeled StudentCustomField rows — never
+ * mixed into the free-text `notes` field. This stays fully deterministic
+ * (the school types the label once at mapping time); it never depends on AI.
+ */
 export const columnMappingSchema = z.array(
   z.object({
     column: z.number().int().min(0),
     field: z.enum(IMPORT_FIELDS),
+    customLabel: z.string().trim().min(1).max(60).optional(),
+  }).refine((v) => v.field !== "custom" || Boolean(v.customLabel), {
+    message: "A custom field mapping needs a label.",
+    path: ["customLabel"],
   })
 ).max(40);
 export type ColumnMapping = z.infer<typeof columnMappingSchema>;
@@ -70,6 +85,9 @@ export const importPreviewSchema = z.object({
   rows: z.array(z.array(z.string().max(300))).max(MAX_IMPORT_ROWS + 1).optional(),
   hasHeader: z.boolean().default(true),
   mapping: columnMappingSchema.optional(), // omit -> server auto-maps
+  /** M.4 — when set, EVERY row in this import goes into this one class only,
+   * ignoring any className column and never auto-creating a new class. */
+  targetClassId: z.string().trim().min(1).optional(),
 }).refine((v) => v.text !== undefined || v.rows !== undefined, {
   message: "Provide pasted text or parsed rows.",
 });
@@ -86,6 +104,8 @@ export const importCommitSchema = z.object({
   seedRequirements: z.boolean().default(true),
   /** Skip rows that fail validation (true) or abort whole import (false). */
   skipInvalid: z.boolean().default(true),
+  /** M.4 — import every row into this ONE class only (isolation mode). */
+  targetClassId: z.string().trim().min(1).optional(),
 });
 export type ImportCommitInput = z.infer<typeof importCommitSchema>;
 

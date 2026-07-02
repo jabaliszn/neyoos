@@ -32,7 +32,7 @@ export async function GET() {
       students: students.map((s) => ({ ...s, name: [s.firstName, s.middleName, s.lastName].filter(Boolean).join(" "), className: s.classId ? classMap.get(s.classId) ?? "—" : "—" })),
       invoices: invoices.map((i) => ({ ...i, balanceKes: i.totalKes - i.discountKes - i.paidKes })),
       calendarEvents,
-      timetableSlots: timetableSlots.map((s) => ({ id: s.id, classId: s.classId, className: classMap.get(s.classId) ?? "—", dayOfWeek: s.dayOfWeek, period: s.period, subjectName: s.subject.name, subjectCode: s.subject.code, teacherId: s.teacherId, venue: s.venue })),
+      timetableSlots: timetableSlots.map((s) => ({ id: s.id, classId: s.classId, className: classMap.get(s.classId) ?? "—", dayOfWeek: s.dayOfWeek, period: s.period, subjectName: s.subject?.name ?? null, subjectCode: s.subject?.code ?? null, teacherId: s.teacherId, venue: s.venue })),
       notifications: notifications.map((n) => ({ id: n.id, title: n.title, body: n.body, category: n.category, href: n.href, read: Boolean(n.readAt), createdAt: n.createdAt.toISOString() })),
     });
   } catch (e) {

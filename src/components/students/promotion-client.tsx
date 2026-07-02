@@ -9,7 +9,8 @@
 import * as React from "react";
 import {
   ArrowUpRight, GraduationCap, Shuffle, AlertCircle, Loader2,
-  Undo2, History, Check, Sparkles,
+  Undo2, History, Check, Sparkles, Wand2, UserCheck, Replace,
+  Users, RefreshCw,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { StatCard } from "@/components/ui/stat-card";
 
 interface PlanStep { classId: string; from: string; to: string | null; graduate: boolean; students: number; toExists: boolean }
 interface RunRow { id: string; kind: string; summary: string; undoneAt: string | null; createdByName: string; createdAt: string; moves: number }
@@ -340,7 +344,7 @@ function AutoGroupingPanel({ onDone }: { onDone: () => void }) {
 
   React.useEffect(() => { load(); }, [load]);
 
-  const levels = React.useMemo(() => Array.from(new Set((setup?.classes ?? []).map((c: any) => c.level))).sort(), [setup]);
+  const levels: string[] = React.useMemo(() => Array.from(new Set<string>((setup?.classes ?? []).map((c: any) => c.level as string))).sort(), [setup]);
 
   async function saveRule() {
     setBusy(true);

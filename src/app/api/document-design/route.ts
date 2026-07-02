@@ -13,6 +13,7 @@ const schema = z.object({
   documentTemplate: z.enum(["classic", "modern", "compact"]),
   smallTimetableLogo: z.boolean(),
   poweredByNeyo: z.boolean(),
+  idStampEnabled: z.boolean().default(false),
 });
 
 export async function GET() {

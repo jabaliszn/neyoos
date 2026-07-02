@@ -67,7 +67,7 @@ export function SubjectSelectionManager({ subjects }: { subjects: any[] }) {
               <Card key={p.id}>
                 <CardContent className="p-4">
                   <div className="flex justify-between items-start mb-2">
-                    <Badge variant={isClosed ? "secondary" : "outline"} className={isClosed ? "bg-amber-100 text-amber-800" : "bg-green-50 text-green-700 border-green-200"}>
+                    <Badge tone={isClosed ? "amber" : "green"}>
                       {isClosed ? "CLOSED" : "ACTIVE"}
                     </Badge>
                     <span className="text-[10px] font-bold uppercase text-navy-400">Target: {p.targetLevel}</span>
@@ -82,7 +82,7 @@ export function SubjectSelectionManager({ subjects }: { subjects: any[] }) {
                     <div className="flex items-center gap-1 text-xs font-semibold text-navy-500">
                       <Users className="h-4 w-4" /> {p._count.selections} Responses
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => setReportPortalId(p.id)} className="h-8 text-xs rounded-full">
+                    <Button variant="secondary" size="sm" onClick={() => setReportPortalId(p.id)} className="h-8 text-xs rounded-full">
                       View Report
                     </Button>
                   </div>
@@ -173,8 +173,8 @@ function CreatePortalDialog({ subjects, onClose, onDone }: any) {
                   <div key={s.id} className="flex items-center justify-between p-2 border border-navy-100 rounded-lg dark:border-navy-800 bg-navy-50/30 dark:bg-navy-900/10">
                     <span className="text-xs font-semibold">{s.name} ({s.code})</span>
                     <div className="flex items-center gap-1">
-                      <Button size="sm" variant={isC ? "default" : "outline"} className={`h-6 text-[10px] px-2 ${isC ? "bg-red-600 hover:bg-red-700" : ""}`} onClick={() => toggle(s.id, true)}>Compulsory</Button>
-                      <Button size="sm" variant={isE ? "default" : "outline"} className={`h-6 text-[10px] px-2 ${isE ? "bg-green-600 hover:bg-green-700" : ""}`} onClick={() => toggle(s.id, false)}>Elective</Button>
+                      <Button size="sm" variant={isC ? "primary" : "secondary"} className={`h-6 text-[10px] px-2 ${isC ? "bg-red-600 hover:bg-red-700" : ""}`} onClick={() => toggle(s.id, true)}>Compulsory</Button>
+                      <Button size="sm" variant={isE ? "primary" : "secondary"} className={`h-6 text-[10px] px-2 ${isE ? "bg-green-600 hover:bg-green-700" : ""}`} onClick={() => toggle(s.id, false)}>Elective</Button>
                     </div>
                   </div>
                 )
@@ -183,7 +183,7 @@ function CreatePortalDialog({ subjects, onClose, onDone }: any) {
           </div>
         </div>
         <DialogFooter className="mt-4 pt-4 border-t border-navy-100 dark:border-navy-800">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publish Portal"}
           </Button>
@@ -237,7 +237,7 @@ function SelectionReportDialog({ portalId, onClose }: any) {
                       <td className="p-2 text-navy-500">{s.admissionNo}</td>
                       <td className="p-2">
                         <div className="flex flex-wrap gap-1">
-                          {s.subjects.map((sub: string) => <Badge key={sub} variant="outline" className="text-[9px]">{sub}</Badge>)}
+                          {s.subjects.map((sub: string) => <Badge key={sub} tone="green" className="text-[9px]">{sub}</Badge>)}
                         </div>
                       </td>
                     </tr>

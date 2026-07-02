@@ -26,17 +26,20 @@ async function main() {
     name,
     description: "Template-driven modular report",
     isDefault: true,
+    version: "v1",
+    effectiveFrom: null,
+    effectiveTo: null,
     sections: [
-      { id: "1", type: "HEADER" },
-      { id: "2", type: "ACADEMIC_MARKS" },
-      { id: "3", type: "COMPETENCIES" },
-      { id: "4", type: "ATTENDANCE" },
-      { id: "5", type: "DISCIPLINE" },
-      { id: "6", type: "TALENTS" },
-      { id: "7", type: "PORTFOLIO" },
-      { id: "8", type: "TEACHER_REMARKS" },
-      { id: "9", type: "PRINCIPAL_REMARKS" },
-      { id: "10", type: "QR_VERIFICATION" },
+      { id: "1", type: "HEADER", config: {} },
+      { id: "2", type: "ACADEMIC_MARKS", config: {} },
+      { id: "3", type: "COMPETENCIES", config: {} },
+      { id: "4", type: "ATTENDANCE", config: {} },
+      { id: "5", type: "DISCIPLINE", config: {} },
+      { id: "6", type: "TALENTS", config: {} },
+      { id: "7", type: "PORTFOLIO", config: {} },
+      { id: "8", type: "TEACHER_REMARKS", config: {} },
+      { id: "9", type: "PRINCIPAL_REMARKS", config: {} },
+      { id: "10", type: "QR_VERIFICATION", config: {} },
     ],
   });
   assert.equal(created.name, name);
@@ -45,11 +48,14 @@ async function main() {
     name,
     description: "Updated template-driven modular report",
     isDefault: true,
+    version: "v1",
+    effectiveFrom: null,
+    effectiveTo: null,
     sections: [
-      { id: "a", type: "HEADER" },
-      { id: "b", type: "PORTFOLIO" },
-      { id: "c", type: "ACADEMIC_MARKS" },
-      { id: "d", type: "QR_VERIFICATION" },
+      { id: "a", type: "HEADER", config: {} },
+      { id: "b", type: "PORTFOLIO", config: {} },
+      { id: "c", type: "ACADEMIC_MARKS", config: {} },
+      { id: "d", type: "QR_VERIFICATION", config: {} },
     ],
   });
   const sections = JSON.parse(updated.sectionsJson);
@@ -78,7 +84,10 @@ async function main() {
     name: `${name} delete`,
     description: "Delete check",
     isDefault: false,
-    sections: [{ id: "1", type: "HEADER" }],
+    version: "v1",
+    effectiveFrom: null,
+    effectiveTo: null,
+    sections: [{ id: "1", type: "HEADER", config: {} }],
   });
   await deleteReportTemplate(user, deleteReady.id);
   const deleteAudit = await db.auditLog.findFirst({ where: { tenantId: tenant.id, entityType: "ReportTemplate", entityId: deleteReady.id, action: "report_template.deleted" } });

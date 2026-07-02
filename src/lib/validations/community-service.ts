@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { dateYmd } from "./date";
+
+const dateYmd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD");
 
 export const SERVICE_CATEGORIES = ["ENVIRONMENT", "CHARITY", "SCHOOL_SERVICE", "COMMUNITY", "OTHER"] as const;
 

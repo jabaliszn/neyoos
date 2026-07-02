@@ -215,13 +215,6 @@ export async function applyPaymentToInvoice(user: SessionUser, invoiceId: string
       await queueInvoiceAfterPayment(user.tenantId, invoiceId, `System (payment by ${user.fullName})`);
     } catch { /* best-effort */ }
 
-
-    // M.1 Trigger Referral Rewards on payment
-    try {
-      const { processReferralRewards } = await import("./referral.service");
-      await processReferralRewards(user.tenantId);
-    } catch { /* best-effort */ }
-
     return updated;
   });
 }

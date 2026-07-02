@@ -5,9 +5,15 @@
  * Vault has `africas_talking_api_key` + `africas_talking_username` (or env
  * fallback). In local/dev without credentials, logs to console so OTP and
  * school-message flows remain testable.
+ *
+ * M.2 — NEYO Ops configures the buy/sell price per SMS centrally
+ * (`revenue-ops.service.ts`); every real send (dev-console fallback AND the
+ * live Africa's Talking path) records a real SmsMarginLedger row so NEYO's
+ * SMS margin revenue is genuinely tracked, not just simulated in dev.
  */
 import { db } from "@/lib/db";
 import { readCompanySecret } from "@/lib/services/company-secret.service";
+import { getSmsMarginConfig } from "@/lib/services/revenue-ops.service";
 
 export interface SendSmsResult {
   ok: boolean;
@@ -45,26 +51,33 @@ async function messageWithSchoolName(message: string, options?: SendSmsOptions) 
   return `${name}: ${message}`;
 }
 
+/** M.2 — records ONE real margin-ledger row for a single SMS send, using the
+ * live NEYO Ops-configured buy/sell prices (never a hardcoded number). */
+async function recordSmsMargin(tenantId: string) {
+  try {
+    const { costPerSmsKes, pricePerSmsKes } = await getSmsMarginConfig();
+    await db.smsMarginLedger.create({
+      data: {
+        tenantId,
+        messageCount: 1,
+        costPerSmsKes,
+        pricePerSmsKes,
+        marginKes: pricePerSmsKes - costPerSmsKes,
+        status: "UNBILLED",
+      },
+    });
+  } catch {
+    // Margin tracking must never block an SMS from sending.
+  }
+}
+
 export async function sendSms(to: string, message: string, options?: SendSmsOptions): Promise<SendSmsResult> {
   const finalMessage = await messageWithSchoolName(message, options);
   const config = await atConfig();
 
   if (!config.apiKey) {
     console.log(`\n[SMS → ${to}]\n${finalMessage}\n`);
-    if (options?.tenantId) {
-      const costPerSms = 0.8;
-      const pricePerSms = 1.2;
-      await db.smsMarginLedger.create({
-        data: {
-          tenantId: options.tenantId,
-          messageCount: 1,
-          costPerSmsKes: costPerSms,
-          pricePerSmsKes: pricePerSms,
-          marginKes: (pricePerSms - costPerSms) * 1,
-          status: "UNBILLED"
-        }
-      });
-    }
+    if (options?.tenantId) await recordSmsMargin(options.tenantId);
     return {
       ok: process.env.NODE_ENV !== "production",
       provider: "dev-console",
@@ -83,6 +96,7 @@ export async function sendSms(to: string, message: string, options?: SendSmsOpti
     const json = await res.json().catch(() => ({} as any));
     const recipient = json?.SMSMessageData?.Recipients?.[0];
     const ok = res.ok && (!recipient || String(recipient.status || "").toLowerCase().includes("success"));
+    if (ok && options?.tenantId) await recordSmsMargin(options.tenantId);
     return { ok, provider: "africas-talking", messageId: recipient?.messageId || json?.SMSMessageData?.Message };
   } catch {
     return { ok: false, provider: "africas-talking" };

@@ -178,7 +178,7 @@ export async function childDetail(user: SessionUser, studentId: string) {
         status: i.status, dueDate: i.dueDate,
       })),
       exams: [...examMap.values()].map((e) => ({ ...e, avgPct: Math.round((e.total / (e.subjects * e.maxMarks)) * 100) })),
-      timetable: timetable.map((t) => ({ dayOfWeek: t.dayOfWeek, period: t.period, code: t.subject.code, name: t.subject.name })),
+      timetable: timetable.map((t) => ({ dayOfWeek: t.dayOfWeek, period: t.period, code: t.subject?.code ?? null, name: t.subject?.name ?? null })),
       homework: homework.map((h) => {
         const sub = subByHw.get(h.id);
         return {

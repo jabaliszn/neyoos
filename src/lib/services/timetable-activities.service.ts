@@ -34,7 +34,7 @@ export async function createActivityCategory(user: SessionUser, input: ActivityC
   }
 
   return tDb.activityCategory.create({
-    data: input
+    data: { ...input, tenantId: user.tenantId }
   });
 }
 

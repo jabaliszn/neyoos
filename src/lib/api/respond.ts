@@ -23,8 +23,11 @@ import { CalendarError } from "@/lib/services/calendar.service";
 import { ReceptionError } from "@/lib/services/reception.service";
 import { StudentError } from "@/lib/services/student.service";
 import { PathwayError } from "@/lib/services/pathway.service";
+import { RevenueOpsError } from "@/lib/services/revenue-ops.service";
 import { TalentError } from "@/lib/services/talent.service";
 import { ImportError } from "@/lib/services/student-import.service";
+import { BundiImportError } from "@/lib/services/bundi-import.service";
+import { QrScanError } from "@/lib/services/qr-scan.service";
 import { AttendanceError } from "@/lib/services/attendance.service";
 import { PromotionError } from "@/lib/services/promotion.service";
 import { AdmissionError } from "@/lib/services/admission.service";
@@ -180,6 +183,12 @@ export function handleError(err: unknown) {
   }
 
   // Pathway problems.
+  if (err instanceof RevenueOpsError) {
+    const status =
+      err.code === "NOT_FOUND" ? 404 : err.code === "DUPLICATE" ? 409 : err.code === "FORBIDDEN" ? 403 : 422;
+    return fail(err.code, err.message, status);
+  }
+
   if (err instanceof PathwayError) {
     const status =
       err.code === "NOT_FOUND" ? 404 : err.code === "CONFLICT" ? 409 : err.code === "FORBIDDEN" ? 403 : 400;
@@ -237,6 +246,24 @@ export function handleError(err: unknown) {
   // Bulk import problems (B.1) — all user-fixable -> 422.
   if (err instanceof ImportError) {
     return fail(err.code, err.message, 422);
+  }
+
+  // M.5 Bundi handwritten import problems.
+  if (err instanceof BundiImportError) {
+    const status = err.code === "NOT_FOUND" ? 404
+      : err.code === "FORBIDDEN" ? 403
+      : err.code === "NOT_CONFIGURED" ? 503
+      : 422;
+    return fail(err.code, err.message, status);
+  }
+
+  // N.2 QR hardware scan problems.
+  if (err instanceof QrScanError) {
+    const status = err.code === "NOT_FOUND" ? 404
+      : err.code === "FORBIDDEN" ? 403
+      : err.code === "DUPLICATE" ? 409
+      : 422;
+    return fail(err.code, err.message, status);
   }
 
   // Attendance problems (B.3).

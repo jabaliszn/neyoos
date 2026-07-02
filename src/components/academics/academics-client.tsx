@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 interface Subject { id: string; name: string; code: string; curriculum: string; departmentId: string | null; departmentName: string | null; archived: boolean }
@@ -107,7 +108,7 @@ export function AcademicsClient({ canManage, canAppointHod, isScopedHod, isCurri
       {tab === "terms" && <TermsTab canManage={canManage} />}
       {tab === "timetable" && <TimetableTab canManage={canManage} />}
       {tab === "exam-timetable" && <ExamTimetableTab canManage={canManage} />}
-      {tab === "exam-auto-generator" && <ExamAutoGeneratorTab canManage={canManage} />}
+      {tab === "exam-auto-generator" && <ExamAutoGeneratorTab canManage={canManage} schoolLevelActivation={schoolLevelActivation} />}
       {tab === "lessons" && <LessonsTab />}
       {tab === "computation" && <ComputationDashboardClient canManage={canManage} schoolLevelActivation={schoolLevelActivation} />}
       {tab === "reports" && <ReportBuilderClient canManage={canManage} schoolLevelActivation={schoolLevelActivation} />}
@@ -145,42 +146,6 @@ function SubjectsTab({ canManage }: { canManage: boolean }) {
     } catch { setError(true); }
   }, []);
   React.useEffect(() => { load(); }, [load]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const draft = JSON.parse(raw);
-      hydratingDraftRef.current = true;
-      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
-      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
-      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
-      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
-      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
-    } catch {}
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (hydratingDraftRef.current) return;
-    const draft = {
-      savedAt: new Date().toISOString(),
-      timeOffTeacherId,
-      timeOffWindows,
-      combinationForm,
-    };
-    try {
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
-    } catch {}
-  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
-
-  function clearDraft(showToast = true) {
-    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
-    setDraftMeta({ dirty: false, restored: false });
-    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
-  }
 
   async function addPreset(preset: "CBC" | "8-4-4") {
     setBusy(true);
@@ -479,241 +444,6 @@ function CoCurricularTab({ canManage, onOpenTimetable }: { canManage: boolean; o
   return <TalentManagerClient canManage={canManage} />;
 }
 
-function OldCoCurricularTab({ canManage, onOpenTimetable }: { canManage: boolean; onOpenTimetable: () => void }) {
-  const { toast } = useToast();
-  const [data, setData] = React.useState<any | null>(null);
-  const [departments, setDepartments] = React.useState<Dept[]>([]);
-  const [error, setError] = React.useState(false);
-  const [savingClassId, setSavingClassId] = React.useState<string | null>(null);
-
-  const load = React.useCallback(async () => {
-    setError(false);
-    try {
-      const [generatorRes, departmentRes] = await Promise.all([
-        fetch("/api/academics/timetable/generator"),
-        fetch("/api/academics/departments"),
-      ]);
-      const generatorJson = await generatorRes.json();
-      const departmentJson = await departmentRes.json();
-      if (!generatorJson.ok || !departmentJson.ok) {
-        setError(true);
-        return;
-      }
-      setData(generatorJson.data);
-      setDepartments(departmentJson.data.departments ?? []);
-    } catch {
-      setError(true);
-    }
-  }, []);
-
-  React.useEffect(() => { load(); }, [load]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const draft = JSON.parse(raw);
-      hydratingDraftRef.current = true;
-      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
-      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
-      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
-      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
-      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
-    } catch {}
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (hydratingDraftRef.current) return;
-    const draft = {
-      savedAt: new Date().toISOString(),
-      timeOffTeacherId,
-      timeOffWindows,
-      combinationForm,
-    };
-    try {
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
-    } catch {}
-  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
-
-  function clearDraft(showToast = true) {
-    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
-    setDraftMeta({ dirty: false, restored: false });
-    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
-  }
-
-  async function saveClassConfig(classId: string, current: any | null, values: { coCurricularName: string; coCurricularCount: number }) {
-    setSavingClassId(classId);
-    try {
-      const payload = {
-        action: "save_config",
-        ...configWithDefaults(classId, current),
-        coCurricularName: values.coCurricularName.trim() || "Games",
-        coCurricularCount: Math.max(0, Math.min(4, values.coCurricularCount)),
-      };
-      const res = await fetch("/api/academics/timetable/generator", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (json.ok) {
-        toast({ title: "Co-curricular timetable link saved", description: "The next timetable generation will reserve these activity slots.", tone: "success" });
-        await load();
-      } else {
-        toast({ title: json.error?.message || "Failed to save co-curricular link", tone: "error" });
-      }
-    } finally {
-      setSavingClassId(null);
-    }
-  }
-
-  if (error) return <LoadError onRetry={load} />;
-  if (!data) return <Skeletons />;
-
-  const coDepartments = departments.filter((d) => /co[-\s]?curricular|sports|games|clubs|activities/i.test(d.name));
-  const linkedConfigs = (data.configs ?? []).filter((cfg: any) => Number(cfg.coCurricularCount ?? 0) > 0);
-  const classes = data.classes ?? [];
-
-  return (
-    <div className="space-y-5">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 overflow-hidden">
-          <CardContent className="p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <Badge tone="green">Linked to timetable</Badge>
-                <h2 className="mt-3 text-lg font-black tracking-tight text-navy-950 dark:text-navy-50">Co-curricular Activities</h2>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-500 dark:text-navy-400">
-                  Manage Games, Clubs, Sports, Music and other non-academic activity blocks from one dedicated tab. These settings are saved to the real timetable configuration, then the generator reserves the activity periods for each class.
-                </p>
-              </div>
-              <Button variant="secondary" onClick={onOpenTimetable}>
-                <Grid3X3 className="h-4 w-4" /> Open timetable
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <p className="text-xs font-bold uppercase tracking-widest text-navy-400">Current setup</p>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-center">
-              <div className="rounded-2xl border border-navy-100 bg-white/60 p-3 dark:border-navy-800 dark:bg-navy-950/40">
-                <p className="text-2xl font-black text-navy-950 dark:text-white">{coDepartments.length}</p>
-                <p className="text-[11px] text-navy-500">activity departments</p>
-              </div>
-              <div className="rounded-2xl border border-green-100 bg-green-50/60 p-3 dark:border-green-900/40 dark:bg-green-950/20">
-                <p className="text-2xl font-black text-green-700 dark:text-green-300">{linkedConfigs.length}</p>
-                <p className="text-[11px] text-navy-500">classes linked</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.4fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base"><Building2 className="h-5 w-5 text-green-600" /> Non-academic departments</CardTitle>
-            <p className="text-xs text-navy-400">Add “Co-curricular Activities” in Departments, appoint its head there, then map subjects such as Creative Arts & Sports or Music.</p>
-          </CardHeader>
-          <CardContent>
-            {coDepartments.length === 0 ? (
-              <EmptyState icon={Trophy} title="No co-curricular department yet" description='Use the Departments tab to add “Co-curricular Activities”, then map sports, clubs or creative subjects to it.' />
-            ) : (
-              <div className="space-y-2">
-                {coDepartments.map((d) => (
-                  <div key={d.id} className="rounded-2xl border border-navy-100 bg-white/70 p-3 dark:border-navy-800 dark:bg-navy-950/40">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-bold text-navy-900 dark:text-navy-50">{d.name}</p>
-                      <Badge tone="green">Non-academic</Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-navy-500">{d.subjectCount} mapped subject{d.subjectCount === 1 ? "" : "s"} · {d.hodName ? `Head: ${d.hodName}` : "Head not assigned"}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base"><Trophy className="h-5 w-5 text-green-600" /> Class activity timetable links</CardTitle>
-            <p className="text-xs text-navy-400">Choose the activity label and weekly slots per class. The whole-school timetable generator reserves these blocks, usually Friday late periods.</p>
-          </CardHeader>
-          <CardContent>
-            {classes.length === 0 ? (
-              <EmptyState icon={Grid3X3} title="No classes found" description="Add classes first, then link co-curricular activity periods." />
-            ) : (
-              <div className="space-y-3">
-                {classes.map((c: any) => {
-                  const current = (data.configs ?? []).find((cfg: any) => cfg.classId === c.id) ?? null;
-                  return (
-                    <CoCurricularClassRow
-                      key={c.id}
-                      classItem={c}
-                      config={current}
-                      canManage={canManage}
-                      saving={savingClassId === c.id}
-                      onSave={(values) => saveClassConfig(c.id, current, values)}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function CoCurricularClassRow({ classItem, config, canManage, saving, onSave }: {
-  classItem: any;
-  config: any | null;
-  canManage: boolean;
-  saving: boolean;
-  onSave: (values: { coCurricularName: string; coCurricularCount: number }) => void;
-}) {
-  const [name, setName] = React.useState(config?.coCurricularName ?? "Games");
-  const [count, setCount] = React.useState<number>(config?.coCurricularCount ?? 2);
-
-  React.useEffect(() => {
-    setName(config?.coCurricularName ?? "Games");
-    setCount(config?.coCurricularCount ?? 2);
-  }, [config?.coCurricularName, config?.coCurricularCount]);
-
-  return (
-    <div className="rounded-2xl border border-navy-100 bg-white/70 p-3 dark:border-navy-800 dark:bg-navy-950/40">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-[10rem]">
-          <p className="text-sm font-bold text-navy-950 dark:text-white">{classLabel(classItem)}</p>
-          <p className="text-[11px] text-navy-500">Friday activity block · generator reserved</p>
-        </div>
-        <div className="grid flex-1 gap-2 sm:grid-cols-[1fr_8rem_auto] sm:items-end">
-          <div>
-            <Label className="text-[10px] uppercase tracking-wider text-navy-400">Activity label</Label>
-            <Input value={name} disabled={!canManage} onChange={(e) => setName(e.target.value)} placeholder="Games / Clubs / Music" />
-          </div>
-          <div>
-            <Label className="text-[10px] uppercase tracking-wider text-navy-400">Slots / week</Label>
-            <Input type="number" min={0} max={4} value={count} disabled={!canManage} onChange={(e) => setCount(Number(e.target.value))} />
-          </div>
-          {canManage ? (
-            <Button size="sm" onClick={() => onSave({ coCurricularName: name, coCurricularCount: count })} disabled={saving || name.trim().length < 2}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
-            </Button>
-          ) : (
-            <Badge tone="neutral">View only</Badge>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ---- Terms -----------------------------------------------------------------------
 function TermsTab({ canManage }: { canManage: boolean }) {
   const { toast } = useToast();
@@ -731,42 +461,6 @@ function TermsTab({ canManage }: { canManage: boolean }) {
     } catch { setError(true); }
   }, []);
   React.useEffect(() => { load(); }, [load]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const draft = JSON.parse(raw);
-      hydratingDraftRef.current = true;
-      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
-      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
-      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
-      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
-      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
-    } catch {}
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (hydratingDraftRef.current) return;
-    const draft = {
-      savedAt: new Date().toISOString(),
-      timeOffTeacherId,
-      timeOffWindows,
-      combinationForm,
-    };
-    try {
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
-    } catch {}
-  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
-
-  function clearDraft(showToast = true) {
-    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
-    setDraftMeta({ dirty: false, restored: false });
-    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
-  }
 
   async function save() {
     setSaving(true);
@@ -1118,42 +812,6 @@ function TimetableTab({ canManage }: { canManage: boolean }) {
     } catch { setError(true); }
   }, [classId]);
   React.useEffect(() => { load(); }, [load]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const draft = JSON.parse(raw);
-      hydratingDraftRef.current = true;
-      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
-      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
-      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
-      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
-      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
-    } catch {}
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (hydratingDraftRef.current) return;
-    const draft = {
-      savedAt: new Date().toISOString(),
-      timeOffTeacherId,
-      timeOffWindows,
-      combinationForm,
-    };
-    try {
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
-    } catch {}
-  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
-
-  function clearDraft(showToast = true) {
-    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
-    setDraftMeta({ dirty: false, restored: false });
-    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
-  }
 
   const grid = new Map<string, Slot>();
   for (const s of slots ?? []) grid.set(`${s.dayOfWeek}|${s.period}`, s);
@@ -1820,42 +1478,6 @@ function ObservationDialog({ plan, onClose, onDone }: { plan: PlanRow; onClose: 
   }, [plan.id]);
   React.useEffect(() => { load(); }, [load]);
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const draft = JSON.parse(raw);
-      hydratingDraftRef.current = true;
-      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
-      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
-      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
-      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
-      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
-    } catch {}
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (hydratingDraftRef.current) return;
-    const draft = {
-      savedAt: new Date().toISOString(),
-      timeOffTeacherId,
-      timeOffWindows,
-      combinationForm,
-    };
-    try {
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
-    } catch {}
-  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
-
-  function clearDraft(showToast = true) {
-    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
-    setDraftMeta({ dirty: false, restored: false });
-    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
-  }
-
   async function save() {
     if (note.trim().length < 2) { toast({ title: "Write a short observation note.", tone: "error" }); return; }
     setSaving(true);
@@ -2021,42 +1643,6 @@ function TimetableGeneratorTab({ canManage }: { canManage: boolean }) {
 
   React.useEffect(() => { load(); }, [load]);
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      const draft = JSON.parse(raw);
-      hydratingDraftRef.current = true;
-      if (draft.timeOffTeacherId) setTimeOffTeacherId(draft.timeOffTeacherId);
-      if (Array.isArray(draft.timeOffWindows) && draft.timeOffWindows.length > 0) setTimeOffWindows(draft.timeOffWindows);
-      if (draft.combinationForm) setCombinationForm(draft.combinationForm);
-      setDraftMeta({ savedAt: draft.savedAt, dirty: false, restored: true });
-      setTimeout(() => { hydratingDraftRef.current = false; }, 0);
-    } catch {}
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (hydratingDraftRef.current) return;
-    const draft = {
-      savedAt: new Date().toISOString(),
-      timeOffTeacherId,
-      timeOffWindows,
-      combinationForm,
-    };
-    try {
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-      setDraftMeta({ savedAt: draft.savedAt, dirty: true, restored: draftMeta.restored });
-    } catch {}
-  }, [timeOffTeacherId, timeOffWindows, combinationForm]);
-
-  function clearDraft(showToast = true) {
-    if (typeof window !== "undefined") window.localStorage.removeItem(DRAFT_KEY);
-    setDraftMeta({ dirty: false, restored: false });
-    if (showToast) toast({ title: "Saved draft cleared", tone: "success" });
-  }
-
   async function generate(force = false) {
     if (!force && !hasConfiguredConstraints) {
       setValidationOpen(true);
@@ -2102,24 +1688,6 @@ function TimetableGeneratorTab({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-6 text-left">
-      <Card className="border border-amber-100 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/10">
-        <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">Draft resume protection</p>
-            <p className="mt-1 text-sm text-navy-700 dark:text-navy-200">
-              If you leave this screen midway, NEYO restores your unfinished teacher time-off and combination setup when you return.
-            </p>
-            <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
-              {draftMeta.savedAt ? `Last saved locally: ${new Date(draftMeta.savedAt).toLocaleString()}` : "No local draft saved yet."}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {draftMeta.restored && <Badge tone="blue">Draft restored</Badge>}
-            {draftMeta.dirty && <Badge tone="amber">Unsaved setup protected</Badge>}
-            <Button size="sm" variant="secondary" onClick={() => clearDraft()}><RotateCcw className="h-4 w-4" /> Clear saved draft</Button>
-          </div>
-        </CardContent>
-      </Card>
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Subject Weights Constraints Editor Card */}
         <Card className="lg:col-span-2">
@@ -3438,24 +3006,6 @@ function DutyRosterTab({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-6 text-left">
-      <Card className="border border-amber-100 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/10">
-        <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">Draft resume protection</p>
-            <p className="mt-1 text-sm text-navy-700 dark:text-navy-200">
-              If you leave this screen midway, NEYO restores your unfinished teacher time-off and combination setup when you return.
-            </p>
-            <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
-              {draftMeta.savedAt ? `Last saved locally: ${new Date(draftMeta.savedAt).toLocaleString()}` : "No local draft saved yet."}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {draftMeta.restored && <Badge tone="blue">Draft restored</Badge>}
-            {draftMeta.dirty && <Badge tone="amber">Unsaved setup protected</Badge>}
-            <Button size="sm" variant="secondary" onClick={() => clearDraft()}><RotateCcw className="h-4 w-4" /> Clear saved draft</Button>
-          </div>
-        </CardContent>
-      </Card>
       <Card className="print:hidden">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -3602,8 +3152,8 @@ function StudentDutyRosterClient({ canManage }: { canManage: boolean }) {
             <CardContent className="p-4">
               <h4 className="font-bold">{a.name}</h4>
               <div className="flex gap-2 mt-2">
-                <Badge variant="secondary" className="text-[10px]">{a.genderConstraint}</Badge>
-                <Badge variant="secondary" className="text-[10px]">Max: {a.maxStudents}</Badge>
+                <Badge tone="neutral" className="text-[10px]">{a.genderConstraint}</Badge>
+                <Badge tone="neutral" className="text-[10px]">Max: {a.maxStudents}</Badge>
               </div>
               <p className="text-[10px] text-navy-400 mt-3 italic">Automatically excludes health-conditioned students & school leaders.</p>
             </CardContent>
@@ -3662,7 +3212,7 @@ function BulkConfigDialog({ data, onClose, onDone }: any) {
                 return (
                   <Badge 
                     key={c.id} 
-                    variant={isSelected ? "secondary" : "outline"} 
+                    tone={isSelected ? "green" : "neutral"} 
                     className="cursor-pointer"
                     onClick={() => {
                       const next = new Set(selectedClasses);
@@ -3706,6 +3256,7 @@ type ExamSlotRow = {
   classId: string;
   subjectId: string;
   examName: string;
+  paperConfigId?: string | null;
   paperName?: string | null;
   examDate: string;
   startTime: string;
@@ -3713,6 +3264,7 @@ type ExamSlotRow = {
   venue?: string | null;
   targetScope: string;
   targetJson?: string | null;
+  targetIds?: string[];
   invigilatorScope?: string;
   eligibleInvigilators?: { teacherId: string; teacherName: string }[];
   invigilators?: { teacherId: string; teacherName: string; warning?: string }[];
@@ -4288,7 +3840,7 @@ type ExamGeneratorRunRow = {
   createdAt: string;
 };
 
-function ExamAutoGeneratorTab({ canManage }: { canManage: boolean }) {
+function ExamAutoGeneratorTab({ canManage, schoolLevelActivation }: { canManage: boolean; schoolLevelActivation?: { isSeniorSchool: boolean; isJuniorSchool: boolean; isMixedSchool: boolean; educationLevelsOffered: string[] } }) {
   const { toast } = useToast();
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);

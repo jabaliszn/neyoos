@@ -9,6 +9,12 @@
  *  - Tenant: the root table itself.
  *  - Session/Credential/RecoveryCode/TotpChallenge: scoped via userId -> User.
  *  - OtpCode/MagicLink/WebAuthnChallenge: pre-authentication (no tenant yet).
+ *  - CalendarFeedToken (M.3): the public webcal:// feed route looks this up
+ *    with NO session at all (a phone's Calendar app polls it unauthenticated,
+ *    like OtpCode/MagicLink) — queried directly via `db`, never `tenantDb()`.
+ *  - BundiImportUnlockCode (M.5): minted by NEYO Ops (no tenant context at
+ *    creation for company-wide codes) and redeemed by CODE lookup, not by
+ *    tenant — queried directly via `db`, same reasoning as API keys/webhooks.
  */
 export const TENANT_OWNED_MODELS = [
   "user",
@@ -29,6 +35,7 @@ export const TENANT_OWNED_MODELS = [
   "intercomCall",
   "storedFile",
   "documentVerification",
+  "qrScanEvent", // N.2 — QR hardware scan audit trail + duplicate-scan guard
   "apiKey",
   "webhookSubscription",
   "webhookDelivery",
@@ -43,6 +50,9 @@ export const TENANT_OWNED_MODELS = [
   "studentDocument",
   "studentRequirement",
   "studentImport",
+  "studentCustomField", // M.4 — school-defined extra import fields per student
+  "bundiFieldTemplate", // M.5 — school-described register field mapping
+  "bundiImportSession", // M.5 — Bundi handwritten import sessions (cost/usage tracked)
   "studentTransfer",
   "attendanceRecord",
   "principalDelegationTask",
@@ -184,6 +194,8 @@ export const TENANT_OWNED_MODELS = [
   "publicSiteGalleryImage",
   "publicSiteActivity",
   "newsPost",
+  "smsMarginLedger", // M.2 SMS margin revenue ledger
+  "referralCredit", // M.1 referral engine credit ledger
 ] as const;
 
 export type TenantOwnedModel = (typeof TENANT_OWNED_MODELS)[number];
