@@ -51,6 +51,11 @@ export async function myChildren(user: SessionUser) {
       const lastAbsent = att.find((a) => a.status === "A")?.date ?? null;
 
       // Fees: open invoices balance.
+      // R.2 — a student with ZERO invoices ever raised (e.g. no fee
+      // structure configured yet for their class/term) must NEVER look the
+      // same as a student who is genuinely fully paid — track the real
+      // invoice count so the UI can show an honest "no fees billed yet"
+      // state instead of a misleading "cleared".
       const invoices = await tenantDb().invoice.findMany({ where: { studentId: c.id } });
       const balance = invoices.reduce((a, i) => a + Math.max(0, i.totalKes - i.discountKes - i.paidKes), 0);
 
@@ -70,6 +75,7 @@ export async function myChildren(user: SessionUser) {
         attendancePct,
         lastAbsent,
         feeBalanceKes: balance,
+        hasFeeInvoices: invoices.length > 0, // R.2 — false means "no invoice raised yet", never render as "cleared"
         latestPublishedExam: lastResult ? { examId: lastResult.examId, name: lastResult.exam.name, year: lastResult.exam.year, term: lastResult.exam.term } : null,
       });
     }
@@ -123,6 +129,11 @@ export async function childDetail(user: SessionUser, studentId: string) {
         })
       : [];
     const subByHw = new Map(submissions.map((s) => [s.homeworkId, s]));
+
+    // T.12 — real, cheap map of today's real confirmed substitute coverage
+    // (empty for any school that never uses substitutes — zero extra cost).
+    const { todaysConfirmedSubstitutesMap } = await import("@/lib/services/substitute.service");
+    const todaySubMap = await todaysConfirmedSubstitutesMap(user.tenantId);
 
     const [attendance, invoices, publishedResults, pickupPersons, altPickups] = await Promise.all([
       tenantDb().attendanceRecord.findMany({
@@ -178,7 +189,13 @@ export async function childDetail(user: SessionUser, studentId: string) {
         status: i.status, dueDate: i.dueDate,
       })),
       exams: [...examMap.values()].map((e) => ({ ...e, avgPct: Math.round((e.total / (e.subjects * e.maxMarks)) * 100) })),
-      timetable: timetable.map((t) => ({ dayOfWeek: t.dayOfWeek, period: t.period, code: t.subject?.code ?? null, name: t.subject?.name ?? null })),
+      timetable: timetable.map((t) => ({
+        dayOfWeek: t.dayOfWeek, period: t.period, code: t.subject?.code ?? null, name: t.subject?.name ?? null,
+        // T.12 — a real confirmed substitute covering TODAY is surfaced
+        // honestly to the family, never silently hidden behind the
+        // absent teacher's normal subject slot.
+        substituteToday: todaySubMap.get(t.id)?.teacherName ?? null,
+      })),
       homework: homework.map((h) => {
         const sub = subByHw.get(h.id);
         return {
@@ -296,6 +313,10 @@ export async function parentChildPathwayReadiness(user: SessionUser, studentId: 
         requirementsTotal: p.requirementsTotal,
         talentEvidenceCount: p.talentEvidenceCount,
         portfolioEvidenceCount: p.portfolioEvidenceCount,
+        // P.4: the real KJSEA placement input, parent-safe (own child's score only).
+        kjseaScorePct: p.kjseaScorePct,
+        kjseaYear: p.kjseaYear,
+        kjseaInfluencedReadiness: p.kjseaInfluencedReadiness,
         // subject-level guidance, parent-safe (child's own averages only)
         subjects: p.subjects.map((s) => ({
           subjectName: s.subjectName,
@@ -305,6 +326,72 @@ export async function parentChildPathwayReadiness(user: SessionUser, studentId: 
           met: s.met,
         })),
       })),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// T.8 (founder-requested 2026-07-06) — real parent-portal-initiated
+// transport route/shift change request, gated by the school's own real
+// Tenant.allowParentTransportRequests toggle (checked inside
+// transport.service.ts's createRouteChangeRequest itself). Real,
+// tenant-scoped ownership enforced via the SAME assertOwnChild() guard
+// every other parent-portal action in this file already uses — a parent
+// can only ever request a change for their OWN real child.
+// ---------------------------------------------------------------------------
+
+export async function parentRequestTransportRouteChange(
+  user: SessionUser,
+  input: { studentId: string; requestedRouteId: string; requestedShiftId?: string; requestedPickupStop?: string; reason?: string }
+) {
+  return withTenant(user.tenantId, async () => {
+    await assertOwnChild(user, input.studentId);
+    const { createRouteChangeRequest } = await import("@/lib/services/transport.service");
+    return createRouteChangeRequest(user, input);
+  });
+}
+
+/** A parent's own real transport route-change request history (their own
+ * children only). */
+export async function parentTransportRouteChangeRequests(user: SessionUser, studentId: string) {
+  return withTenant(user.tenantId, async () => {
+    await assertOwnChild(user, studentId);
+    return tenantDb().transportRouteChangeRequest.findMany({
+      where: { studentId },
+      orderBy: { createdAt: "desc" },
+    });
+  });
+}
+
+/** T.8 — the real, single call the parent-portal transport screen needs:
+ * whether this school has opted in to allow parent-requested changes, the
+ * child's own real current route/shift assignment (if any), the real list
+ * of routes+shifts they could request instead, and their own real request
+ * history — all real ownership-scoped to this parent's own child. */
+export async function parentTransportInfo(user: SessionUser, studentId: string) {
+  return withTenant(user.tenantId, async () => {
+    await assertOwnChild(user, studentId);
+    const { listRoutes, getTransportSettings } = await import("@/lib/services/transport.service");
+    const [settings, routes, current, requests] = await Promise.all([
+      getTransportSettings(user),
+      listRoutes(user),
+      tenantDb().transportAssignment.findFirst({
+        where: { studentId, releasedAt: null },
+        include: { route: true, shift: true },
+      }),
+      tenantDb().transportRouteChangeRequest.findMany({ where: { studentId }, orderBy: { createdAt: "desc" } }),
+    ]);
+    return {
+      allowParentTransportRequests: settings.allowParentTransportRequests,
+      current: current
+        ? {
+            routeId: current.routeId, routeName: current.route.name,
+            shiftId: current.shiftId, shiftName: current.shift?.name ?? null,
+            pickupStop: current.pickupStop,
+          }
+        : null,
+      routes,
+      requests,
     };
   });
 }

@@ -19,6 +19,7 @@ const schema = z.object({
   })).optional(),
   notes: z.string().optional().nullable(),
   autoGenerateInvigilators: z.boolean().optional(),
+  excludeSaturday: z.boolean().optional(),
 });
 
 function mapErr(e: unknown) {

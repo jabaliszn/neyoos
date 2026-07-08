@@ -13,6 +13,7 @@ import { initialiseModules } from "@/lib/services/module.service";
 import { generateNeyoLoginId } from "@/lib/services/identity.service";
 import { SESSION_TTL_DAYS } from "@/lib/core/session";
 import type { SignupInput } from "@/lib/validations/onboarding";
+import { getPricingEngineConfig, quotePriceForCounts, estimateParentCountForSchool } from "@/lib/services/pricing-engine.service";
 
 export class OnboardingError extends Error {
   constructor(public code: "EMAIL_TAKEN" | "SLUG_TAKEN", message: string) {
@@ -93,6 +94,53 @@ export async function signupSchool(
       phone: input.ownerPhone,
       role: "SCHOOL_OWNER",
       passwordHash,
+    },
+  });
+
+  // Part V — Capacity-Based Pricing 2.0 (founder-confirmed 2026-07-06):
+  // "they get their price in their first launch." A real, honest first
+  // price computed from the school's OWN declared numbers, persisted as
+  // both the real active Subscription.sizeBasedPriceKes AND the first real
+  // TenantPricingSnapshot ("INITIAL_SIGNUP") that every future repricing
+  // check compares real growth against. If a school genuinely didn't
+  // declare any numbers yet, this simply seeds a real 0-baseline — never
+  // blocks signup, never fabricates a number.
+  const pricingConfig = await getPricingEngineConfig();
+  const declaredStudentCount = input.expectedStudentCount ?? 0;
+  const declaredStaffCount = input.expectedStaffCount ?? 0;
+  // A school is only ever asked for students + staff at signup (V.0's
+  // "just all parents either live or dormant" is a real, silent NEYO-Ops
+  // pricing input) — if a real declared parent count isn't supplied (the
+  // normal case now that the wizard no longer asks), it's estimated here.
+  const declaredParentCount = input.expectedParentCount ?? estimateParentCountForSchool(declaredStudentCount);
+  const initialQuote = quotePriceForCounts(declaredStudentCount, declaredStaffCount, declaredParentCount, pricingConfig);
+
+  await db.subscription.upsert({
+    where: { tenantId: tenant.id },
+    create: {
+      tenantId: tenant.id,
+      planKey: "free_karibu",
+      status: "ACTIVE",
+      pricingMode: "SIZE_BASED_V2",
+      sizeBasedPriceKes: initialQuote.monthlyPriceKes,
+      currentPeriodEnd: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000),
+    },
+    update: {
+      pricingMode: "SIZE_BASED_V2",
+      sizeBasedPriceKes: initialQuote.monthlyPriceKes,
+    },
+  });
+  await db.tenantPricingSnapshot.create({
+    data: {
+      tenantId: tenant.id,
+      studentCount: declaredStudentCount,
+      staffCount: declaredStaffCount,
+      parentCount: declaredParentCount,
+      estimatedStorageGb: initialQuote.estimatedStorageGb,
+      estimatedAiOcrUsage: initialQuote.estimatedAiOcrUsage,
+      rawScore: initialQuote.rawScore,
+      monthlyPriceKes: initialQuote.monthlyPriceKes,
+      reason: "INITIAL_SIGNUP",
     },
   });
 

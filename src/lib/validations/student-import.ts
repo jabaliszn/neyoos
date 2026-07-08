@@ -29,6 +29,11 @@ export const IMPORT_FIELDS = [
   "guardianName",
   "guardianPhone",
   "notes",
+  // R.1 — smart create-or-update: a school can add or fix fee/opening-balance
+  // info on a re-import without ever touching totals already paid, since
+  // this only ever creates a real ARREARS invoice for the DIFFERENCE (see
+  // reconcileOpeningBalance() in the service) — never edits an existing one.
+  "openingBalanceKes",
   "custom", // M.4 — school-defined extra field (needs customLabel)
   "ignore", // explicit "skip this column"
 ] as const;
@@ -50,10 +55,12 @@ export const HEADER_SYNONYMS: Record<Exclude<ImportField, "ignore">, string[]> =
   guardianName: ["guardianname", "parentname", "guardian", "parent", "mzazi", "fathername", "mothername", "parentguardian"],
   guardianPhone: ["guardianphone", "parentphone", "phone", "phoneno", "phonenumber", "contact", "mobile", "simu", "telephone", "parentcontact", "guardiancontact"],
   notes: ["notes", "remarks", "comment", "comments", "maelezo"],
+  openingBalanceKes: ["openingbalance", "balance", "feebalance", "outstandingbalance", "arrears", "balancebroughtforward", "bbf", "salio"],
   // "custom" is never auto-mapped by header text — a school always chooses it
   // explicitly and types its own label, so no synonym guessing applies here.
   custom: [],
 };
+
 
 /** One column mapping decision: spreadsheet column index -> student field. */
 /**
@@ -88,6 +95,8 @@ export const importPreviewSchema = z.object({
   /** M.4 — when set, EVERY row in this import goes into this one class only,
    * ignoring any className column and never auto-creating a new class. */
   targetClassId: z.string().trim().min(1).optional(),
+  /** R.1 — preview under smart create-or-update rules (see importCommitSchema). */
+  updateExisting: z.boolean().default(true),
 }).refine((v) => v.text !== undefined || v.rows !== undefined, {
   message: "Provide pasted text or parsed rows.",
 });
@@ -106,6 +115,25 @@ export const importCommitSchema = z.object({
   skipInvalid: z.boolean().default(true),
   /** M.4 — import every row into this ONE class only (isolation mode). */
   targetClassId: z.string().trim().min(1).optional(),
+  /**
+   * R.1 — "smart import": when a row matches an EXISTING student (by
+   * admission no / UPI / birth cert / name+DOB / name+guardian phone), fill
+   * in any blank fields on that student and add new info (guardian, custom
+   * fields, opening balance) instead of rejecting the whole import as a
+   * duplicate. Defaults to true — this is the safer, more useful default
+   * for a school re-uploading an updated register; explicitly set false to
+   * get the old strict "duplicates are always rejected" behavior.
+   */
+  updateExisting: z.boolean().default(true),
+  /**
+   * R.1 — rows the caller has already reviewed and explicitly confirmed
+   * should overwrite a field that already had a DIFFERENT value on the
+   * existing student (a genuine conflict, e.g. two different birth dates).
+   * Without confirmation, a conflicting field is left untouched and
+   * reported back for the school to decide — NEYO never silently overwrites
+   * real data. Keyed by the row's 1-based sheet row number.
+   */
+  confirmedConflictRows: z.array(z.number().int().min(1)).max(MAX_IMPORT_ROWS + 1).optional(),
 });
 export type ImportCommitInput = z.infer<typeof importCommitSchema>;
 
@@ -124,5 +152,6 @@ export const importedRowSchema = z.object({
   guardianName: z.string().trim().max(80).optional(),
   guardianPhone: z.string().trim().max(20).optional(),
   notes: z.string().trim().max(500).optional(),
+  openingBalanceKes: z.coerce.number().int().min(0).max(10_000_000).optional(),
 });
 export type ImportedRow = z.infer<typeof importedRowSchema>;

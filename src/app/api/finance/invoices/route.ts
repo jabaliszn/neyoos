@@ -42,8 +42,13 @@ export async function PATCH(req: NextRequest) {
     const user = await requirePermission("finance.record_payment");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("MISSING_ID", "Invoice id required.", 400);
-    const { amountKes } = z.object({ amountKes: z.coerce.number().int().min(1).max(10_000_000) }).parse(await req.json());
-    return ok(await applyPaymentToInvoice(user, id, amountKes));
+    const { amountKes, biometricTicket } = z.object({
+      amountKes: z.coerce.number().int().min(1).max(10_000_000),
+      // R.3 — real single-use server ticket, required only if the school
+      // has turned on requireBiometricForFinance (see applyPaymentToInvoice()).
+      biometricTicket: z.string().trim().max(80).optional(),
+    }).parse(await req.json());
+    return ok(await applyPaymentToInvoice(user, id, amountKes, biometricTicket));
   } catch (e) {
     return handleError(e);
   }

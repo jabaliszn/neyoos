@@ -380,6 +380,9 @@ function AutoGroupingPanel({ onDone }: { onDone: () => void }) {
       if (!json.ok) throw new Error(json.error?.message || 'Failed');
       if (commit) {
         toast({ title: json.data.summary, tone: 'success' });
+        if (json.data.timetableJob) {
+          toast({ title: 'Whole-school timetable regeneration started in the background to reflect the reassigned teachers.', tone: 'success' });
+        }
         setPreview(null);
         onDone();
       } else setPreview(json.data);

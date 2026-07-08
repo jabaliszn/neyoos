@@ -8,7 +8,7 @@
 import * as React from "react";
 import {
   Wallet, Plus, AlertCircle, Loader2, X, Layers3, FileText, Banknote,
-  TrendingUp, Check, Search, Smartphone, Printer, Calendar,
+  TrendingUp, Check, Search, Smartphone, Printer, Calendar, Fingerprint, Percent,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { useBiometricGate } from "@/components/auth/biometric-gate";
 
 const kes = (n: number) => `KES ${n.toLocaleString("en-KE")}`;
 
@@ -30,7 +31,7 @@ interface LeaderboardRow { classId: string; className: string; classTeacherName:
 
 const STATUS_TONE: Record<string, "green" | "amber" | "red"> = { PAID: "green", PARTIAL: "amber", UNPAID: "red" };
 
-export function FinanceClient({ canStructure, canInvoice, canRecord }: { canStructure: boolean; canInvoice: boolean; canRecord: boolean }) {
+export function FinanceClient({ canStructure, canInvoice, canRecord, canDiscount, canManageSiblingDiscount }: { canStructure: boolean; canInvoice: boolean; canRecord: boolean; canDiscount?: boolean; canManageSiblingDiscount?: boolean }) {
   const [tab, setTab] = React.useState<"overview" | "invoices" | "structures" | "promises">("overview");
   return (
     <div className="space-y-5">
@@ -41,10 +42,11 @@ export function FinanceClient({ canStructure, canInvoice, canRecord }: { canStru
           </button>
         ))}
         <a href="/finance/payments" className="rounded-full px-4 py-1.5 text-sm font-medium text-navy-500">M-Pesa payments ↗</a>
+        <a href="/finance/activities" className="rounded-full px-4 py-1.5 text-sm font-medium text-navy-500">Trips &amp; activities ↗</a>
       </div>
       {tab === "overview" && <OverviewTab />}
-      {tab === "invoices" && <InvoicesTab canInvoice={canInvoice} canRecord={canRecord} />}
-      {tab === "structures" && <StructuresTab canStructure={canStructure} canInvoice={canInvoice} />}
+      {tab === "invoices" && <InvoicesTab canInvoice={canInvoice} canRecord={canRecord} canDiscount={!!canDiscount} />}
+      {tab === "structures" && <StructuresTab canStructure={canStructure} canInvoice={canInvoice} canManageSiblingDiscount={!!canManageSiblingDiscount} />}
       {tab === "promises" && <PromisesTab />}
     </div>
   );
@@ -197,7 +199,7 @@ function OverviewTab() {
 }
 
 // ---- Invoices --------------------------------------------------------------------
-function InvoicesTab({ canInvoice, canRecord }: { canInvoice: boolean; canRecord: boolean }) {
+function InvoicesTab({ canInvoice, canRecord, canDiscount }: { canInvoice: boolean; canRecord: boolean; canDiscount: boolean }) {
   const { toast } = useToast();
   const [invoices, setInvoices] = React.useState<InvoiceRow[] | null>(null);
   const [error, setError] = React.useState(false);
@@ -206,6 +208,7 @@ function InvoicesTab({ canInvoice, canRecord }: { canInvoice: boolean; canRecord
   const [manualOpen, setManualOpen] = React.useState(false);
   const [payInvoice, setPayInvoice] = React.useState<InvoiceRow | null>(null);
   const [stkInvoice, setStkInvoice] = React.useState<InvoiceRow | null>(null);
+  const [discountInvoice, setDiscountInvoice] = React.useState<InvoiceRow | null>(null);
 
   const load = React.useCallback(async () => {
     setError(false);
@@ -241,7 +244,7 @@ function InvoicesTab({ canInvoice, canRecord }: { canInvoice: boolean; canRecord
       ) : (
         <TableContainer>
           <Table>
-            <THead><TR><TH>Invoice</TH><TH>Student</TH><TH align="right">Total</TH><TH align="right">Paid</TH><TH align="right">Balance</TH><TH>Due</TH><TH>Status</TH>{canRecord && <TH></TH>}</TR></THead>
+            <THead><TR><TH>Invoice</TH><TH>Student</TH><TH align="right">Total</TH><TH align="right">Paid</TH><TH align="right">Balance</TH><TH>Due</TH><TH>Status</TH>{(canRecord || canDiscount) && <TH></TH>}</TR></THead>
             <TBody>
               {invoices.map((inv) => (
                 <TR key={inv.id}>
@@ -261,14 +264,17 @@ function InvoicesTab({ canInvoice, canRecord }: { canInvoice: boolean; canRecord
                     <Badge tone={STATUS_TONE[inv.status] ?? "amber"}>{inv.status.toLowerCase()}</Badge>
                     {inv.printCount > 0 && <span className="ml-1 align-middle text-[10px] text-navy-400" title="Times printed">🖨 {inv.printCount}</span>}
                   </TD>
-                  {canRecord && (
+                  {(canRecord || canDiscount) && (
                     <TD>
-                      <div className="flex gap-1">
-                        {inv.balanceKes > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {canRecord && inv.balanceKes > 0 && (
                           <>
                             <Button size="sm" onClick={() => setStkInvoice(inv)}><Smartphone className="h-3.5 w-3.5" /> M-Pesa</Button>
                             <Button size="sm" variant="secondary" onClick={() => setPayInvoice(inv)}><Banknote className="h-3.5 w-3.5" /> Cash</Button>
                           </>
+                        )}
+                        {canDiscount && inv.balanceKes > 0 && (
+                          <Button size="sm" variant="secondary" onClick={() => setDiscountInvoice(inv)}><Percent className="h-3.5 w-3.5" /> Discount</Button>
                         )}
                         <a href={`/api/finance/invoices/${inv.id}/pdf`}>
                           <Button size="sm" variant="ghost"><Printer className="h-3.5 w-3.5" /> Print</Button>
@@ -286,33 +292,65 @@ function InvoicesTab({ canInvoice, canRecord }: { canInvoice: boolean; canRecord
       {manualOpen && <ManualInvoiceDialog onClose={() => setManualOpen(false)} onDone={() => { setManualOpen(false); load(); toast({ title: "Invoice created", tone: "success" }); }} />}
       {payInvoice && <PayDialog invoice={payInvoice} onClose={() => setPayInvoice(null)} onDone={() => { setPayInvoice(null); load(); toast({ title: "Payment recorded", tone: "success" }); }} />}
       {stkInvoice && <StkDialog invoice={stkInvoice} onClose={() => setStkInvoice(null)} onDone={() => { setStkInvoice(null); load(); toast({ title: "STK push sent — parent's phone will prompt for the PIN", tone: "success" }); }} />}
+      {discountInvoice && <DiscountDialog invoice={discountInvoice} onClose={() => setDiscountInvoice(null)} onDone={() => { setDiscountInvoice(null); load(); toast({ title: "Discount applied", tone: "success" }); }} />}
     </div>
   );
 }
 
 function PayDialog({ invoice, onClose, onDone }: { invoice: InvoiceRow; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
+  const { requireBiometric } = useBiometricGate();
   const [amount, setAmount] = React.useState(String(invoice.balanceKes));
   const [saving, setSaving] = React.useState(false);
-  async function save() {
+  const [requiresBiometric, setRequiresBiometric] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/finance/security").then((r) => r.json()).then((j) => {
+      if (j.ok) setRequiresBiometric(j.data.requireBiometricForFinance);
+    }).catch(() => {});
+  }, []);
+
+  async function doSave(biometricTicket: string | null) {
     setSaving(true);
     try {
-      const res = await fetch(`/api/finance/invoices?id=${invoice.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountKes: Number(amount) }) });
+      const res = await fetch(`/api/finance/invoices?id=${invoice.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountKes: Number(amount), biometricTicket: biometricTicket ?? undefined }) });
       const json = await res.json();
       if (json.ok) onDone();
       else toast({ title: json.error?.message || "Failed", tone: "error" });
     } finally { setSaving(false); }
   }
+
+  function submit() {
+    if (requiresBiometric) {
+      // R.3 — this school requires a fresh fingerprint/Face ID/passkey check
+      // before a cash/offline payment can be recorded here too — server-side
+      // enforced by applyPaymentToInvoice() itself, not just this popup.
+      requireBiometric(
+        `Record payment of KES ${amount || "0"} on ${invoice.invoiceNo}`,
+        (ticket) => doSave(ticket),
+        `offline_payment:${invoice.id}:${amount}`
+      );
+      return;
+    }
+    doSave(null);
+  }
+
   return (
     <Modal title={`Record payment — ${invoice.invoiceNo}`} onClose={onClose}>
       <div className="space-y-3">
         <p className="rounded-xl bg-warm-50 px-3 py-2 text-sm text-navy-600 dark:bg-navy-800 dark:text-navy-300">
           {invoice.studentName} · balance <span className="font-semibold text-red-600">{kes(invoice.balanceKes)}</span>
         </p>
+        {requiresBiometric && (
+          <p className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            <Fingerprint className="h-4 w-4 shrink-0" /> This school requires a fingerprint/Face ID check before recording a payment.
+          </p>
+        )}
         <div><Label>Amount received (KES)</Label><Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
         <p className="text-xs text-navy-400">Cash/offline entry. M-Pesa STK push arrives with Finance Part 2.</p>
-        <Button onClick={save} disabled={saving || !amount || Number(amount) < 1} className="w-full">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Record {amount ? kes(Number(amount)) : ""}
+        <Button onClick={submit} disabled={saving || !amount || Number(amount) < 1} className="w-full">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : requiresBiometric ? <Fingerprint className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+          {requiresBiometric ? "Verify & record " : "Record "}{amount ? kes(Number(amount)) : ""}
         </Button>
       </div>
     </Modal>
@@ -347,6 +385,71 @@ function StkDialog({ invoice, onClose, onDone }: { invoice: InvoiceRow; onClose:
         <p className="text-xs text-navy-400">The parent gets an M-Pesa prompt on their phone. When they enter their PIN, the invoice updates automatically and they receive a confirmation SMS.</p>
         <Button onClick={send} disabled={saving || !phone || !amount} className="w-full">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />} Send STK push
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+function DiscountDialog({ invoice, onClose, onDone }: { invoice: InvoiceRow; onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const { requireBiometric } = useBiometricGate();
+  const [amount, setAmount] = React.useState("");
+  const [reason, setReason] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [requiresBiometric, setRequiresBiometric] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/finance/security").then((r) => r.json()).then((j) => {
+      if (j.ok) setRequiresBiometric(j.data.requireBiometricForFinance);
+    }).catch(() => {});
+  }, []);
+
+  async function doSave(biometricTicket: string | null) {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/finance/invoices/${invoice.id}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "discount", amountKes: Number(amount), reason, biometricTicket: biometricTicket ?? undefined }),
+      });
+      const json = await res.json();
+      if (json.ok) onDone();
+      else toast({ title: json.error?.message || "Could not apply discount", tone: "error" });
+    } finally { setSaving(false); }
+  }
+
+  function submit() {
+    if (requiresBiometric) {
+      // R.3 — a real, server-verified fingerprint/Face ID/passkey check is
+      // required before ANY discount/waiver is applied, when this school
+      // has opted in — enforced by applyDiscount() itself server-side.
+      requireBiometric(
+        `Apply KES ${amount || "0"} discount on ${invoice.invoiceNo}`,
+        (ticket) => doSave(ticket),
+        `fee_discount:${invoice.id}:${amount}`
+      );
+      return;
+    }
+    doSave(null);
+  }
+
+  return (
+    <Modal title={`Discount / waiver — ${invoice.invoiceNo}`} onClose={onClose}>
+      <div className="space-y-3">
+        <p className="rounded-xl bg-warm-50 px-3 py-2 text-sm text-navy-600 dark:bg-navy-800 dark:text-navy-300">
+          {invoice.studentName} · balance <span className="font-semibold text-red-600">{kes(invoice.balanceKes)}</span>
+        </p>
+        {requiresBiometric && (
+          <p className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            <Fingerprint className="h-4 w-4 shrink-0" /> This school requires a fingerprint/Face ID check before applying a discount.
+          </p>
+        )}
+        <div><Label>Discount amount (KES)</Label><Input type="number" min={1} max={invoice.balanceKes} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 2000" /></div>
+        <div><Label>Reason (scholarship, bursary, hardship…)</Label><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. CDF bursary — Term 2" /></div>
+        <p className="text-xs text-navy-400">This waives part of the fee — the invoice balance reduces immediately and is auditable.</p>
+        <Button onClick={submit} disabled={saving || !amount || Number(amount) < 1 || reason.trim().length < 3} className="w-full">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : requiresBiometric ? <Fingerprint className="h-4 w-4" /> : <Percent className="h-4 w-4" />}
+          {requiresBiometric ? "Verify & apply " : "Apply "}{amount ? kes(Number(amount)) : ""} discount
         </Button>
       </div>
     </Modal>
@@ -422,7 +525,115 @@ function ManualInvoiceDialog({ onClose, onDone }: { onClose: () => void; onDone:
 }
 
 // ---- Structures ------------------------------------------------------------------
-function StructuresTab({ canStructure, canInvoice }: { canStructure: boolean; canInvoice: boolean }) {
+/**
+ * R.8 (2026-07-04, founder request) — the school's own sibling-discount %.
+ * Replaces the old platform-wide flat-10% `enable_sibling_discount` switch:
+ * every school now sets its own number here (0 = off, default), and it
+ * takes effect BOTH in the one-tap "Apply X%" button on a child's Family
+ * card (G.12) AND automatically inside "Invoice the level" batch invoicing
+ * below, including for siblings whose parent has two separate guardian
+ * records that were never formally linked (matched by phone + name).
+ */
+function SiblingDiscountCard() {
+  const { toast } = useToast();
+  const [pct, setPct] = React.useState<number | null>(null);
+  const [draft, setDraft] = React.useState("");
+  const [error, setError] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    setError(false);
+    try {
+      const res = await fetch("/api/finance/sibling-discount");
+      const json = await res.json();
+      if (json.ok) { setPct(json.data.siblingDiscountPct); setDraft(String(json.data.siblingDiscountPct)); }
+      else setError(true);
+    } catch { setError(true); }
+  }, []);
+  React.useEffect(() => { load(); }, [load]);
+
+  async function save() {
+    const parsed = Number(draft);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100) {
+      toast({ title: "Enter a whole number between 0 and 100.", tone: "error" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/finance/sibling-discount", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pct: parsed }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setPct(json.data.siblingDiscountPct);
+        toast({ title: parsed === 0 ? "Sibling discount turned off" : `Sibling discount set to ${parsed}%`, tone: "success" });
+      } else {
+        toast({ title: json.error?.message || "Could not save.", tone: "error" });
+      }
+    } catch {
+      toast({ title: "Network problem — try again.", tone: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Sibling discount</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-navy-400">Could not load this setting.</p>
+          <Button variant="secondary" onClick={load} className="mt-2">Retry</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (pct === null) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Sibling discount</CardTitle></CardHeader>
+        <CardContent><div className="h-16 animate-pulse rounded-xl bg-navy-100 dark:bg-navy-800" /></CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2"><Percent className="h-4.5 w-4.5" /> Sibling discount</CardTitle>
+        <Badge tone={pct > 0 ? "green" : "neutral"}>{pct > 0 ? `${pct}% on` : "Off"}</Badge>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-navy-600 dark:text-navy-300">
+          Set the % off a sibling&apos;s fee balance for families with 2 or more children at this school. 0% turns it off. This
+          number is used both for the one-tap &quot;Apply&quot; button on a child&apos;s Family card, and automatically whenever you
+          &quot;Invoice the level&quot; below.
+        </p>
+        <p className="text-xs text-navy-400">
+          Siblings are detected automatically — including when a parent has two separate guardian records (e.g. from two different
+          imports) that were never formally linked, as long as the phone number and name match.
+        </p>
+        <div className="flex items-center gap-2">
+          <div className="relative w-28">
+            <Input
+              type="number" min={0} max={100} value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="pr-7"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-navy-400">%</span>
+          </div>
+          <Button onClick={save} disabled={saving || draft === String(pct)}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StructuresTab({ canStructure, canInvoice, canManageSiblingDiscount }: { canStructure: boolean; canInvoice: boolean; canManageSiblingDiscount: boolean }) {
   const { toast } = useToast();
   const [structures, setStructures] = React.useState<Structure[] | null>(null);
   const [error, setError] = React.useState(false);
@@ -444,6 +655,7 @@ function StructuresTab({ canStructure, canInvoice }: { canStructure: boolean; ca
 
   return (
     <div className="space-y-4">
+      {canManageSiblingDiscount && <SiblingDiscountCard />}
       {canStructure && <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> New fee structure</Button>}
       {structures.length === 0 ? (
         <EmptyState icon={Layers3} title="No fee structures" description="Define what each class level pays per term (tuition, boarding, activity…), then invoice everyone in one click." />

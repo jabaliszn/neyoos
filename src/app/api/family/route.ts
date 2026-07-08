@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     z.object({ action: z.literal("sibling_discount") }).parse(body);
     const user = await requirePermission("finance.manage_structure");
     const input = siblingDiscountSchema.parse(body);
-    return ok(await applySiblingDiscount(user, input.invoiceId, input.pct));
+    return ok(await applySiblingDiscount(user, input.invoiceId, input.pct, input.biometricTicket));
   } catch (e) {
     return handleError(e);
   }

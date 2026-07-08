@@ -5,7 +5,7 @@ import {
   Phone, Mail, Hash, CalendarDays, GraduationCap,
   FileText, CheckCircle2, Circle, Plus, ShieldCheck,
   ArrowRightLeft, Download, Undo2, Loader2, X,
-  Users, Wallet, Percent, CreditCard, Award, FolderOpen, Pencil,
+  Users, Wallet, Percent, CreditCard, Award, FolderOpen, Pencil, Fingerprint,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FileUpload } from "@/components/ui/file-upload";
 import { useToast } from "@/components/ui/toast";
+import { useBiometricGate } from "@/components/auth/biometric-gate";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageButton } from "@/components/messaging/message-button";
 import { StudentCompetencySummaryCard } from "@/components/competencies/competency-framework-components";
@@ -514,8 +515,8 @@ function AddGuardian({ studentId, onAdded }: { studentId: string; onAdded: () =>
 
       {open && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-navy-900/40 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setOpen(false)}>
-          <div className="max-h-[min(92dvh,46rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/60 bg-white/95 p-0 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-950/95" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 z-10 mb-4 flex items-center justify-between border-b border-navy-100 bg-white/95 p-5 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-950/95">
+          <div className="max-h-[min(92dvh,46rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/60 bg-white p-0 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-900" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 mb-4 flex items-center justify-between border-b border-navy-100 bg-white p-5 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-900">
               <h3 className="text-lg font-semibold text-navy-900 dark:text-navy-50">Add Guardian</h3>
               <button onClick={() => setOpen(false)} className="rounded-full p-1.5 text-navy-400 hover:bg-navy-50 dark:hover:bg-navy-800">
                 <X className="h-5 w-5" />
@@ -567,7 +568,7 @@ function AddGuardian({ studentId, onAdded }: { studentId: string; onAdded: () =>
                 </label>
               </div>
 
-              <div className="sticky bottom-0 -mx-5 mt-6 flex justify-end gap-2 border-t border-navy-100 bg-white/95 px-5 py-4 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-950/95">
+              <div className="sticky bottom-0 -mx-5 mt-6 flex justify-end gap-2 border-t border-navy-100 bg-white px-5 py-4 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-900">
                 <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                 <Button onClick={save} disabled={saving}>
                   {saving ? "Adding..." : "Add Guardian"}
@@ -656,8 +657,8 @@ function EditGuardian({ studentId, guardian, onUpdated }: {
 
       {open && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-navy-900/40 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setOpen(false)}>
-          <div className="max-h-[min(92dvh,46rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/60 bg-white/95 p-0 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-950/95" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 z-10 mb-4 flex items-center justify-between border-b border-navy-100 bg-white/95 p-5 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-950/95">
+          <div className="max-h-[min(92dvh,46rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/60 bg-white p-0 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-900" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 mb-4 flex items-center justify-between border-b border-navy-100 bg-white p-5 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-900">
               <h3 className="text-lg font-semibold text-navy-900 dark:text-navy-50">Edit Guardian</h3>
               <button onClick={() => setOpen(false)} className="rounded-full p-1.5 text-navy-400 hover:bg-navy-50 dark:hover:bg-navy-800">
                 <X className="h-5 w-5" />
@@ -696,7 +697,7 @@ function EditGuardian({ studentId, guardian, onUpdated }: {
                 </select>
               </div>
 
-              <div className="sticky bottom-0 -mx-5 mt-6 flex justify-end gap-2 border-t border-navy-100 bg-white/95 px-5 py-4 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-950/95">
+              <div className="sticky bottom-0 -mx-5 mt-6 flex justify-end gap-2 border-t border-navy-100 bg-white px-5 py-4 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-900">
                 <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
                 <Button onClick={save} disabled={saving}>
                   {saving ? "Saving..." : "Save changes"}
@@ -780,7 +781,8 @@ const kes = (n: number) => `KES ${n.toLocaleString("en-KE")}`;
 
 interface FamilyKid {
   id: string; name: string; admissionNo: string; className: string;
-  photoUrl: string | null; balanceKes: number; billedKes: number; paidKes: number; isCurrent: boolean;
+  photoUrl: string | null; balanceKes: number; billedKes: number; paidKes: number; hasFeeInvoices: boolean; isCurrent: boolean;
+  openInvoiceId: string | null; openInvoiceTotalKes: number | null;
 }
 interface FamilyData {
   siblingCount: number;
@@ -792,8 +794,17 @@ interface FamilyData {
 
 function FamilyCard({ studentId, canManageFinance }: { studentId: string; canManageFinance: boolean }) {
   const { toast } = useToast();
+  const { requireBiometric } = useBiometricGate();
   const [data, setData] = React.useState<FamilyData | null>(null);
   const [error, setError] = React.useState(false);
+  const [applying, setApplying] = React.useState<string | null>(null);
+  const [requiresBiometric, setRequiresBiometric] = React.useState(false);
+
+  React.useEffect(() => {
+    fetch("/api/finance/security").then((r) => r.json()).then((j) => {
+      if (j.ok) setRequiresBiometric(j.data.requireBiometricForFinance);
+    }).catch(() => {});
+  }, []);
 
   const load = React.useCallback(async () => {
     setError(false);
@@ -842,16 +853,38 @@ function FamilyCard({ studentId, canManageFinance }: { studentId: string; canMan
     );
   }
 
-  async function applyDiscount(invoiceId: string) {
+  async function doApplyDiscount(invoiceId: string, biometricTicket: string | null) {
+    setApplying(invoiceId);
     try {
       const res = await fetch("/api/family", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sibling_discount", invoiceId }),
+        body: JSON.stringify({ action: "sibling_discount", invoiceId, biometricTicket: biometricTicket ?? undefined }),
       });
       const json = await res.json();
       if (json.ok) { toast({ title: `Sibling discount applied (${data?.siblingDiscountPct}%)`, tone: "success" }); load(); }
       else toast({ title: json.error?.message || "Could not apply", tone: "error" });
     } catch { toast({ title: "Network problem", tone: "error" }); }
+    finally { setApplying(null); }
+  }
+
+  function applyDiscount(invoiceId: string, invoiceTotalKes: number) {
+    if (requiresBiometric) {
+      // R.3 — a fresh, server-verified fingerprint/Face ID/passkey check is
+      // required before a sibling discount is applied, when this school has
+      // opted in — enforced server-side by applyDiscount() itself, since
+      // applySiblingDiscount() funnels through the very same function. The
+      // action key must match EXACTLY what the server will compute
+      // (fee_discount:<invoiceId>:<amountKes>), so we mirror its rounding.
+      const pct = data?.siblingDiscountPct ?? 0;
+      const amountKes = Math.round((invoiceTotalKes * pct) / 100);
+      requireBiometric(
+        `Apply sibling discount (${pct}%) on this invoice`,
+        (ticket) => doApplyDiscount(invoiceId, ticket),
+        `fee_discount:${invoiceId}:${amountKes}`
+      );
+      return;
+    }
+    doApplyDiscount(invoiceId, null);
   }
 
   return (
@@ -889,20 +922,40 @@ function FamilyCard({ studentId, canManageFinance }: { studentId: string; canMan
                 )}
                 <p className="text-xs text-navy-400">{c.admissionNo} · {c.className}</p>
               </div>
-              <span className={"inline-flex items-center gap-1 text-xs font-medium " + (c.balanceKes > 0 ? "text-red-600" : "text-green-700 dark:text-green-400")}>
-                <Wallet className="h-3 w-3" /> {c.balanceKes > 0 ? `${kes(c.balanceKes)} due` : "cleared"}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={"inline-flex items-center gap-1 text-xs font-medium " + (!c.hasFeeInvoices ? "text-navy-400" : c.balanceKes > 0 ? "text-red-600" : "text-green-700 dark:text-green-400")}>
+                  <Wallet className="h-3 w-3" />
+                  {!c.hasFeeInvoices ? "no fees billed yet" : c.balanceKes > 0 ? `${kes(c.balanceKes)} due` : "cleared"}
+                </span>
+                {canManageFinance && data.siblingDiscountPct > 0 && c.openInvoiceId && c.openInvoiceTotalKes !== null && (
+                  <Button
+                    size="sm" variant="secondary"
+                    disabled={applying === c.openInvoiceId}
+                    onClick={() => applyDiscount(c.openInvoiceId as string, c.openInvoiceTotalKes as number)}
+                  >
+                    {applying === c.openInvoiceId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : requiresBiometric ? <Fingerprint className="h-3.5 w-3.5" /> : <Percent className="h-3.5 w-3.5" />}
+                    Apply {data.siblingDiscountPct}%
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>
 
-        {/* sibling discount seam */}
+        {/* sibling discount seam — real one-tap "Apply" buttons are on each
+            child above; this is just the school-wide rate + a fingerprint
+            notice when the school has R.3 biometric finance gating on. */}
         {canManageFinance && data.siblingDiscountPct > 0 && (
           <div className="rounded-xl bg-warm-50 p-3 dark:bg-navy-800">
             <p className="flex items-center gap-1.5 text-xs font-medium text-navy-600 dark:text-navy-300">
               <Percent className="h-3.5 w-3.5" /> Sibling discount: {data.siblingDiscountPct}% (set in Settings)
             </p>
-            <p className="mt-1 text-[11px] text-navy-400">Apply it to this learner&apos;s unpaid fee invoices from Finance — the family qualifies with {data.siblingCount + 1} children enrolled.</p>
+            <p className="mt-1 text-[11px] text-navy-400">Tap &quot;Apply {data.siblingDiscountPct}%&quot; next to any child with an open balance above — the family qualifies with {data.siblingCount + 1} children enrolled.</p>
+            {requiresBiometric && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                <Fingerprint className="h-3 w-3" /> This school requires a fingerprint/Face ID check before applying it.
+              </p>
+            )}
           </div>
         )}
         {canManageFinance && data.siblingDiscountPct === 0 && (

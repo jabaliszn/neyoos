@@ -132,7 +132,7 @@ export function ExpiredCheckoutClient({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-warm-100 px-4 text-center dark:bg-navy-950 font-sans">
-      <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white/70 p-8 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-900/60">
+      <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-8 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-900">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-400">
           <CreditCard className="h-7 w-7 animate-pulse" />
         </div>

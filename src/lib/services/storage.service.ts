@@ -148,11 +148,15 @@ export async function uploadProcessedImage(
 }
 
 
-/** Server-side encrypted upload for documents/images. Plaintext never leaves NEYO. */
+/** Server-side encrypted upload for documents/images. Plaintext never leaves NEYO.
+ * `lifecycleTier` (W.1, Storage Intelligence Engine): defaults to PERMANENT —
+ * a school's real uploaded documents/photos are official records unless the
+ * call site explicitly marks a specific upload as a real TEMPORARY working
+ * file (e.g. a Bundi OCR scratch image) or GENERATED artifact. */
 export async function uploadEncryptedFile(
   tenantId: string,
   uploadedById: string,
-  input: { buffer: Buffer; fileName: string; contentType: string; category?: string }
+  input: { buffer: Buffer; fileName: string; contentType: string; category?: string; lifecycleTier?: "PERMANENT" | "GENERATED" | "TEMPORARY" }
 ) {
   if (!ALLOWED.has(input.contentType)) {
     throw new StorageError("BAD_TYPE", "Only images (JPG/PNG/WebP), PDF, DOC and DOCX are allowed.");
@@ -174,6 +178,7 @@ export async function uploadEncryptedFile(
       contentType: input.contentType,
       size: input.buffer.length,
       category,
+      lifecycleTier: input.lifecycleTier ?? "PERMANENT",
       provider: providerName,
       providerObjectId: key,
       encrypted: true,
@@ -218,6 +223,11 @@ export async function storeGeneratedArtifact(
       contentType: input.contentType,
       size: input.buffer.length,
       category,
+      // W.1 — a real server-generated artifact (e.g. a KNEC export
+      // manifest) is genuinely regenerable from its underlying data, so
+      // the Storage Intelligence Engine may safely prune an old copy —
+      // NEVER treated as an irreplaceable official record.
+      lifecycleTier: "GENERATED",
       provider: providerName,
       providerObjectId: key,
       encrypted: true,

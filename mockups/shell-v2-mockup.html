@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NEYO — Shell V2 mockup (prototype, not live code)</title>
+<style>
+  :root{
+    --navy-950:#121a2e; --navy-900:#1c2740; --navy-800:#263452; --navy-700:#2b3d60;
+    --navy-600:#344b76; --navy-500:#456090; --navy-400:#677fab; --navy-300:#9aabc9;
+    --navy-200:#c6d0e1; --navy-100:#e4e9f1; --navy-50:#f3f5f9;
+    --green-900:#0f412d; --green-700:#11643f; --green-600:#137e4c; --green-500:#1f9d5f;
+    --green-400:#46bd80; --green-300:#7dd6a6; --green-200:#b0e9c7; --green-100:#d6f5e1; --green-50:#eefbf3;
+    --warm-50:#fdfcf9; --warm-100:#faf8f2; --warm-200:#f3efe4;
+    --radius-2xl:1rem; --radius-full:9999px;
+    --ease-apple: cubic-bezier(0.25,0.1,0.25,1);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:Inter,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--warm-50); color:var(--navy-900); height:100vh; overflow:hidden;
+  }
+  /* ---------- Top notice bar (mockup-only label) ---------- */
+  .proto-banner{
+    background:linear-gradient(90deg,var(--navy-900),var(--navy-700));
+    color:#fff; font-size:12px; font-weight:600; text-align:center; padding:6px 10px;
+    letter-spacing:.02em;
+  }
+  .proto-banner b{color:var(--green-300);}
+
+  /* ---------- App shell ---------- */
+  .shell{ display:flex; flex-direction:column; height:calc(100vh - 30px); }
+  .topbar{
+    height:56px; flex:none; display:flex; align-items:center; justify-content:space-between;
+    padding:0 18px; background:#fff; border-bottom:1px solid var(--navy-100);
+  }
+  .topbar .brand{ display:flex; align-items:center; gap:10px; font-weight:700; color:var(--navy-900); }
+  .brand .mark{
+    width:28px;height:28px;border-radius:9px; background:linear-gradient(135deg,var(--navy-900),var(--green-600));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:800;
+  }
+  .topbar .right{ display:flex; align-items:center; gap:14px; color:var(--navy-500); font-size:13px;}
+  .pill-toggle{
+    display:flex; gap:2px; background:var(--navy-50); border-radius:var(--radius-full); padding:3px;
+    font-size:11px; font-weight:600;
+  }
+  .pill-toggle button{ border:0; background:transparent; padding:5px 10px; border-radius:var(--radius-full); cursor:pointer; color:var(--navy-500); font-family:inherit; font-size:11px; font-weight:600;}
+  .pill-toggle button.active{ background:var(--navy-900); color:#fff; }
+
+  .body-row{ flex:1; display:flex; min-height:0; position:relative; }
+
+  /* ---------- Main scroll column ---------- */
+  .main-col{ flex:1; min-width:0; overflow-y:auto; padding:22px 22px 140px 22px; position:relative; }
+  .page-h1{ font-size:22px; font-weight:700; margin:0 0 4px 0; }
+  .page-sub{ color:var(--navy-400); font-size:13.5px; margin:0 0 20px 0; }
+  .stat-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:22px; }
+  .stat-card{ background:#fff; border:1px solid var(--navy-100); border-radius:var(--radius-2xl); padding:16px; box-shadow:0 1px 2px rgba(28,39,64,.04); }
+  .stat-card .lbl{ font-size:11.5px; color:var(--navy-400); font-weight:600; text-transform:uppercase; letter-spacing:.03em;}
+  .stat-card .val{ font-size:21px; font-weight:700; margin-top:6px; color:var(--navy-900); }
+  .stat-card.green .val{ color:var(--green-600); }
+  .filler-card{
+    background:#fff; border:1px solid var(--navy-100); border-radius:var(--radius-2xl);
+    padding:18px; margin-bottom:14px;
+  }
+  .filler-card h3{ margin:0 0 6px 0; font-size:14.5px; }
+  .filler-card p{ margin:0; color:var(--navy-400); font-size:13px; line-height:1.5; }
+  .scroll-hint{
+    text-align:center; color:var(--navy-300); font-size:12px; padding:24px 0 10px 0; font-weight:600;
+  }
+
+  /* ---------- Right side panel (Activity + Intercom) ---------- */
+  .side-panel{
+    width:300px; flex:none; border-left:1px solid var(--navy-100); background:#fff;
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .side-section{ flex:1; min-height:0; display:flex; flex-direction:column; }
+  .side-section + .side-section{ border-top:1px solid var(--navy-100); }
+  .side-head{
+    padding:14px 16px 10px 16px; display:flex; align-items:center; justify-content:space-between; flex:none;
+  }
+  .side-head .t{ font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--navy-500); display:flex; align-items:center; gap:6px;}
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--green-500); display:inline-block; }
+  .side-body{ flex:1; overflow-y:auto; padding:0 16px 14px 16px; }
+  .activity-row{ display:flex; gap:10px; padding:9px 0; border-bottom:1px dashed var(--navy-100); }
+  .activity-row:last-child{ border-bottom:0; }
+  .avatar-sq{ width:30px; height:30px; border-radius:8px; background:var(--green-100); color:var(--green-700); font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none;}
+  .activity-row .txt{ font-size:12.5px; line-height:1.4; color:var(--navy-700); }
+  .activity-row .txt b{ color:var(--navy-900); }
+  .activity-row .time{ font-size:10.5px; color:var(--navy-300); margin-top:2px; }
+
+  .intercom-row{ display:flex; align-items:center; gap:10px; padding:9px 0; }
+  .intercom-avatar{ width:32px;height:32px;border-radius:50%; background:var(--navy-100); position:relative; flex:none; display:flex;align-items:center;justify-content:center; font-size:12px; font-weight:700; color:var(--navy-700);}
+  .presence{ position:absolute; bottom:-1px; right:-1px; width:9px;height:9px;border-radius:50%; border:2px solid #fff; }
+  .presence.on{ background:var(--green-500); }
+  .presence.off{ background:var(--navy-200); }
+  .intercom-name{ font-size:13px; font-weight:600; color:var(--navy-900); }
+  .intercom-role{ font-size:11px; color:var(--navy-400); }
+  .call-btn{ margin-left:auto; width:28px;height:28px; border-radius:50%; border:0; background:var(--green-50); color:var(--green-600); cursor:pointer; display:flex;align-items:center;justify-content:center; }
+
+  /* ---------- Floating bottom module bar (WhatsApp-style) ---------- */
+  .float-wrap{
+    position:absolute; left:0; right:0; bottom:20px; display:flex; justify-content:center;
+    pointer-events:none; z-index:40;
+  }
+  .float-bar{
+    pointer-events:auto;
+    display:flex; align-items:center; gap:4px; padding:8px; border-radius:var(--radius-full);
+    background:linear-gradient(135deg, var(--navy-900) 0%, var(--navy-800) 55%, var(--green-800,#114f34) 130%);
+    box-shadow:0 8px 30px rgba(18,26,46,.35), 0 1px 0 rgba(255,255,255,.06) inset;
+    max-width:min(92vw, 760px);
+    overflow-x:auto; scrollbar-width:none;
+    transition:padding .28s var(--ease-apple), gap .28s var(--ease-apple), transform .28s var(--ease-apple), opacity .28s var(--ease-apple), max-width .28s var(--ease-apple);
+  }
+  .float-bar::-webkit-scrollbar{ display:none; }
+  .float-item{
+    flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    padding:8px 14px; border-radius:var(--radius-full); color:rgba(255,255,255,.72); cursor:pointer;
+    font-size:11px; font-weight:600; white-space:nowrap; border:1px solid transparent;
+    transition:all .2s var(--ease-apple);
+    -webkit-tap-highlight-color:transparent;
+  }
+  .float-item .ic{ width:20px;height:20px; display:flex;align-items:center;justify-content:center; }
+  .float-item.active{ background:rgba(255,255,255,.16); color:#fff; border-color:rgba(255,255,255,.18); }
+  .float-item .badge{
+    position:relative; top:-10px; left:10px; background:var(--green-500); color:#fff; font-size:9px;
+    font-weight:800; border-radius:999px; padding:1px 5px; margin-left:-6px;
+  }
+
+  /* Collapsed (scrolling) state — shrinks to icon-only pill, semi-fades */
+  .float-bar.collapsed{
+    padding:6px; gap:2px; opacity:.55; transform:translateY(2px) scale(.94);
+  }
+  .float-bar.collapsed .float-item{ padding:7px 9px; }
+  .float-bar.collapsed .float-item .label{ display:none; }
+  .float-bar.collapsed .float-item .ic{ width:18px;height:18px; }
+
+  .float-hint{
+    position:absolute; bottom:96px; left:50%; transform:translateX(-50%);
+    background:var(--navy-900); color:#fff; font-size:11px; font-weight:600; padding:6px 12px; border-radius:8px;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  .float-hint.show{ opacity:.92; }
+
+  svg{ display:block; }
+</style>
+</head>
+<body>
+
+<div class="proto-banner">🧪 PROTOTYPE MOCKUP — nothing here is wired to real data or saved to any settings. Scroll the middle column to see the bar collapse/expand. <b>Shell V2 concept, for approval only.</b></div>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="brand"><span class="mark">N</span> Karibu High School</div>
+    <div class="right">
+      <div class="pill-toggle">
+        <button id="btnV1" onclick="setVersion(1)">Shell V1 (current)</button>
+        <button id="btnV2" class="active" onclick="setVersion(2)">Shell V2 (new)</button>
+      </div>
+      <span>🔔</span>
+      <span style="width:26px;height:26px;border-radius:50%;background:var(--navy-100);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--navy-700);">FC</span>
+    </div>
+  </div>
+
+  <div class="body-row">
+    <!-- MAIN SCROLLABLE CONTENT -->
+    <div class="main-col" id="mainCol">
+      <h1 class="page-h1">Dashboard</h1>
+      <p class="page-sub">Good afternoon, Fatuma. Here's what's happening at Karibu High today.</p>
+
+      <div class="stat-row">
+        <div class="stat-card"><div class="lbl">Active students</div><div class="val">842</div></div>
+        <div class="stat-card green"><div class="lbl">Fees collected today</div><div class="val">KES 128,400</div></div>
+        <div class="stat-card"><div class="lbl">Attendance today</div><div class="val">96%</div></div>
+      </div>
+
+      <div class="filler-card"><h3>Term 2 fee collection</h3><p>KES 4.2M billed · KES 3.1M collected · 74% collection rate, on track vs the 80% target set for this term.</p></div>
+      <div class="filler-card"><h3>Upcoming: CAT 2 — Term 2</h3><p>Marks entry opens for all Form 2 subjects on Monday. 3 of 9 subject teachers have already been notified.</p></div>
+      <div class="filler-card"><h3>Bus fleet status</h3><p>2 buses on route, 1 in service (oil change, back Thursday). Fuel consumption steady at ~7 km/L this week.</p></div>
+
+      <p class="scroll-hint">⬇ keep scrolling to see the floating bar shrink out of the way ⬇</p>
+
+      <div class="filler-card"><h3>Library</h3><p>3 overdue returns this week, KES 90 total in unpaid fines. 2 new titles added to the digital shelf.</p></div>
+      <div class="filler-card"><h3>Hostel curfew, last night</h3><p>All 4 boarders marked IN by 21:15. Zero LEAVE incidents.</p></div>
+      <div class="filler-card"><h3>Staff attendance</h3><p>14 of 14 teaching staff clocked in today, geofence-verified at the gate.</p></div>
+      <div class="filler-card"><h3>Discipline</h3><p>1 minor incident logged this week (lateness), no suspensions active.</p></div>
+      <div class="filler-card"><h3>Recent admission</h3><p>Wanjiru Achieng admitted to Form 1 West, 8 of 8 joining requirements fulfilled.</p></div>
+      <div class="filler-card"><h3>Transport</h3><p>Mwiki route running 2 minutes ahead of schedule this morning.</p></div>
+      <div class="filler-card"><h3>Sibling discount</h3><p>Set at 5% school-wide. 6 families currently qualify across active students.</p></div>
+      <div class="filler-card"><h3>End of scrollable demo content</h3><p>Scroll back up — the floating bar expands again once you stop or reverse direction, exactly like WhatsApp's status bar tucking away while you browse Updates.</p></div>
+    </div>
+
+    <!-- SIDE PANEL: Activity (top) + Intercom (bottom), stacked, both scroll independently -->
+    <div class="side-panel" id="sidePanel">
+      <div class="side-section">
+        <div class="side-head">
+          <span class="t"><span class="dot"></span> Recent Activity</span>
+          <span style="font-size:11px;color:var(--navy-300);">Live</span>
+        </div>
+        <div class="side-body">
+          <div class="activity-row"><div class="avatar-sq">FC</div><div class="txt"><b>Fatuma Chebet</b> recorded a cash payment of <b>KES 5,000</b> for Kamau Mwangi<div class="time">2 minutes ago</div></div></div>
+          <div class="activity-row"><div class="avatar-sq">NJ</div><div class="txt"><b>Njoroge Peter</b> published CAT 1 marks for Form 2 East<div class="time">14 minutes ago</div></div></div>
+          <div class="activity-row"><div class="avatar-sq">RC</div><div class="txt"><b>Reception</b> checked in a visitor — Mr. Otieno, parent meeting<div class="time">28 minutes ago</div></div></div>
+          <div class="activity-row"><div class="avatar-sq">SY</div><div class="txt"><b>System</b> sent 3 fee reminder SMS to overdue families<div class="time">1 hour ago</div></div></div>
+          <div class="activity-row"><div class="avatar-sq">BW</div><div class="txt"><b>Barasa Wekesa</b> marked hostel curfew for Simba dorm<div class="time">this morning, 21:15</div></div></div>
+          <div class="activity-row"><div class="avatar-sq">AC</div><div class="txt"><b>Achieng Mary</b> submitted a leave request<div class="time">yesterday</div></div></div>
+          <div class="activity-row"><div class="avatar-sq">FC</div><div class="txt"><b>Fatuma Chebet</b> approved a purchase order — KES 86,500<div class="time">yesterday</div></div></div>
+        </div>
+      </div>
+      <div class="side-section">
+        <div class="side-head">
+          <span class="t">🦉 NEYO Intercom</span>
+          <span style="font-size:11px;color:var(--green-600);font-weight:700;">3 online</span>
+        </div>
+        <div class="side-body">
+          <div class="intercom-row"><div class="intercom-avatar">NJ<span class="presence on"></span></div><div><div class="intercom-name">Njoroge Peter</div><div class="intercom-role">Class Teacher</div></div><button class="call-btn">📞</button></div>
+          <div class="intercom-row"><div class="intercom-avatar">BC<span class="presence on"></span></div><div><div class="intercom-name">Bursar's office</div><div class="intercom-role">Finance</div></div><button class="call-btn">📞</button></div>
+          <div class="intercom-row"><div class="intercom-avatar">RC<span class="presence on"></span></div><div><div class="intercom-name">Front Desk</div><div class="intercom-role">Reception</div></div><button class="call-btn">📞</button></div>
+          <div class="intercom-row"><div class="intercom-avatar">DP<span class="presence off"></span></div><div><div class="intercom-name">Deputy Principal</div><div class="intercom-role">Leadership</div></div><button class="call-btn">📞</button></div>
+          <div class="intercom-row"><div class="intercom-avatar">HM<span class="presence off"></span></div><div><div class="intercom-name">Hostel Master</div><div class="intercom-role">Boarding</div></div><button class="call-btn">📞</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FLOATING BOTTOM MODULE BAR -->
+    <div class="float-hint" id="floatHint">Scroll up to bring the module bar back</div>
+    <div class="float-wrap">
+      <div class="float-bar" id="floatBar">
+        <div class="float-item active"><div class="ic">🏠</div><div class="label">Dashboard</div></div>
+        <div class="float-item"><div class="ic">🎓</div><div class="label">Students</div></div>
+        <div class="float-item"><div class="ic">📅</div><div class="label">Attendance</div></div>
+        <div class="float-item"><div class="ic">💰</div><div class="label">Finance<span class="badge">3</span></div></div>
+        <div class="float-item"><div class="ic">📚</div><div class="label">Academics</div></div>
+        <div class="float-item"><div class="ic">📝</div><div class="label">Exams</div></div>
+        <div class="float-item"><div class="ic">👥</div><div class="label">Staff</div></div>
+        <div class="float-item"><div class="ic">🏨</div><div class="label">Hostel</div></div>
+        <div class="float-item"><div class="ic">🚌</div><div class="label">Transport</div></div>
+        <div class="float-item"><div class="ic">📖</div><div class="label">Library</div></div>
+        <div class="float-item"><div class="ic">🍽️</div><div class="label">Cafeteria</div></div>
+        <div class="float-item"><div class="ic">⚕️</div><div class="label">Clinic</div></div>
+        <div class="float-item"><div class="ic">🛡️</div><div class="label">Security</div></div>
+        <div class="float-item"><div class="ic">💬</div><div class="label">Messages</div></div>
+        <div class="float-item"><div class="ic">⚙️</div><div class="label">Settings</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const mainCol = document.getElementById('mainCol');
+  const floatBar = document.getElementById('floatBar');
+  const floatHint = document.getElementById('floatHint');
+  let lastScrollTop = 0;
+  let collapseTimer = null;
+
+  mainCol.addEventListener('scroll', () => {
+    const st = mainCol.scrollTop;
+    const goingDown = st > lastScrollTop;
+    lastScrollTop = st <= 0 ? 0 : st;
+
+    if (goingDown && st > 40) {
+      floatBar.classList.add('collapsed');
+      floatHint.classList.add('show');
+    } else {
+      floatBar.classList.remove('collapsed');
+      floatHint.classList.remove('show');
+    }
+
+    clearTimeout(collapseTimer);
+    collapseTimer = setTimeout(() => {
+      // if idle (not actively scrolling) for a moment, expand back — mirrors
+      // WhatsApp: it only stays tucked away *while actively browsing*.
+      floatBar.classList.remove('collapsed');
+      floatHint.classList.remove('show');
+    }, 1400);
+  }, { passive: true });
+
+  document.querySelectorAll('.float-item').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.float-item').forEach(i => i.classList.remove('active'));
+      el.classList.add('active');
+    });
+  });
+
+  function setVersion(v){
+    document.getElementById('btnV1').classList.toggle('active', v===1);
+    document.getElementById('btnV2').classList.toggle('active', v===2);
+    const sidePanel = document.getElementById('sidePanel');
+    const floatWrap = document.querySelector('.float-wrap');
+    if (v === 1) {
+      alert('This mockup only demos Shell V2. In the real app, Shell V1 stays exactly as it is today (left sidebar, no floating bar) — this toggle here is just to show you both buttons will exist side-by-side in NEYO Ops / Settings.');
+      document.getElementById('btnV2').classList.add('active');
+      document.getElementById('btnV1').classList.remove('active');
+    }
+  }
+</script>
+
+</body>
+</html>

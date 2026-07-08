@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const report = await buildPathwayReport(user);
 
     if (format === "json") {
-      return ok({ data: report });
+      return ok(report);
     }
 
     const tenant = await db.tenant.findUniqueOrThrow({ where: { id: user.tenantId } });

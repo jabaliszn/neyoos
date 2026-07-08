@@ -29,8 +29,12 @@ export async function POST(req: NextRequest) {
       .object({
         liquidLevel: z.enum(["1", "2", "3"]).optional(),
         liquidEnabled: z.boolean().optional(),
+        liquidColorLevel: z.enum(["1", "2", "3"]).optional(),
       })
-      .refine((v) => v.liquidLevel !== undefined || v.liquidEnabled !== undefined, "Provide liquidLevel or liquidEnabled.")
+      .refine(
+        (v) => v.liquidLevel !== undefined || v.liquidEnabled !== undefined || v.liquidColorLevel !== undefined,
+        "Provide liquidLevel, liquidEnabled or liquidColorLevel."
+      )
       .parse(await req.json().catch(() => ({})));
     return ok(await setAppearanceSettings(user, input));
   } catch (e) {

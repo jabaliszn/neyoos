@@ -73,10 +73,24 @@ async function main() {
       { column: 2, field: "className" as const },
       { column: 3, field: "legacyAdmissionNo" as const },
     ];
+    // R.1 — explicit strict mode (updateExisting: false) still rejects the
+    // whole import outright, exactly like the original M.4 behavior — this
+    // must never be weakened for a school that wants the old strict rule.
     await expectDuplicate(
-      () => commitImport(user, { source: "paste", rows: rows2, hasHeader: true, mapping: mapping2, seedRequirements: false, skipInvalid: true }),
-      "student import denies existing NEYO/school admission number"
+      () => commitImport(user, { source: "paste", rows: rows2, hasHeader: true, mapping: mapping2, seedRequirements: false, skipInvalid: true, updateExisting: false }),
+      "student import (strict mode) denies existing NEYO/school admission number"
     );
+    // R.1 — the new SMART default (updateExisting: true) does NOT throw or
+    // silently create a duplicate learner for a genuinely different name at
+    // the same admission number — it reports a real, per-row conflict for a
+    // human to review, and the pre-existing student is left untouched.
+    const beforeCount = await db.student.count({ where: { tenantId } });
+    const smartResult = await commitImport(user, { source: "paste", rows: rows2, hasHeader: true, mapping: mapping2, seedRequirements: false, skipInvalid: true, updateExisting: true });
+    assert(smartResult.created === 0 && smartResult.updated === 0 && smartResult.failed.length === 1, "student import (smart mode) reports the name mismatch as a real per-row conflict instead of throwing or silently duplicating");
+    const afterCount = await db.student.count({ where: { tenantId } });
+    assert(afterCount === beforeCount, "smart mode genuinely created zero new students for the conflicting row");
+    const untouched = await db.student.findUniqueOrThrow({ where: { id: existing.id } });
+    assert(untouched.firstName === existing.firstName && untouched.lastName === existing.lastName, "the pre-existing student's real name was left completely untouched by the unconfirmed conflict");
   });
 
   console.log("\n✅ I.93 duplicate import prevention test passed");

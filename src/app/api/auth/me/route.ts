@@ -15,6 +15,8 @@ export async function GET() {
         fullName: user.fullName,
         role: user.role,
         roleLabel: ROLE_LABELS[user.role],
+        popupStyle: user.popupStyle,
+        lgContrast: user.lgContrast,
       },
     });
   } catch (err) {

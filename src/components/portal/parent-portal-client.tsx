@@ -29,12 +29,13 @@ import { SkillsPassportCard } from "@/components/skills-passport/skills-passport
 import { LearnerJourneyCard } from "@/components/learner-journey/learner-journey-card";
 import { ParentGrowthTab } from "./parent-growth-tab";
 import { ParentPathwayCard } from "./parent-pathway-card";
+import { TransportRequestCard } from "./transport-request-card";
 
 const kes = (n: number) => `KES ${n.toLocaleString("en-KE")}`;
 
-interface ChildCard { id: string; name: string; admissionNo: string; photoUrl: string | null; className: string | null; attendancePct: number | null; lastAbsent: string | null; feeBalanceKes: number; latestPublishedExam: { examId: string; name: string; year: number; term: number } | null }
+interface ChildCard { id: string; name: string; admissionNo: string; photoUrl: string | null; className: string | null; attendancePct: number | null; lastAbsent: string | null; feeBalanceKes: number; hasFeeInvoices: boolean; latestPublishedExam: { examId: string; name: string; year: number; term: number } | null }
 interface ChildDetail {
-  timetable: { dayOfWeek: number; period: number; code: string; name: string }[];
+  timetable: { dayOfWeek: number; period: number; code: string; name: string; substituteToday: string | null }[];
   child: { id: string; name: string; admissionNo: string; photoUrl: string | null; className: string | null; classId: string | null };
   attendance: { date: string; status: string; note: string | null }[];
   invoices: { id: string; invoiceNo: string; description: string; totalKes: number; discountKes: number; paidKes: number; balanceKes: number; status: string; dueDate: string }[];
@@ -92,7 +93,9 @@ export function ParentPortalClient({ isCurriculumEngineEnabled = false }: { isCu
                 </div>
                 <div className="rounded-xl bg-warm-50 px-3 py-2 dark:bg-navy-800">
                   <p className="text-[11px] text-navy-400">Fee balance</p>
-                  <p className={`text-sm font-semibold ${c.feeBalanceKes > 0 ? "text-red-600" : "text-green-600"}`}>{c.feeBalanceKes > 0 ? kes(c.feeBalanceKes) : "Cleared ✓"}</p>
+                  <p className={`text-sm font-semibold ${!c.hasFeeInvoices ? "text-navy-400" : c.feeBalanceKes > 0 ? "text-red-600" : "text-green-600"}`}>
+                    {!c.hasFeeInvoices ? "No fees billed yet" : c.feeBalanceKes > 0 ? kes(c.feeBalanceKes) : "Cleared ✓"}
+                  </p>
                 </div>
               </div>
               {c.latestPublishedExam && (
@@ -263,6 +266,9 @@ function ChildView({ id, onBack, isCurriculumEngineEnabled = false }: { id: stri
       {/* K.10 — Parent uploads (photo + documents) that go to school approval */}
       <ParentUploadCard studentId={data.child.id} studentName={data.child.name} />
 
+      {/* T.8 — real transport route/shift change requests */}
+      <TransportRequestCard studentId={data.child.id} />
+
       {/* timetable (B.11 — shared family portal) */}
       {data.timetable.length > 0 && (
         <Card>
@@ -282,13 +288,27 @@ function ChildView({ id, onBack, isCurriculumEngineEnabled = false }: { id: stri
                       <td className="p-1.5 font-mono text-navy-400">P{p}</td>
                       {[1, 2, 3, 4, 5].map((d) => {
                         const slot = data.timetable.find((t) => t.dayOfWeek === d && t.period === p);
-                        return <td key={d} className="p-1.5">{slot ? <span className="rounded-md bg-green-50 px-1.5 py-0.5 font-semibold text-navy-800 dark:bg-green-900/20 dark:text-navy-100" title={slot.name}>{slot.code}</span> : <span className="text-navy-200 dark:text-navy-700">—</span>}</td>;
+                        return (
+                          <td key={d} className="p-1.5">
+                            {slot ? (
+                              <span
+                                className={`rounded-md px-1.5 py-0.5 font-semibold ${slot.substituteToday ? "bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200" : "bg-green-50 text-navy-800 dark:bg-green-900/20 dark:text-navy-100"}`}
+                                title={slot.substituteToday ? `${slot.name} — covered today by ${slot.substituteToday}` : slot.name}
+                              >
+                                {slot.code}{slot.substituteToday ? " *" : ""}
+                              </span>
+                            ) : <span className="text-navy-200 dark:text-navy-700">—</span>}
+                          </td>
+                        );
                       })}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {data.timetable.some((t) => t.substituteToday) && (
+              <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">* covered by a substitute teacher today</p>
+            )}
           </CardContent>
         </Card>
       )}

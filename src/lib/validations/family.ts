@@ -14,6 +14,9 @@ export const siblingDiscountSchema = z.object({
   invoiceId: z.string().min(1),
   // Optional override; when omitted the service uses Tenant.siblingDiscountPct.
   pct: z.coerce.number().int().min(1).max(100).optional(),
+  // R.3 — real single-use server ticket, required only if the school has
+  // turned on requireBiometricForFinance (see applyDiscount()).
+  biometricTicket: z.string().trim().max(80).optional(),
 });
 
 export type SiblingDiscountInput = z.infer<typeof siblingDiscountSchema>;

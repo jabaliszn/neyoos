@@ -18,6 +18,12 @@ import { generateNeyoLoginId, nextTenantId } from "@/lib/services/identity.servi
  */
 
 export const DEMO_TTL_HOURS = 24;
+/** Part X — Developer Center 2.0: a real sandbox API key's provisioned
+ * demo-style tenant needs a much longer real lifetime than a visitor's
+ * 24h Day-One Demo — 90 days, refreshed on real sandbox-key usage (see
+ * `api-key.service.ts`'s resolveBearerToken()), so an actively-developed
+ * real integration never silently expires mid-build. */
+export const SANDBOX_TTL_HOURS = 24 * 90;
 const SESSION_TTL_DAYS = 30;
 
 export interface DemoResult {
@@ -39,7 +45,10 @@ const DEMO_STUDENTS: Array<{ first: string; middle?: string; last: string; gende
 ];
 
 /** Create a fresh, sandboxed demo school and return a session for auto-login. */
-export async function createDemoSchool(ctx?: { userAgent?: string; ipAddress?: string; deviceId?: string }): Promise<DemoResult> {
+export async function createDemoSchool(
+  ctx?: { userAgent?: string; ipAddress?: string; deviceId?: string },
+  ttlHours: number = DEMO_TTL_HOURS
+): Promise<DemoResult> {
   // Unique slug + owner email (so many visitors can run demos at once).
   const suffix = crypto.randomBytes(3).toString("hex"); // 6 chars
   const slug = `demo-${suffix}`;
@@ -47,7 +56,7 @@ export async function createDemoSchool(ctx?: { userAgent?: string; ipAddress?: s
   const password = "Demo2026!";
   const passwordHash = await argonHash(password);
   const now = new Date();
-  const demoExpiresAt = new Date(now.getTime() + DEMO_TTL_HOURS * 3600_000);
+  const demoExpiresAt = new Date(now.getTime() + ttlHours * 3600_000);
 
   const tenant = await db.tenant.create({
     data: {

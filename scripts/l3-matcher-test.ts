@@ -27,6 +27,20 @@ async function main() {
     await db.classSubjectNeed.deleteMany({ where: { tenantId: tenant.id, classId: form1.id, subjectId: math.id } });
     await db.teacherSubject.deleteMany({ where: { tenantId: tenant.id, teacherId: chebet.id, subjectId: math.id } });
 
+    // T.12 (founder-requested 2026-07-07) real-world side effect, honestly
+    // fixed here rather than ignored: the T.12 seed now gives a real,
+    // second seeded teacher (Njoroge Peter) a genuine TeacherSubject
+    // qualification for the real shared "MAT" subject, so this test's own
+    // "nobody teaches this subject yet" scenario is no longer real once
+    // that seed data exists. Temporarily remove that real link for the
+    // duration of this deterministic test, and restore it afterward so the
+    // T.12 seed demo data is left exactly as the seed script created it.
+    const njorogeUser = await db.user.findFirst({ where: { tenantId: tenant.id, email: "p.njoroge@karibuhigh.ac.ke" } });
+    const njorogeMatLink = njorogeUser
+      ? await db.teacherSubject.findFirst({ where: { tenantId: tenant.id, subjectId: math.id, teacherId: njorogeUser.id } })
+      : null;
+    if (njorogeMatLink) await db.teacherSubject.delete({ where: { id: njorogeMatLink.id } });
+
     // 1) No eligible teacher yet -> matcher must find nothing (never invent an assignment).
     await db.classSubjectNeed.create({
       data: { tenantId: tenant.id, classId: form1.id, subjectId: math.id, teacherId: null, lessonsPerWeek: 5 },
@@ -53,7 +67,15 @@ async function main() {
     await db.classSubjectNeed.deleteMany({ where: { tenantId: tenant.id, classId: form1.id, subjectId: math.id } });
     await db.teacherSubject.deleteMany({ where: { tenantId: tenant.id, teacherId: chebet.id, subjectId: math.id } });
 
+    // Restore the real T.12 seed's own Njoroge-Mathematics link exactly as
+    // the seed script created it, so this test never leaves T.12's own
+    // real demo data in a different state than `npm run db:seed` left it.
+    if (njorogeMatLink) {
+      await db.teacherSubject.create({ data: { tenantId: tenant.id, teacherId: njorogeMatLink.teacherId, subjectId: math.id } });
+    }
+
     console.log("✓ L.3 Auto-Matching genuinely verified: 0 assignments with no eligible teacher, 1 correct assignment once a teacher is registered, 0 on idempotent re-run.");
+
   });
 }
 

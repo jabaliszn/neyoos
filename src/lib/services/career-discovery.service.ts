@@ -15,12 +15,18 @@ const CAREER_RULES: Array<{ area: string; interestKeywords: string[]; subjectCod
   { area: "Engineering & Technology", interestKeywords: ["engineering", "machines", "building", "robotics", "aeronautical"], subjectCodes: ["MAT", "PHY", "CHE", "CMP"], competencyKeywords: ["problem", "critical", "digital"], talentKeywords: ["coding", "stem", "robotics"] },
   { area: "Medicine & Healthcare", interestKeywords: ["doctor", "medicine", "nurse", "health", "pediatric"], subjectCodes: ["BIO", "CHE", "MAT"], competencyKeywords: ["care", "communication", "citizenship"], talentKeywords: ["science", "health"] },
   { area: "Agriculture & Environmental", interestKeywords: ["agriculture", "farming", "environment", "climate"], subjectCodes: ["AGR", "BIO", "GEO"], competencyKeywords: ["citizenship", "problem"], talentKeywords: ["environment", "agriculture"] },
-  { area: "Business & Economics", interestKeywords: ["business", "entrepreneur", "finance", "accounting"], subjectCodes: ["BST", "MAT", "CRE"], competencyKeywords: ["leadership", "communication"], talentKeywords: ["leadership", "enterprise"] },
+  // P.6 (2026-07-02): a student's Religious Education subject choice is
+  // CRE/IRE/HRE (Christian/Islamic/Hindu) — whichever their family practises.
+  // These credit the SAME real career-relevant skills (ethics, civic
+  // education, communication) regardless of which one a learner studies, so
+  // all three are recognised here — a student studying IRE or HRE must not
+  // silently lose career-signal credit just because the code only checked CRE.
+  { area: "Business & Economics", interestKeywords: ["business", "entrepreneur", "finance", "accounting"], subjectCodes: ["BST", "MAT", "CRE", "IRE", "HRE"], competencyKeywords: ["leadership", "communication"], talentKeywords: ["leadership", "enterprise"] },
   { area: "ICT & Computer Science", interestKeywords: ["ict", "computer", "software", "technology", "programming"], subjectCodes: ["CMP", "MAT", "PHY"], competencyKeywords: ["digital", "critical"], talentKeywords: ["coding", "ict"] },
   { area: "Creative Arts & Design", interestKeywords: ["art", "design", "music", "creative", "film"], subjectCodes: ["ART", "MUS", "LIT"], competencyKeywords: ["creativity", "communication"], talentKeywords: ["music", "art", "drama"] },
   { area: "Sports & Athletics", interestKeywords: ["sports", "athletics", "football", "basketball"], subjectCodes: ["PED"], competencyKeywords: ["teamwork", "leadership"], talentKeywords: ["sports", "athletics", "football"] },
   { area: "Education & Training", interestKeywords: ["teacher", "education", "training", "mentor"], subjectCodes: ["ENG", "KIS", "HIS"], competencyKeywords: ["communication", "leadership"], talentKeywords: ["debate", "leadership"] },
-  { area: "Law & Public Service", interestKeywords: ["law", "justice", "government", "public service"], subjectCodes: ["HIS", "CRE", "ENG"], competencyKeywords: ["communication", "citizenship", "leadership"], talentKeywords: ["debate", "leadership", "public speaking"] },
+  { area: "Law & Public Service", interestKeywords: ["law", "justice", "government", "public service"], subjectCodes: ["HIS", "CRE", "IRE", "HRE", "ENG"], competencyKeywords: ["communication", "citizenship", "leadership"], talentKeywords: ["debate", "leadership", "public speaking"] },
 ];
 
 function scoreBand(avg: number | null) {

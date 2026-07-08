@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     if (!examId || !subjectId || !classId) return fail("INVALID", "Missing params", 400);
 
     const data = await getMarksGrid(user, examId, subjectId, classId);
-    return ok({ data });
+    return ok(data);
   } catch (error) {
     if (error instanceof GradingError) return fail(error.code, error.message, 403);
     return handleError(error);
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const normalizedResults = data.results.map((r) => ({ ...r, marksScored: r.marksScored ?? null }));
 
     const res = await savePaperResults(user, data.examId, data.subjectId, classId, normalizedResults);
-    return ok({ data: res });
+    return ok(res);
   } catch (error) {
     if (error instanceof GradingError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400, CLOSED: 423 };

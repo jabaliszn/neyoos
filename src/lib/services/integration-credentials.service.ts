@@ -36,7 +36,16 @@ export const INTEGRATION_CREDENTIALS = [
   { key: "turn_server_username", provider: "WEBRTC", label: "TURN server username", kind: "public" },
   { key: "turn_server_secret", provider: "WEBRTC", label: "TURN server secret", kind: "secret" },
   { key: "youtube_api_key", provider: "YOUTUBE", label: "YouTube Data API key", kind: "secret" },
-  { key: "bundi_provider_key", provider: "BUNDI", label: "Bundi provider key (paused)", kind: "secret" },
+  { key: "bundi_provider_key", provider: "BUNDI", label: "Bundi provider key (legacy/manual provider)", kind: "secret" },
+  // N.1 (2026-07-02) — Google Cloud Vision OCR for "Bundi Intelligent".
+  // Vision's `images:annotate` REST endpoint accepts simple API-key auth
+  // (no service-account JSON/OAuth needed), so this is deliberately a single
+  // pasted key — exactly as easy to configure as the SMS/email keys already
+  // above, per the founder's "add credentials easily" instruction. Vision
+  // OCR is real, and priced per 1,000 units (first 1,000/month free on
+  // Google's own published pricing) — genuinely cheap at NEYO's likely
+  // volume once local OCR + rules have already resolved most cells for free.
+  { key: "google_vision_api_key", provider: "GOOGLE_VISION", label: "Google Cloud Vision API key (Bundi Intelligent OCR)", kind: "secret" },
 ] as const;
 
 const keys = INTEGRATION_CREDENTIALS.map((item) => item.key) as [string, ...string[]];

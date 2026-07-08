@@ -10,6 +10,7 @@ import { ok, fail, handleError } from "@/lib/api/respond";
 import {
   listConstraints, upsertConstraint, deleteConstraint, saveTeacherTimeOff,
   listCombinationGroups, upsertCombinationGroup, deleteCombinationGroup,
+  applyKicdSeniorSchoolTemplate,
   TimetableEngineError,
 } from "@/lib/services/timetable-engine.service";
 
@@ -48,6 +49,8 @@ export async function POST(req: NextRequest) {
         return ok(await upsertCombinationGroup(user, body));
       case "delete_combination":
         return ok(await deleteCombinationGroup(user, body.id));
+      case "apply_kicd_senior_template":
+        return ok(await applyKicdSeniorSchoolTemplate(user, { classId: body.classId, electiveSubjectIds: body.electiveSubjectIds ?? [] }));
       default:
         return fail("INVALID", "Unknown action.", 400);
     }

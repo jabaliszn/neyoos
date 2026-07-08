@@ -10,6 +10,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { SlugField } from "@/components/ui/slug-field";
 import { useToast } from "@/components/ui/toast";
 import { slugify } from "@/lib/validations/tenant";
+import { formatKES } from "@/lib/utils";
 
 type Step = 0 | 1 | 2 | 3;
 
@@ -23,7 +24,7 @@ const MODULE_OPTIONS = [
   { key: "library", label: "Library", icon: Library, on: false },
 ];
 
-export function GetStartedWizard({ fromDemo = false, osKey = "school" }: { fromDemo?: boolean; osKey?: "school" | "business" | "farm" | "creator" }) {
+export function GetStartedWizard({ fromDemo = false, osKey = "school", quoteRequestId }: { fromDemo?: boolean; osKey?: "school" | "business" | "farm" | "creator"; quoteRequestId?: string }) {
   const { toast } = useToast();
   const [step, setStep] = React.useState<Step>(0);
   const [loading, setLoading] = React.useState(false);
@@ -41,6 +42,14 @@ export function GetStartedWizard({ fromDemo = false, osKey = "school" }: { fromD
   const [ownerEmail, setOwnerEmail] = React.useState("");
   const [ownerPhone, setOwnerPhone] = React.useState("");
   const [password, setPassword] = React.useState("");
+  // Part V — Capacity-Based Pricing 2.0: real expected counts so a school
+  // sees its real price the moment it launches (founder's own explicit
+  // requirement — no waiting on a human for this first number). Only
+  // students + staff are ever asked of a school — parent count (live or
+  // dormant) is a real, silent NEYO-Ops-only pricing input, estimated
+  // server-side, never a question shown to a school.
+  const [expectedStudentCount, setExpectedStudentCount] = React.useState("");
+  const [expectedStaffCount, setExpectedStaffCount] = React.useState("");
 
   function autoSlug(name: string) {
     setSchoolName(name);
@@ -52,6 +61,40 @@ export function GetStartedWizard({ fromDemo = false, osKey = "school" }: { fromD
     if (opt?.locked) return;
     setModules((m) => ({ ...m, [key]: !m[key] }));
   }
+
+  // Part V — Capacity-Based Pricing 2.0: a real, honest, instant price the
+  // moment real (or estimated) counts are entered — founder's own explicit
+  // requirement: "so that they know the amount of money they would pay".
+  const [instantPrice, setInstantPrice] = React.useState<{ monthlyPriceKes: number } | null>(null);
+  const [instantPriceLoading, setInstantPriceLoading] = React.useState(false);
+  React.useEffect(() => {
+    const hasAnyCount = expectedStudentCount || expectedStaffCount;
+    if (!hasAnyCount) { setInstantPrice(null); return; }
+    const handle = setTimeout(async () => {
+      setInstantPriceLoading(true);
+      try {
+        const res = await fetch("/api/quotes/instant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentCount: expectedStudentCount ? Number(expectedStudentCount) : 0,
+            staffCount: expectedStaffCount ? Number(expectedStaffCount) : 0,
+            // Parent count (live or dormant) is a real, silent pricing
+            // input the school is never asked about here — the engine
+            // estimates it from the student count on the server side.
+            requestedEstimate: false,
+          }),
+        });
+        const json = await res.json();
+        if (json.ok) setInstantPrice(json.data);
+      } catch {
+        // best-effort live preview only
+      } finally {
+        setInstantPriceLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [expectedStudentCount, expectedStaffCount]);
 
   const canNext0 = schoolName.trim().length >= 2 && slug.length >= 3;
   const canSubmit =
@@ -81,6 +124,9 @@ export function GetStartedWizard({ fromDemo = false, osKey = "school" }: { fromD
           ownerEmail,
           ownerPhone,
           password,
+          expectedStudentCount: expectedStudentCount ? Number(expectedStudentCount) : undefined,
+          expectedStaffCount: expectedStaffCount ? Number(expectedStaffCount) : undefined,
+          quoteRequestId: quoteRequestId || undefined,
         }),
       });
       const json = await res.json();
@@ -181,7 +227,7 @@ export function GetStartedWizard({ fromDemo = false, osKey = "school" }: { fromD
                           : "border-navy-200 text-navy-600 hover:bg-navy-50 dark:border-navy-700 dark:text-navy-300"
                       }`}
                     >
-                      {c}
+                      {c === "CBC" ? "CBE" : c}
                     </button>
                   ))}
                 </div>
@@ -214,6 +260,48 @@ export function GetStartedWizard({ fromDemo = false, osKey = "school" }: { fromD
                 <p className="mt-1.5 text-xs text-navy-400">
                   Students & Finance are always on. You can change modules later.
                 </p>
+              </div>
+              <div>
+                <Label>Roughly how many people? (optional — see your real price now)</Label>
+                <p className="mt-1 text-xs text-navy-400">
+                  NEYO Complete: every real feature is included for every school, priced fairly by size. Leave these blank and we'll estimate for you later — but if you know your rough numbers, see your real price right now.
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="w-students" className="text-xs text-navy-400">Number of students</Label>
+                    <Input
+                      id="w-students"
+                      type="number"
+                      min={0}
+                      placeholder="e.g. 300"
+                      value={expectedStudentCount}
+                      onChange={(e) => setExpectedStudentCount(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="w-staff" className="text-xs text-navy-400">Number of staff</Label>
+                    <Input
+                      id="w-staff"
+                      type="number"
+                      min={0}
+                      placeholder="e.g. 20"
+                      value={expectedStaffCount}
+                      onChange={(e) => setExpectedStaffCount(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {(instantPriceLoading || instantPrice) && (
+                  <div className="mt-2 rounded-2xl border border-green-200/70 bg-green-50/60 px-4 py-3 text-sm dark:border-green-900 dark:bg-green-900/10">
+                    {instantPriceLoading ? (
+                      <span className="text-navy-500 dark:text-navy-400">Calculating your real price…</span>
+                    ) : (
+                      <>
+                        <span className="font-bold text-green-700 dark:text-green-400">{formatKES(instantPrice!.monthlyPriceKes)}/month</span>
+                        <span className="ml-1 text-navy-500 dark:text-navy-400">— every NEYO feature included, no setup fee.</span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button variant="ghost" onClick={() => setStep(0)}>

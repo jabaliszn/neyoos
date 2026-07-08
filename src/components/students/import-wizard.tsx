@@ -27,11 +27,21 @@ const FIELD_LABELS: Record<string, string> = {
   className: "Class", admissionNo: "Admission no", upiNumber: "UPI (NEMIS)",
   birthCertNo: "Birth cert no", guardianName: "Guardian name",
   guardianPhone: "Guardian phone", notes: "Notes",
+  openingBalanceKes: "Opening balance (KES)",
   custom: "Custom field (school-defined)…", ignore: "— Skip column —",
 };
 const FIELD_OPTIONS = Object.keys(FIELD_LABELS);
 
 interface ClassOption { id: string; level: string; stream: string | null; name: string; archived: boolean; }
+
+interface MatchedRow {
+  row: number;
+  matchedOn: "admissionNo" | "upiNumber" | "birthCertNo" | "name+dob" | "name+guardianPhone";
+  studentId: string;
+  studentLabel: string;
+  fillable: string[];
+  conflicts: { field: string; existingValue: string; newValue: string }[];
+}
 
 interface PreviewData {
   source: "csv" | "xlsx" | "paste";
@@ -48,15 +58,24 @@ interface PreviewData {
   unknownClasses: string[];
   duplicateInFileRows: number[];
   possibleExistingRows: number[];
+  matchedRows: MatchedRow[];
   targetClass: { id: string; label: string } | null;
 }
 
-interface CommitResult { importId: string; totalRows: number; created: number; failed: { row: number; message: string }[]; }
+interface CommitResult { importId: string; totalRows: number; created: number; updated: number; failed: { row: number; message: string }[]; }
 interface ImportHistoryRow {
   id: string; fileName: string | null; source: string; totalRows: number;
-  createdRows: number; failedRows: number; createdByName: string; createdAt: string;
+  createdRows: number; updatedRows: number; failedRows: number; createdByName: string; createdAt: string;
   errorRows: { row: number; message: string }[];
 }
+
+const MATCH_LABELS: Record<MatchedRow["matchedOn"], string> = {
+  admissionNo: "admission number",
+  upiNumber: "UPI/NEMIS number",
+  birthCertNo: "birth certificate number",
+  "name+dob": "name + date of birth",
+  "name+guardianPhone": "name + guardian's phone",
+};
 
 export function ImportWizard() {
   const { toast } = useToast();
@@ -75,6 +94,13 @@ export function ImportWizard() {
   const [classes, setClasses] = React.useState<ClassOption[] | null>(null);
   const [importMode, setImportMode] = React.useState<"auto" | "single">("auto");
   const [targetClassId, setTargetClassId] = React.useState<string>("");
+
+  // R.1 — smart create-or-update: on by default (re-importing a register
+  // enriches existing students instead of always failing as a duplicate).
+  const [updateExisting, setUpdateExisting] = React.useState(true);
+  // Rows where the school has explicitly reviewed a real conflict (e.g. two
+  // different birth dates) and confirmed the NEW value should win.
+  const [confirmedConflictRows, setConfirmedConflictRows] = React.useState<Set<number>>(new Set());
 
   React.useEffect(() => {
     fetch("/api/classes").then((r) => r.json()).then((j) => { if (j.ok) setClasses(j.data.classes); });
@@ -99,10 +125,11 @@ export function ImportWizard() {
       const fd = new FormData();
       fd.append("file", file);
       if (activeTargetClassId) fd.append("targetClassId", activeTargetClassId);
+      fd.append("updateExisting", String(updateExisting));
       const res = await fetch("/api/students/import/preview", { method: "POST", body: fd });
       const json = await res.json();
       if (!json.ok) { toast({ title: json.error?.message ?? "Could not read that file.", tone: "error" }); return; }
-      setPreview(json.data); setStep(2);
+      setPreview(json.data); setConfirmedConflictRows(new Set()); setStep(2);
     } catch {
       toast({ title: "Upload failed. Check your connection and try again.", tone: "error" });
     } finally { setBusy(false); }
@@ -114,11 +141,11 @@ export function ImportWizard() {
     try {
       const res = await fetch("/api/students/import/preview", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "paste", text: pasteText, hasHeader: true, targetClassId: activeTargetClassId }),
+        body: JSON.stringify({ source: "paste", text: pasteText, hasHeader: true, targetClassId: activeTargetClassId, updateExisting }),
       });
       const json = await res.json();
       if (!json.ok) { toast({ title: json.error?.message ?? "Could not read the pasted rows.", tone: "error" }); return; }
-      setPreview(json.data); setStep(2);
+      setPreview(json.data); setConfirmedConflictRows(new Set()); setStep(2);
     } catch {
       toast({ title: "Preview failed. Check your connection and try again.", tone: "error" });
     } finally { setBusy(false); }
@@ -133,7 +160,7 @@ export function ImportWizard() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           source: preview.source, fileName: preview.fileName, rows: preview.rows, hasHeader: preview.hasHeader,
-          mapping, targetClassId: preview.targetClass?.id ?? activeTargetClassId,
+          mapping, targetClassId: preview.targetClass?.id ?? activeTargetClassId, updateExisting,
         }),
       });
       const json = await res.json();
@@ -153,15 +180,26 @@ export function ImportWizard() {
           hasHeader: preview.hasHeader, mapping: preview.mapping,
           seedRequirements: true, skipInvalid,
           targetClassId: preview.targetClass?.id ?? activeTargetClassId,
+          updateExisting, confirmedConflictRows: [...confirmedConflictRows],
         }),
       });
       const json = await res.json();
       if (!json.ok) { toast({ title: json.error?.message ?? "Import failed.", tone: "error" }); return; }
       setResult(json.data); setStep(3); loadHistory();
-      toast({ title: `${json.data.created} students imported`, tone: "success" });
+      const parts = [`${json.data.created} created`];
+      if (json.data.updated > 0) parts.push(`${json.data.updated} updated`);
+      toast({ title: `Import complete: ${parts.join(", ")}`, tone: "success" });
     } catch {
       toast({ title: "Import failed. Nothing was saved — try again.", tone: "error" });
     } finally { setBusy(false); }
+  }
+
+  function toggleConflictConfirm(row: number) {
+    setConfirmedConflictRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(row)) next.delete(row); else next.add(row);
+      return next;
+    });
   }
 
   return (
@@ -231,6 +269,25 @@ export function ImportWizard() {
             </CardContent>
           </Card>
 
+          {/* R.1 — smart create-or-update toggle */}
+          <Card>
+            <CardHeader><CardTitle>Re-importing an updated register?</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-navy-100 bg-warm-50 px-3 py-2.5 dark:border-navy-800 dark:bg-navy-900">
+                <input
+                  type="checkbox"
+                  checked={updateExisting}
+                  onChange={(e) => setUpdateExisting(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-navy-300 text-green-600 focus:ring-green-500"
+                />
+                <span className="text-xs text-navy-600 dark:text-navy-300">
+                  <span className="block font-semibold text-navy-900 dark:text-navy-50">Update matching students instead of rejecting them as duplicates (recommended)</span>
+                  A row that matches an existing learner (by admission number, UPI, birth certificate, or name + guardian phone) fills in any missing information — it never creates a second record for the same child. Genuine conflicts (e.g. two different birth dates) are always shown to you before anything is changed.
+                </span>
+              </label>
+            </CardContent>
+          </Card>
+
           <div className="grid gap-4 lg:grid-cols-2">
           {/* upload */}
           <Card>
@@ -286,8 +343,49 @@ export function ImportWizard() {
               preview.unknownClasses.length > 0 && <Badge tone="blue">{preview.unknownClasses.length} new class{preview.unknownClasses.length > 1 ? "es" : ""} will be created</Badge>
             )}
             {preview.duplicateInFileRows.length > 0 && <Badge tone="amber">{preview.duplicateInFileRows.length} duplicate rows in file</Badge>}
-            {preview.possibleExistingRows.length > 0 && <Badge tone="amber">{preview.possibleExistingRows.length} may already exist</Badge>}
+            {preview.matchedRows.length > 0 && <Badge tone="blue">{preview.matchedRows.length} row{preview.matchedRows.length > 1 ? "s" : ""} will update an existing learner</Badge>}
           </div>
+
+          {/* R.1 — matched rows: what will be updated, and any real conflicts */}
+          {preview.matchedRows.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>These rows match learners already in NEYO</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-navy-500 dark:text-navy-400">
+                  NEYO will fill in any new information on the SAME real student — never create a second record. Review any conflicts below before importing.
+                </p>
+                {preview.matchedRows.map((m) => (
+                  <div key={m.row} className="rounded-xl border border-navy-100 bg-warm-50 p-3 text-xs dark:border-navy-800 dark:bg-navy-900">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold text-navy-800 dark:text-navy-100">Row {m.row} → {m.studentLabel}</span>
+                      <Badge tone="blue">matched by {MATCH_LABELS[m.matchedOn]}</Badge>
+                    </div>
+                    {m.fillable.length > 0 && (
+                      <p className="mt-1.5 text-green-700 dark:text-green-400">Will add: {m.fillable.join(", ")}</p>
+                    )}
+                    {m.conflicts.length > 0 && (
+                      <div className="mt-2 space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2 dark:border-amber-900/40 dark:bg-amber-950/20">
+                        {m.conflicts.map((c) => (
+                          <p key={c.field} className="text-amber-800 dark:text-amber-300">
+                            <span className="font-semibold">{c.field}</span> differs — on file: &ldquo;{c.existingValue}&rdquo;, in this file: &ldquo;{c.newValue}&rdquo;.
+                          </p>
+                        ))}
+                        <label className="flex items-center gap-2 pt-1 text-amber-900 dark:text-amber-200">
+                          <input
+                            type="checkbox"
+                            checked={confirmedConflictRows.has(m.row)}
+                            onChange={() => toggleConflictConfirm(m.row)}
+                            className="h-3.5 w-3.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                          />
+                          Yes, use the NEW value(s) from this file for row {m.row}
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {/* column mapping */}
           <Card>
@@ -409,10 +507,12 @@ export function ImportWizard() {
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40">
               <CheckCircle2 className="h-7 w-7 text-green-600" />
             </span>
-            <h2 className="text-lg font-semibold text-navy-900 dark:text-navy-50">{result.created} students imported</h2>
+            <h2 className="text-lg font-semibold text-navy-900 dark:text-navy-50">
+              {result.created} student{result.created === 1 ? "" : "s"} imported{result.updated > 0 ? ` · ${result.updated} updated` : ""}
+            </h2>
             <p className="text-sm text-navy-500 dark:text-navy-400">
               {result.failed.length > 0
-                ? `${result.failed.length} row(s) were skipped — fix them in your sheet and import just those rows again.`
+                ? `${result.failed.length} row(s) need review — some may be conflicts that need your confirmation, others may just need fixing in your sheet.`
                 : "Every row was imported successfully."}
             </p>
             {result.failed.length > 0 && (
@@ -448,7 +548,7 @@ export function ImportWizard() {
           ) : (
             <TableContainer>
               <Table>
-                <THead><TR><TH>When</TH><TH>File</TH><TH>By</TH><TH align="right">Rows</TH><TH align="right">Created</TH><TH align="right">Failed</TH></TR></THead>
+                <THead><TR><TH>When</TH><TH>File</TH><TH>By</TH><TH align="right">Rows</TH><TH align="right">Created</TH><TH align="right">Updated</TH><TH align="right">Failed</TH></TR></THead>
                 <TBody>
                   {history.map((h) => (
                     <TR key={h.id}>
@@ -457,6 +557,7 @@ export function ImportWizard() {
                       <TD className="text-xs">{h.createdByName}</TD>
                       <TD align="right">{h.totalRows}</TD>
                       <TD align="right" className="font-medium text-green-700 dark:text-green-400">{h.createdRows}</TD>
+                      <TD align="right" className={h.updatedRows > 0 ? "font-medium text-blue-700 dark:text-blue-400" : "text-navy-300"}>{h.updatedRows}</TD>
                       <TD align="right" className={h.failedRows > 0 ? "font-medium text-red-600" : "text-navy-300"}>{h.failedRows}</TD>
                     </TR>
                   ))}

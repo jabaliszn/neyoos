@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requirePermission("academics.view");
     const areas = await getTalentAreas(user);
-    return ok({ data: areas });
+    return ok(areas);
   } catch (error) {
     return handleError(error);
   }
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = talentAreaSchema.parse(body);
     const area = await createTalentArea(user, data);
-    return ok({ data: area }, 201);
+    return ok(area, 201);
   } catch (error) {
     if (error instanceof TalentError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400, CONFLICT: 409 };

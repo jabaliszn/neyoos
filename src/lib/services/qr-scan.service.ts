@@ -194,7 +194,7 @@ export async function scanForPayment(user: SessionUser, scanned: string) {
     await assertNotDuplicate(user, student.id, "PAYMENT_LOOKUP");
 
     const { studentOpenInvoices } = await import("@/lib/services/finance.service");
-    const invoices = await studentOpenInvoices(user, student.id);
+    const { invoices, hasFeeInvoices } = await studentOpenInvoices(user, student.id);
     const totalBalanceKes = invoices.reduce((sum, inv) => sum + inv.balanceKes, 0);
     const primaryGuardian = student.guardians.find((g) => g.isPrimary) ?? student.guardians[0];
 
@@ -209,6 +209,10 @@ export async function scanForPayment(user: SessionUser, scanned: string) {
         : "Unassigned",
       totalBalanceKes,
       invoices,
+      // R.2 — false means no invoice has EVER been raised for this student;
+      // the caller must show a distinct "not billed yet" state, never
+      // conflate it with a genuinely fully-paid zero balance.
+      hasFeeInvoices,
       guardianPhone: primaryGuardian?.guardian.phone ?? null,
       guardianName: primaryGuardian?.guardian.fullName ?? null,
     };

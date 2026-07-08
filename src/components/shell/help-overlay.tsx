@@ -23,7 +23,7 @@ const HOTKEY_MAP: Record<string, HotkeyInfo> = {
   c: { route: "/calendar", label: "Calendar", permission: "calendar.view", help: "events" },
   e: { route: "/exams", label: "Exams", permission: "exam.view", help: "marks" },
   q: { route: "/exam-timetable", label: "Exam timetable", permission: "exam.view", help: "exam schedule" },
-  k: { route: "/cbc", label: "CBC", permission: "academics.view", help: "competencies" },
+  k: { route: "/cbc", label: "CBE", permission: "academics.view", help: "competencies" },
   y: { route: "/syllabus", label: "Syllabus", permission: "academics.view", help: "coverage" },
   l: { route: "/learning-videos", label: "Learning Videos", help: "class videos" },
   o: { route: "/online-classes", label: "Online Classes", permission: "academics.view", help: "live classes" },

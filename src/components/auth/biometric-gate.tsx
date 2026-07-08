@@ -6,8 +6,15 @@ import { cn } from "@/lib/utils";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { useToast } from "@/components/ui/toast";
 
+/**
+ * R.3 — `onSuccess` receives the real ticket ID minted by the server ONLY
+ * when a real `actionKey` was supplied (money-moving actions). Existing
+ * callers (Library, Recycle Bin) that don't pass `actionKey` keep working
+ * unchanged — `ticket` is simply `null` for them, matching the pre-existing
+ * client-trusted-popup behavior for those lower-stakes actions.
+ */
 interface BiometricGateContextType {
-  requireBiometric: (actionLabel: string, onSuccess: () => void) => void;
+  requireBiometric: (actionLabel: string, onSuccess: (ticket: string | null) => void, actionKey?: string) => void;
 }
 
 const BiometricGateContext = React.createContext<BiometricGateContextType | null>(null);
@@ -22,14 +29,16 @@ export function BiometricGateProvider({ children }: { children: React.ReactNode 
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
   const [actionLabel, setActionLabel] = React.useState("");
-  const [onSuccessCallback, setOnSuccessCallback] = React.useState<(() => void) | null>(null);
+  const [actionKey, setActionKey] = React.useState<string | undefined>(undefined);
+  const [onSuccessCallback, setOnSuccessCallback] = React.useState<((ticket: string | null) => void) | null>(null);
   const [status, setStatus] = React.useState<"idle" | "verifying" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = React.useState("");
   const [appUnlockMode, setAppUnlockMode] = React.useState(false);
 
-  const requireBiometric = React.useCallback((label: string, onSuccess: () => void) => {
+  const requireBiometric = React.useCallback((label: string, onSuccess: (ticket: string | null) => void, key?: string) => {
     setAppUnlockMode(false);
     setActionLabel(label);
+    setActionKey(key);
     setOnSuccessCallback(() => onSuccess);
     setStatus("idle");
     setErrorMessage("");
@@ -47,6 +56,7 @@ export function BiometricGateProvider({ children }: { children: React.ReactNode 
         if (!j?.ok) return;
         setAppUnlockMode(true);
         setActionLabel("Open NEYO on this device");
+        setActionKey(undefined);
         setOnSuccessCallback(() => () => {
           sessionStorage.setItem("neyo-app-unlocked", "true");
         });
@@ -72,11 +82,14 @@ export function BiometricGateProvider({ children }: { children: React.ReactNode 
       // 2) Open the browser/OS Face ID / fingerprint / passkey prompt.
       const assertResp = await startAuthentication(optJson.data.options);
 
-      // 3) Verify the signed assertion against the current user's stored public key.
+      // 3) Verify the signed assertion against the current user's stored public
+      // key. R.3 — when this gate protects a real money-moving action, pass
+      // the same actionKey the server route will require, so a REAL,
+      // server-enforced single-use ticket is minted for THIS exact action.
       const verRes = await fetch("/api/auth/passkey/action/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ response: assertResp })
+        body: JSON.stringify({ response: assertResp, actionKey })
       });
       const verJson = await verRes.json();
 
@@ -87,9 +100,10 @@ export function BiometricGateProvider({ children }: { children: React.ReactNode 
           description: "You can continue with this protected action.",
           tone: "success"
         });
+        const ticket: string | null = verJson.data?.ticket ?? null;
         setTimeout(() => {
           setOpen(false);
-          if (onSuccessCallback) onSuccessCallback();
+          if (onSuccessCallback) onSuccessCallback(ticket);
         }, 1000);
       } else {
         throw new Error(verJson.error?.message || "Device security check failed.");

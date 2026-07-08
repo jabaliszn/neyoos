@@ -1,26 +1,32 @@
 /**
- * PART M.5 — Bundi Handwritten Import (founder-controlled premium import path).
+ * PART M.5 / N.1 — Bundi Handwritten Import ("Bundi Intelligent").
  *
- * Design contract (per the checklist, followed literally):
+ * Design contract:
  *  1. Separate premium/manual-assist path — never replaces or weakens the
- *     standard CSV/Excel engine (M.4). Every commit funnels through the SAME
- *     `commitImport()` used by the standard engine — there is no second,
- *     weaker write path into the Student table.
- *  2. Gated by a one-time company-issued unlock code (or a standing
- *     per-school approval — maxUses:null) minted by NEYO Ops.
- *  3. The school describes their own register's fields BEFORE any AI mapping
- *     happens (BundiFieldTemplate) — Bundi maps AROUND the school's own
- *     description, never the other way round.
+ *     standard CSV/Excel engines (Student M.4, Staff B.9, Library N.1).
+ *     Every commit funnels through that DOMAIN's own real standard import
+ *     engine — there is no second, weaker write path into any table.
+ *  2. N.1 (2026-07-02) — TWO real access modes:
+ *     - "Bundi Intelligent" (pipeline: BUNDI_INTELLIGENT): local OCR + rules
+ *       first, AI only for genuinely uncertain fields via the cheap Google
+ *       Vision API. OPEN to every school, NO unlock code required — per the
+ *       founder's explicit instruction, now that the confidence-based
+ *       pipeline keeps real AI usage tiny.
+ *     - "Legacy provider" (pipeline: LEGACY_PROVIDER): the original
+ *       whole-page-to-a-big-vision-model path (OpenAI/Anthropic/Google
+ *       Vision used as the ONLY step). Still gated by a company-issued
+ *       unlock code, since it is genuinely more expensive per page.
+ *  3. The school describes their own register's fields BEFORE any
+ *     extraction happens (BundiFieldTemplate, now per-domain) — Bundi maps
+ *     AROUND the school's own description, never the other way round.
  *  4. Every session tracks REAL provider/model/token/cost so NEYO Ops has
- *     full usage + cost visibility (mirrors the M.2 SMS-margin ledger
- *     pattern). No feature here may ever fake a number.
- *  5. Cost-aware by design: `maxPagesPerSession` caps spend per attempt, and
- *     the extraction call point is a real provider ADAPTER seam — if no
- *     provider is configured, this returns a clear NOT_CONFIGURED error,
- *     never fabricated rows. Swapping in a real provider later requires
- *     zero changes to any of the surrounding gating/review/commit logic.
+ *     full usage + cost visibility. No feature here may ever fake a number.
+ *  5. Multi-domain (STUDENT | STAFF | LIBRARY) — generalized from the
+ *     original student-only M.5 design without duplicating the gating/
+ *     review/commit machinery per domain.
  */
 import crypto from "crypto";
+import sharp from "sharp";
 import { db } from "@/lib/db";
 import { tenantDb } from "@/lib/core/tenant-db";
 import { withTenant } from "@/lib/core/tenant-context";
@@ -29,6 +35,8 @@ import {
   BUNDI_PROVIDER_SETTING_KEY,
   bundiProviderConfigSchema,
   defaultBundiProviderConfig,
+  mappableFieldsForDomain,
+  numericFieldsForDomain,
   type BundiProviderConfig,
   type MintUnlockCodeInput,
   type SaveFieldTemplateInput,
@@ -37,9 +45,21 @@ import {
   type CommitBundiSessionInput,
   type BundiExtractedRow,
 } from "@/lib/validations/bundi-import";
+import type { BundiDomain } from "@/lib/validations/bundi-intelligent";
 import { commitImport } from "@/lib/services/student-import.service";
 import type { ColumnMapping } from "@/lib/validations/student-import";
+import { importStaffBatch, type StaffImportRow } from "@/lib/services/staff-import.service";
+import { importLibraryBatch } from "@/lib/services/library-import.service";
+import type { LibraryImportRow } from "@/lib/validations/library-import";
 import { readObject } from "@/lib/services/storage.service";
+import { readCompanySecret } from "@/lib/services/company-secret.service";
+import {
+  runBundiIntelligentPipeline,
+  recordLearnedCorrection,
+  computeLayoutSignature,
+  findKnownTemplate,
+  saveKnownTemplate,
+} from "@/lib/services/bundi-intelligent.service";
 
 export class BundiImportError extends Error {
   constructor(
@@ -61,10 +81,9 @@ async function audit(user: SessionUser, action: string, entityType: string, enti
 }
 
 // ---------------------------------------------------------------------------
-// NEYO Ops: provider configuration (company-level, PlatformSetting — same
-// pattern as M.2's SMS margin config). No secret lives here; the API key
-// itself belongs in the existing company-secret vault (bundi_provider_key,
-// already scaffolded in integration-credentials.service.ts).
+// NEYO Ops: provider configuration for the LEGACY code-gated path (company-
+// level, PlatformSetting — same pattern as M.2's SMS margin config). No
+// secret lives here; the API key itself belongs in the company-secret vault.
 // ---------------------------------------------------------------------------
 
 export async function getBundiProviderConfig(): Promise<BundiProviderConfig> {
@@ -88,7 +107,8 @@ export async function saveBundiProviderConfig(input: unknown, actor: { fullName:
 }
 
 // ---------------------------------------------------------------------------
-// NEYO Ops: unlock code lifecycle
+// NEYO Ops: unlock code lifecycle (LEGACY path only — Bundi Intelligent
+// needs none).
 // ---------------------------------------------------------------------------
 
 function generateUnlockCode(): string {
@@ -106,8 +126,6 @@ export async function mintUnlockCode(input: MintUnlockCodeInput, actor: { id: st
     data: {
       code,
       tenantId: input.tenantId ?? null,
-      // undefined -> 1 (classic one-time code, the founder's chosen default);
-      // explicit null -> unlimited (standing approval), a deliberate opt-in.
       maxUses: input.maxUses === undefined ? 1 : input.maxUses,
       expiresAt,
       note: input.note ?? null,
@@ -154,7 +172,6 @@ export async function listUnlockCodes() {
   }));
 }
 
-/** Real validity check — used both when redeeming and before every session start. */
 function assertCodeUsable(row: {
   tenantId: string | null;
   maxUses: number | null;
@@ -168,7 +185,6 @@ function assertCodeUsable(row: {
   if (row.maxUses !== null && row.usedCount >= row.maxUses) throw new BundiImportError("EXHAUSTED", "This unlock code has already been used up.");
 }
 
-/** School: redeem a code (does NOT consume it — consumption happens per session start). */
 export async function checkUnlockCode(tenantId: string, code: string) {
   const row = await db.bundiImportUnlockCode.findUnique({ where: { code: code.trim().toUpperCase() } });
   if (!row) throw new BundiImportError("NOT_FOUND", "That unlock code was not recognized.");
@@ -181,12 +197,13 @@ export async function checkUnlockCode(tenantId: string, code: string) {
 }
 
 // ---------------------------------------------------------------------------
-// School: field template (described BEFORE any AI mapping happens)
+// School: field template (described BEFORE any AI mapping happens),
+// PER-DOMAIN (N.1).
 // ---------------------------------------------------------------------------
 
-export async function getFieldTemplate(user: SessionUser) {
+export async function getFieldTemplate(user: SessionUser, domain: BundiDomain) {
   return withTenant(user.tenantId, async () => {
-    const row = await tenantDb().bundiFieldTemplate.findUnique({ where: { tenantId: user.tenantId } });
+    const row = await tenantDb().bundiFieldTemplate.findUnique({ where: { tenantId_domain: { tenantId: user.tenantId, domain } } });
     if (!row) return { fields: [] as unknown[], updatedAt: null };
     return { fields: JSON.parse(row.fieldsJson), updatedAt: row.updatedAt };
   });
@@ -194,12 +211,18 @@ export async function getFieldTemplate(user: SessionUser) {
 
 export async function saveFieldTemplate(user: SessionUser, input: SaveFieldTemplateInput) {
   return withTenant(user.tenantId, async () => {
+    const allowed = new Set(mappableFieldsForDomain(input.domain));
+    for (const f of input.fields) {
+      if (!allowed.has(f.mapsTo)) {
+        throw new BundiImportError("INVALID", `"${f.mapsTo}" is not a real field for ${input.domain} imports.`);
+      }
+    }
     const row = await db.bundiFieldTemplate.upsert({
-      where: { tenantId: user.tenantId },
-      create: { tenantId: user.tenantId, fieldsJson: JSON.stringify(input.fields), updatedById: user.id },
+      where: { tenantId_domain: { tenantId: user.tenantId, domain: input.domain } },
+      create: { tenantId: user.tenantId, domain: input.domain, fieldsJson: JSON.stringify(input.fields), updatedById: user.id },
       update: { fieldsJson: JSON.stringify(input.fields), updatedById: user.id },
     });
-    await audit(user, "bundi.field_template_saved", "BundiFieldTemplate", row.id, { fieldCount: input.fields.length });
+    await audit(user, "bundi.field_template_saved", "BundiFieldTemplate", row.id, { domain: input.domain, fieldCount: input.fields.length });
     return { fields: input.fields, updatedAt: row.updatedAt };
   });
 }
@@ -208,8 +231,40 @@ export async function saveFieldTemplate(user: SessionUser, input: SaveFieldTempl
 // School: import session lifecycle
 // ---------------------------------------------------------------------------
 
+/** Start a "Bundi Intelligent" session — OPEN, no unlock code required. */
+export async function startIntelligentSession(user: SessionUser, input: StartImportSessionInput) {
+  return withTenant(user.tenantId, async () => {
+    const storedFile = await tenantDb().storedFile.findUnique({ where: { id: input.storedFileId } });
+    if (!storedFile) throw new BundiImportError("NOT_FOUND", "Uploaded file not found. Please upload the scan again.");
+
+    const config = await getBundiProviderConfig();
+    if (input.pageCount > config.maxPagesPerSession) {
+      throw new BundiImportError("INVALID", `This session has ${input.pageCount} pages; NEYO Ops has capped Bundi sessions at ${config.maxPagesPerSession} pages. Split the scan into smaller batches.`);
+    }
+
+    const session = await tenantDb().bundiImportSession.create({
+      data: {
+        unlockCodeId: null,
+        pipeline: "BUNDI_INTELLIGENT",
+        domain: input.domain,
+        contextNote: input.contextNote ?? null,
+        status: "UPLOADED",
+        fileKey: storedFile.key,
+        fileName: input.fileName,
+        pageCount: input.pageCount,
+        createdById: user.id,
+        createdByName: user.fullName,
+      } as never,
+    });
+    await audit(user, "bundi.intelligent_session_started", "BundiImportSession", session.id, { domain: input.domain, fileName: input.fileName, pageCount: input.pageCount, contextNote: input.contextNote });
+    return session;
+  });
+}
+
+/** Start a LEGACY provider session — still requires a real unlock code. */
 export async function startImportSession(user: SessionUser, input: StartImportSessionInput) {
   return withTenant(user.tenantId, async () => {
+    if (!input.unlockCode) throw new BundiImportError("INVALID", "An unlock code is required for the legacy provider path.");
     const codeRow = await db.bundiImportUnlockCode.findUnique({ where: { code: input.unlockCode.trim().toUpperCase() } });
     if (!codeRow) throw new BundiImportError("NOT_FOUND", "That unlock code was not recognized.");
     assertCodeUsable(codeRow, user.tenantId);
@@ -219,17 +274,17 @@ export async function startImportSession(user: SessionUser, input: StartImportSe
       throw new BundiImportError("INVALID", `This session has ${input.pageCount} pages; NEYO Ops has capped Bundi sessions at ${config.maxPagesPerSession} pages to protect AI spend. Split the scan into smaller batches.`);
     }
 
-    // Resolve the real storage key from the already-uploaded encrypted file
-    // (never trust a raw storage key from the client).
     const storedFile = await tenantDb().storedFile.findUnique({ where: { id: input.storedFileId } });
     if (!storedFile) throw new BundiImportError("NOT_FOUND", "Uploaded file not found. Please upload the scan again.");
 
-    // Consume one use of the code atomically with session creation.
     await db.bundiImportUnlockCode.update({ where: { id: codeRow.id }, data: { usedCount: { increment: 1 } } });
 
     const session = await tenantDb().bundiImportSession.create({
       data: {
         unlockCodeId: codeRow.id,
+        pipeline: "LEGACY_PROVIDER",
+        domain: input.domain,
+        contextNote: input.contextNote ?? null,
         status: "UPLOADED",
         fileKey: storedFile.key,
         fileName: input.fileName,
@@ -238,18 +293,21 @@ export async function startImportSession(user: SessionUser, input: StartImportSe
         createdByName: user.fullName,
       } as never,
     });
-    await audit(user, "bundi.import_session_started", "BundiImportSession", session.id, { fileName: input.fileName, pageCount: input.pageCount });
+    await audit(user, "bundi.import_session_started", "BundiImportSession", session.id, { domain: input.domain, fileName: input.fileName, pageCount: input.pageCount });
     return session;
   });
 }
 
-export async function listImportSessions(user: SessionUser) {
+export async function listImportSessions(user: SessionUser, domain?: BundiDomain) {
   return withTenant(user.tenantId, async () => {
-    const rows = await tenantDb().bundiImportSession.findMany({ orderBy: { createdAt: "desc" }, take: 20 });
+    const rows = await tenantDb().bundiImportSession.findMany({ where: domain ? { domain } : undefined, orderBy: { createdAt: "desc" }, take: 20 });
     return rows.map((r) => ({
-      id: r.id, status: r.status, fileName: r.fileName, pageCount: r.pageCount,
+      id: r.id, domain: r.domain, pipeline: r.pipeline, status: r.status, fileName: r.fileName, pageCount: r.pageCount,
+      contextNote: r.contextNote,
       provider: r.provider, model: r.model, costKes: r.costKes,
-      studentImportId: r.studentImportId, createdByName: r.createdByName, createdAt: r.createdAt,
+      ocrConfidenceAvgPct: r.ocrConfidenceAvgPct, fieldsTotal: r.fieldsTotal, fieldsAiEscalated: r.fieldsAiEscalated, aiInvoked: r.aiInvoked,
+      studentImportId: r.studentImportId, staffImportId: r.staffImportId, libraryImportId: r.libraryImportId,
+      createdByName: r.createdByName, createdAt: r.createdAt,
       errorMessage: r.errorMessage,
     }));
   });
@@ -263,18 +321,219 @@ export async function getImportSession(user: SessionUser, sessionId: string) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Real Google Cloud Vision OCR call — the cheap, real cloud fallback for the
+// AI-escalation stage of Bundi Intelligent (used only for the small % of
+// cells local OCR + rules could not confidently resolve). Vision's
+// `images:annotate` REST endpoint accepts a plain API key, so this is a
+// single pasted credential (`google_vision_api_key`) in NEYO Ops — exactly
+// as easy to configure as the SMS/email keys already there.
+// ---------------------------------------------------------------------------
+// Real, small padding (px) added around a cell's OCR bbox before cropping —
+// Vision's DOCUMENT_TEXT_DETECTION reads noticeably better with a little
+// breathing room around the exact word boundary, and this keeps the crop
+// still just ONE FIELD wide, never a whole row/page.
+const VISION_CROP_PADDING_PX = 12;
+
+export async function callGoogleVisionTextCorrection(
+  apiKey: string,
+  imageBuffer: Buffer,
+  items: { rowIndex: number; label: string; rawText: string; bbox?: { x0: number; y0: number; x1: number; y1: number } }[]
+): Promise<{ rowIndex: number; label: string; correctedText: string }[]> {
+  // Google Vision's OCR (DOCUMENT_TEXT_DETECTION) reads pixels, not "correct
+  // this string" prompts — so a genuine field-level correction means
+  // cropping JUST this cell's real bbox out of the source image (never the
+  // whole page) and sending that tiny crop to Vision for a fresh, targeted
+  // re-read. This is real, field-level, batched-per-request work — the
+  // exact cost shape the founder asked for (process fields, not pages).
+  const meta = await sharp(imageBuffer).metadata();
+  const imgWidth = meta.width ?? 0;
+  const imgHeight = meta.height ?? 0;
+
+  const results: { rowIndex: number; label: string; correctedText: string }[] = [];
+  // Vision bills per IMAGE, so each item is still its own request — but
+  // each request is a tiny single-field crop, not a whole document, which
+  // is what actually keeps cost tiny per the founder's brief.
+  for (const item of items) {
+    if (!item.bbox || imgWidth === 0 || imgHeight === 0) continue; // no crop region known — leave for manual review, no guess made
+    const left = Math.max(0, Math.floor(item.bbox.x0 - VISION_CROP_PADDING_PX));
+    const top = Math.max(0, Math.floor(item.bbox.y0 - VISION_CROP_PADDING_PX));
+    const right = Math.min(imgWidth, Math.ceil(item.bbox.x1 + VISION_CROP_PADDING_PX));
+    const bottom = Math.min(imgHeight, Math.ceil(item.bbox.y1 + VISION_CROP_PADDING_PX));
+    const width = right - left;
+    const height = bottom - top;
+    if (width <= 0 || height <= 0) continue;
+
+    let cropBase64: string;
+    try {
+      const crop = await sharp(imageBuffer).extract({ left, top, width, height }).png().toBuffer();
+      cropBase64 = crop.toString("base64");
+    } catch {
+      continue; // real crop failure — skip this one cell, never fabricate a value for it
+    }
+
+    const res = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requests: [
+          {
+            image: { content: cropBase64 },
+            features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 }],
+            imageContext: { languageHints: ["en"] },
+          },
+        ],
+      }),
+    });
+    if (!res.ok) continue; // real HTTP failure for this one field — leave it for manual review, never fabricate
+    const json = (await res.json()) as {
+      responses?: { fullTextAnnotation?: { text?: string }; error?: { message?: string } }[];
+    };
+    const text = json.responses?.[0]?.fullTextAnnotation?.text?.trim();
+    if (!text) continue; // Vision genuinely found nothing clearer than local OCR did — leave for manual review
+    results.push({ rowIndex: item.rowIndex, label: item.label, correctedText: text.replace(/\s+/g, " ").trim() });
+  }
+  return results;
+}
+
+/** THE REAL AI-ESCALATION ADAPTER for Bundi Intelligent. Tries Google Vision
+ * first (cheap) if configured; returns null (no AI available) otherwise —
+ * the pipeline then simply leaves escalated cells at their real OCR
+ * confidence for manual review, never fabricating a correction. */
+async function getAiCorrectorForIntelligentPipeline(): Promise<
+  | ((
+      imageBuffer: Buffer,
+      items: { rowIndex: number; label: string; rawText: string; bbox?: { x0: number; y0: number; x1: number; y1: number } }[]
+    ) => Promise<{ rowIndex: number; label: string; correctedText: string }[]>)
+  | null
+> {
+  const visionKey = await readCompanySecret("google_vision_api_key");
+  if (visionKey) {
+    return (imageBuffer, items) => callGoogleVisionTextCorrection(visionKey, imageBuffer, items);
+  }
+  return null;
+}
+
 /**
- * Run (or re-run) AI extraction for a session. THE REAL PROVIDER SEAM.
- *
- * If NEYO Ops has not configured a real provider, this throws NOT_CONFIGURED
- * — it NEVER fabricates rows. This is the exact same honesty pattern as
- * `payment.service.ts` (PaymentError "NOT_CONFIGURED") and the WhatsApp/OAuth
- * seams elsewhere in this codebase.
+ * Run the "Bundi Intelligent" pipeline for a session: local OCR -> rules ->
+ * validation -> learned corrections -> template memoization -> AI escalation
+ * ONLY for cells still uncertain (cheap Google Vision if configured, else
+ * left for manual review). This is the REAL cost-cutting path, open to
+ * every school with no unlock code.
+ */
+export async function extractIntelligentSession(user: SessionUser, sessionId: string) {
+  return withTenant(user.tenantId, async () => {
+    const session = await tenantDb().bundiImportSession.findUnique({ where: { id: sessionId } });
+    if (!session) throw new BundiImportError("NOT_FOUND", "Import session not found.");
+    if (session.pipeline !== "BUNDI_INTELLIGENT") throw new BundiImportError("STATE", "This session does not use the Bundi Intelligent pipeline.");
+    if (session.status !== "UPLOADED" && session.status !== "FAILED") {
+      throw new BundiImportError("STATE", `Cannot extract a session in status ${session.status}.`);
+    }
+
+    const template = await tenantDb().bundiFieldTemplate.findUnique({ where: { tenantId_domain: { tenantId: user.tenantId, domain: session.domain as BundiDomain } } });
+    if (!template) throw new BundiImportError("INVALID", "Describe your register's fields first, before extracting.");
+    const fields = JSON.parse(template.fieldsJson) as { label: string; mapsTo: string }[];
+    if (fields.length === 0) throw new BundiImportError("INVALID", "Your field description is empty.");
+
+    await tenantDb().bundiImportSession.update({ where: { id: sessionId }, data: { status: "EXTRACTING" } });
+
+    try {
+      const file = await readObject(session.fileKey);
+      const domain = session.domain as BundiDomain;
+      const fieldLabels = fields.map((f) => f.label);
+      const fieldMapsTo = Object.fromEntries(fields.map((f) => [f.label, f.mapsTo]));
+      const numericLabels = fields.filter((f) => numericFieldsForDomain(domain).includes(f.mapsTo)).map((f) => f.label);
+
+      const layoutSignature = computeLayoutSignature(fieldLabels);
+      const knownTemplate = await findKnownTemplate(user, domain, layoutSignature);
+
+      const aiCorrectBatch = (await getAiCorrectorForIntelligentPipeline()) ?? undefined;
+
+      const pipelineResult = await runBundiIntelligentPipeline({
+        tenantId: user.tenantId,
+        domain,
+        imageBuffer: file.body,
+        fieldLabels,
+        fieldMapsTo,
+        numericFieldLabels: numericLabels,
+        contextNote: session.contextNote ?? undefined,
+        knownTemplate,
+        aiCorrectBatch,
+      });
+
+      if (!knownTemplate) {
+        // First time seeing this exact layout for this tenant+domain — save
+        // it so future scans of the SAME register skip straight to a known
+        // layout (the founder's "cache repeated work" requirement).
+        await saveKnownTemplate(user, { domain, layoutSignature, label: session.fileName, fields });
+      }
+
+      const rows: BundiExtractedRow[] = pipelineResult.rows.map((r) => ({
+        cells: Object.fromEntries(Object.entries(r.cells).map(([label, cell]) => [label, { value: cell.value, ocrConfidencePct: cell.ocrConfidencePct, source: cell.source }])),
+      }));
+
+      // Real Google Vision pricing (DOCUMENT_TEXT_DETECTION, published rate:
+      // https://cloud.google.com/vision/pricing — $1.50 per 1,000 units
+      // after the first free 1,000/month, i.e. $0.0015/call). Bundi
+      // Intelligent only ever calls Vision once per genuinely-escalated
+      // FIELD (never a whole page), so `aiCallsMade` here is already the
+      // real, tiny number the founder's architecture is built to produce —
+      // this is a real, published-rate cost, never a guess or a flat fee.
+      const GOOGLE_VISION_USD_PER_CALL = 0.0015;
+      const costUsd = pipelineResult.stats.aiCallsMade * GOOGLE_VISION_USD_PER_CALL;
+      const providerConfig = await getBundiProviderConfig();
+      const costKes = costUsd * providerConfig.usdToKes;
+
+      const updated = await tenantDb().bundiImportSession.update({
+        where: { id: sessionId },
+        data: {
+          status: "REVIEW",
+          provider: pipelineResult.stats.aiInvoked ? "google_vision" : "local_ocr_only",
+          model: pipelineResult.stats.aiInvoked ? "vision-document-text-detection-crop" : "tesseract-local",
+          ocrConfidenceAvgPct: pipelineResult.stats.ocrConfidenceAvgPct,
+          fieldsTotal: pipelineResult.stats.fieldsTotal,
+          fieldsAiEscalated: pipelineResult.stats.fieldsAiEscalated,
+          aiInvoked: pipelineResult.stats.aiInvoked,
+          templateMatchId: pipelineResult.stats.templateMatchId,
+          // Bundi Intelligent's local-OCR-first design means MOST sessions
+          // cost genuinely nothing — costUsd/costKes are only non-zero when
+          // Vision's real crop-based correction was actually called, and
+          // are computed from Vision's real published per-unit price times
+          // the real number of calls made, never a flat fee or an estimate.
+          costUsd,
+          costKes,
+          extractedRowsJson: JSON.stringify(rows),
+          reviewedRowsJson: JSON.stringify(rows),
+        },
+      });
+      await audit(user, "bundi.intelligent_extracted", "BundiImportSession", sessionId, {
+        domain, fieldsTotal: pipelineResult.stats.fieldsTotal, fieldsAiEscalated: pipelineResult.stats.fieldsAiEscalated,
+        aiInvoked: pipelineResult.stats.aiInvoked, ocrConfidenceAvgPct: pipelineResult.stats.ocrConfidenceAvgPct,
+      });
+      return updated;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Extraction failed.";
+      await tenantDb().bundiImportSession.update({ where: { id: sessionId }, data: { status: "FAILED", errorMessage: message } });
+      throw e;
+    }
+  });
+}
+
+/**
+ * Run (or re-run) extraction for a LEGACY provider session. THE REAL
+ * PROVIDER SEAM for the code-gated path. If NEYO Ops has not configured a
+ * real provider, this throws NOT_CONFIGURED — it NEVER fabricates rows.
  */
 export async function extractSession(user: SessionUser, sessionId: string) {
   return withTenant(user.tenantId, async () => {
     const session = await tenantDb().bundiImportSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new BundiImportError("NOT_FOUND", "Import session not found.");
+    if (session.pipeline !== "LEGACY_PROVIDER") {
+      // A Bundi Intelligent session was routed here by mistake — redirect
+      // logic belongs at the route layer, but fail loudly rather than
+      // silently running the wrong pipeline.
+      throw new BundiImportError("STATE", "This session uses the Bundi Intelligent pipeline; call the intelligent extract endpoint instead.");
+    }
     if (session.status !== "UPLOADED" && session.status !== "FAILED") {
       throw new BundiImportError("STATE", `Cannot extract a session in status ${session.status}.`);
     }
@@ -283,9 +542,9 @@ export async function extractSession(user: SessionUser, sessionId: string) {
     if (!config.enabled || config.provider === "NONE") {
       await tenantDb().bundiImportSession.update({
         where: { id: sessionId },
-        data: { status: "FAILED", errorMessage: "Bundi's handwriting reader is not switched on yet for NEYO. NEYO Ops must configure a real AI provider before scans can be read." },
+        data: { status: "FAILED", errorMessage: "Bundi's legacy handwriting reader is not switched on yet for NEYO. NEYO Ops must configure a real AI provider before scans can be read this way." },
       });
-      throw new BundiImportError("NOT_CONFIGURED", "Bundi's handwriting reader is not configured yet. Ask NEYO Ops to enable a provider.");
+      throw new BundiImportError("NOT_CONFIGURED", "Bundi's legacy handwriting reader is not configured yet. Ask NEYO Ops to enable a provider, or use Bundi Intelligent instead (no code needed).");
     }
 
     await tenantDb().bundiImportSession.update({ where: { id: sessionId }, data: { status: "EXTRACTING" } });
@@ -305,7 +564,7 @@ export async function extractSession(user: SessionUser, sessionId: string) {
           costUsd: result.costUsd,
           costKes: result.costUsd * config.usdToKes,
           extractedRowsJson: JSON.stringify(result.rows),
-          reviewedRowsJson: JSON.stringify(result.rows), // school starts review from the raw extraction
+          reviewedRowsJson: JSON.stringify(result.rows),
         },
       });
       await audit(user, "bundi.import_extracted", "BundiImportSession", sessionId, {
@@ -321,13 +580,9 @@ export async function extractSession(user: SessionUser, sessionId: string) {
 }
 
 /**
- * THE PROVIDER ADAPTER SEAM. Swapping providers means editing only this
- * function — nothing above (gating, cost tracking) or below (review/commit)
- * changes. Currently every branch is a real "not implemented" throw rather
- * than fabricated output; wiring a real HTTP call to OpenAI/Google/Anthropic
- * vision here is the ONLY change needed to go live once a provider is chosen
- * and a real API key is placed in the company-secret vault
- * (`bundi_provider_key`, already scaffolded).
+ * THE LEGACY PROVIDER ADAPTER SEAM (whole-page-to-vision-model path).
+ * Swapping providers means editing only this function. Every branch is a
+ * real "not implemented" throw rather than fabricated output.
  */
 async function runProviderExtraction(
   config: BundiProviderConfig,
@@ -340,12 +595,34 @@ async function runProviderExtraction(
   );
 }
 
-/** School: save their row-by-row edits/corrections after reviewing the AI extraction. */
+/** School: save their row-by-row edits/corrections after reviewing the
+ * extraction. N.1 — every real edit is ALSO fed into `recordLearnedCorrection`
+ * so Bundi Intelligent remembers it for free on future sessions, per the
+ * founder's "learn from corrections" cost-cutting requirement. */
 export async function reviewSession(user: SessionUser, sessionId: string, input: ReviewImportSessionInput) {
   return withTenant(user.tenantId, async () => {
     const session = await tenantDb().bundiImportSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new BundiImportError("NOT_FOUND", "Import session not found.");
     if (session.status !== "REVIEW") throw new BundiImportError("STATE", `Cannot review a session in status ${session.status}.`);
+
+    // Diff against the PREVIOUS reviewed rows to find genuine corrections.
+    const previousRows = session.reviewedRowsJson ? (JSON.parse(session.reviewedRowsJson) as BundiExtractedRow[]) : [];
+    for (let i = 0; i < input.rows.length; i++) {
+      const before = previousRows[i];
+      const after = input.rows[i];
+      if (!before) continue;
+      for (const [label, afterCell] of Object.entries(after.cells)) {
+        const beforeCell = before.cells[label];
+        if (beforeCell && beforeCell.value !== afterCell.value && beforeCell.source !== "MANUAL") {
+          await recordLearnedCorrection(user, {
+            domain: session.domain as BundiDomain,
+            fieldLabel: label,
+            wrongText: beforeCell.value,
+            correctText: afterCell.value,
+          });
+        }
+      }
+    }
 
     const updated = await tenantDb().bundiImportSession.update({
       where: { id: sessionId },
@@ -357,11 +634,10 @@ export async function reviewSession(user: SessionUser, sessionId: string, input:
 }
 
 /**
- * Commit the school-reviewed rows through the SAME `commitImport()` used by
- * the standard CSV/Excel engine — never a second, weaker write path. Builds
- * a synthetic header+rows+mapping from the school's own BundiFieldTemplate so
- * every downstream rule (duplicate prevention, legacy admission numbers,
- * single-class-only mode, custom fields) applies identically.
+ * Commit the school-reviewed rows through the SAME real standard import
+ * engine for the session's domain — never a second, weaker write path.
+ * Builds a synthetic header+rows+mapping from the school's own
+ * BundiFieldTemplate so every downstream rule applies identically.
  */
 export async function commitSession(user: SessionUser, sessionId: string, input: CommitBundiSessionInput) {
   return withTenant(user.tenantId, async () => {
@@ -370,7 +646,8 @@ export async function commitSession(user: SessionUser, sessionId: string, input:
     if (session.status !== "REVIEW") throw new BundiImportError("STATE", `Cannot commit a session in status ${session.status}.`);
     if (!session.reviewedRowsJson) throw new BundiImportError("STATE", "No reviewed rows to commit.");
 
-    const template = await tenantDb().bundiFieldTemplate.findUnique({ where: { tenantId: user.tenantId } });
+    const domain = session.domain as BundiDomain;
+    const template = await tenantDb().bundiFieldTemplate.findUnique({ where: { tenantId_domain: { tenantId: user.tenantId, domain } } });
     if (!template) throw new BundiImportError("INVALID", "Describe your register's fields first, before committing an import.");
     const fields = JSON.parse(template.fieldsJson) as { label: string; mapsTo: string; customLabel?: string }[];
     if (fields.length === 0) throw new BundiImportError("INVALID", "Your field description is empty.");
@@ -378,35 +655,71 @@ export async function commitSession(user: SessionUser, sessionId: string, input:
     const reviewedRows = JSON.parse(session.reviewedRowsJson) as BundiExtractedRow[];
     if (reviewedRows.length === 0) throw new BundiImportError("INVALID", "No rows to commit.");
 
-    // Build a synthetic header + rows exactly matching the school's field
-    // template order, then a real ColumnMapping — this is what makes the
-    // commit flow all the way through the STANDARD engine's own rules.
-    const header = fields.map((f) => f.label);
-    const rows: string[][] = [header, ...reviewedRows.map((r) => fields.map((f) => r.cells[f.label] ?? ""))];
-    const mapping: ColumnMapping = fields.map((f, column) => ({
-      column,
-      field: f.mapsTo as ColumnMapping[number]["field"],
-      ...(f.mapsTo === "custom" ? { customLabel: f.customLabel } : {}),
-    }));
+    if (domain === "STUDENT") {
+      const header = fields.map((f) => f.label);
+      const rows: string[][] = [header, ...reviewedRows.map((r) => fields.map((f) => r.cells[f.label]?.value ?? ""))];
+      const mapping: ColumnMapping = fields.map((f, column) => ({
+        column,
+        field: f.mapsTo as ColumnMapping[number]["field"],
+        ...(f.mapsTo === "custom" ? { customLabel: f.customLabel } : {}),
+      }));
 
-    const result = await commitImport(user, {
-      source: "paste",
-      fileName: session.fileName,
-      rows,
-      hasHeader: true,
-      mapping,
-      seedRequirements: input.seedRequirements,
-      skipInvalid: input.skipInvalid,
-      targetClassId: input.targetClassId,
-    });
+      const result = await commitImport(user, {
+        source: "paste",
+        fileName: session.fileName,
+        rows,
+        hasHeader: true,
+        mapping,
+        seedRequirements: input.seedRequirements,
+        skipInvalid: input.skipInvalid,
+        targetClassId: input.targetClassId,
+      });
 
-    await tenantDb().bundiImportSession.update({
-      where: { id: sessionId },
-      data: { status: "COMMITTED", studentImportId: result.importId },
+      await tenantDb().bundiImportSession.update({ where: { id: sessionId }, data: { status: "COMMITTED", studentImportId: result.importId } });
+      await audit(user, "bundi.import_committed", "BundiImportSession", sessionId, { domain, studentImportId: result.importId, created: result.created, failed: result.failed.length });
+      return result;
+    }
+
+    if (domain === "STAFF") {
+      const staffRows: StaffImportRow[] = reviewedRows.map((r) => {
+        const out: Record<string, string> = {};
+        for (const f of fields) out[f.mapsTo] = r.cells[f.label]?.value ?? "";
+        return {
+          fullName: out.fullName || "",
+          role: out.role || "TEACHER",
+          phone: out.phone || undefined,
+          email: out.email || undefined,
+          tscNumber: out.tscNumber || undefined,
+          nationalId: out.nationalId || undefined,
+          kraPin: out.kraPin || undefined,
+          qualifications: out.qualifications || undefined,
+          employmentDate: out.employmentDate || undefined,
+          contractType: out.contractType || undefined,
+          emergencyContact: out.emergencyContact || undefined,
+        };
+      });
+      const result = await importStaffBatch(user, staffRows);
+      await tenantDb().bundiImportSession.update({ where: { id: sessionId }, data: { status: "COMMITTED" } });
+      await audit(user, "bundi.import_committed", "BundiImportSession", sessionId, { domain, created: result.created, skipped: result.skipped });
+      return result;
+    }
+
+    // LIBRARY
+    const libraryRows: LibraryImportRow[] = reviewedRows.map((r) => {
+      const out: Record<string, string> = {};
+      for (const f of fields) out[f.mapsTo] = r.cells[f.label]?.value ?? "";
+      return {
+        title: out.title || "",
+        author: out.author || undefined,
+        isbn: out.isbn || undefined,
+        category: out.category || undefined,
+        shelf: out.shelf || undefined,
+        copiesTotal: out.copiesTotal ? Math.max(1, Math.trunc(Number(out.copiesTotal)) || 1) : 1,
+      };
     });
-    await audit(user, "bundi.import_committed", "BundiImportSession", sessionId, {
-      studentImportId: result.importId, created: result.created, failed: result.failed.length,
-    });
+    const result = await importLibraryBatch(user, libraryRows, { fileName: session.fileName, source: "bundi" });
+    await tenantDb().bundiImportSession.update({ where: { id: sessionId }, data: { status: "COMMITTED", libraryImportId: result.importId } });
+    await audit(user, "bundi.import_committed", "BundiImportSession", sessionId, { domain, libraryImportId: result.importId, created: result.created, updated: result.updated });
     return result;
   });
 }
@@ -423,7 +736,9 @@ export async function cancelSession(user: SessionUser, sessionId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// NEYO Ops: usage/cost dashboard (mirrors M.2's smsMarginDashboard pattern)
+// NEYO Ops: usage/cost dashboard (mirrors M.2's smsMarginDashboard pattern).
+// Now reports both pipelines separately so Ops can see, with real numbers,
+// how much cheaper Bundi Intelligent genuinely is versus the legacy path.
 // ---------------------------------------------------------------------------
 
 export async function bundiUsageDashboard() {
@@ -437,6 +752,25 @@ export async function bundiUsageDashboard() {
   const totalOutputTokens = sessions.reduce((sum, s) => sum + s.outputTokens, 0);
   const byStatus: Record<string, number> = {};
   for (const s of sessions) byStatus[s.status] = (byStatus[s.status] ?? 0) + 1;
+  const byDomain: Record<string, number> = {};
+  for (const s of sessions) byDomain[s.domain] = (byDomain[s.domain] ?? 0) + 1;
+
+  const intelligentSessions = sessions.filter((s) => s.pipeline === "BUNDI_INTELLIGENT");
+  const legacySessions = sessions.filter((s) => s.pipeline === "LEGACY_PROVIDER");
+  const pipelineComparison = {
+    bundiIntelligent: {
+      sessions: intelligentSessions.length,
+      costKes: intelligentSessions.reduce((sum, s) => sum + s.costKes, 0),
+      aiInvokedCount: intelligentSessions.filter((s) => s.aiInvoked).length,
+      avgFieldsAiEscalatedPct: intelligentSessions.length
+        ? Math.round((intelligentSessions.reduce((sum, s) => sum + (s.fieldsTotal > 0 ? s.fieldsAiEscalated / s.fieldsTotal : 0), 0) / intelligentSessions.length) * 100)
+        : 0,
+    },
+    legacyProvider: {
+      sessions: legacySessions.length,
+      costKes: legacySessions.reduce((sum, s) => sum + s.costKes, 0),
+    },
+  };
 
   const bySchool = new Map<string, { tenantName: string; sessions: number; costKes: number }>();
   for (const s of sessions) {
@@ -448,5 +782,5 @@ export async function bundiUsageDashboard() {
   }
   const topSchools = [...bySchool.values()].sort((a, b) => b.costKes - a.costKes).slice(0, 10);
 
-  return { totalSessions, totalCostKes, totalPromptTokens, totalOutputTokens, byStatus, topSchools };
+  return { totalSessions, totalCostKes, totalPromptTokens, totalOutputTokens, byStatus, byDomain, pipelineComparison, topSchools };
 }

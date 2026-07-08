@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     let hasHeader = true;
     let mapping;
     let targetClassId: string | undefined;
+    let updateExisting = true;
 
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
       hasHeader = form.get("hasHeader") !== "false";
       const targetClassRaw = form.get("targetClassId");
       targetClassId = typeof targetClassRaw === "string" && targetClassRaw ? targetClassRaw : undefined;
+      updateExisting = form.get("updateExisting") !== "false";
     } else {
       const body = importPreviewSchema.parse(await req.json());
       source = body.source;
@@ -46,11 +48,12 @@ export async function POST(req: NextRequest) {
       hasHeader = body.hasHeader;
       mapping = body.mapping;
       targetClassId = body.targetClassId;
+      updateExisting = body.updateExisting;
       rows = body.rows ?? parseDelimited(body.text ?? "");
     }
 
-    const preview = await previewImport(user, rows, hasHeader, mapping, targetClassId);
-    return ok({ source, fileName, hasHeader, rows, ...preview });
+    const preview = await previewImport(user, rows, hasHeader, mapping, targetClassId, updateExisting);
+    return ok({ source, fileName, hasHeader, rows, updateExisting, ...preview });
   } catch (e) {
     return handleError(e);
   }

@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await getStudentServiceActivities(user, studentId);
-    return ok({ data });
+    return ok(data);
   } catch (error) {
     return handleError(error);
   }
@@ -43,11 +43,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     if (body?.action === "decision") {
       const updated = await decideServiceActivity(user, communityServiceDecisionSchema.parse(body));
-      return ok({ data: updated });
+      return ok(updated);
     }
     const data = communityServiceSchema.parse(body);
     const activity = await logServiceActivity(user, data);
-    return ok({ data: activity }, 201);
+    return ok(activity, 201);
   } catch (error) {
     if (error instanceof CommunityServiceError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400 };

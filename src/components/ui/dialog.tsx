@@ -62,12 +62,18 @@ export function DialogContent({
         onClick={() => onOpenChange?.(false)}
         aria-hidden="true"
       />
-      {/* Glass panel */}
+      {/* Glass panel — deliberately uses the literal `bg-white` / `dark:bg-navy-900`
+          utilities (NOT opacity-suffixed like bg-white/95) so the Liquid Glass
+          engine's exact-match CSS selectors in globals.css (`html.glass .bg-white`,
+          `html.glass.dark .bg-navy-900`) actually apply blur/tint/sheen here.
+          An opacity-suffixed class compiles to a different selector and silently
+          falls outside the glass system — this was the root cause of modals that
+          looked "flat" instead of glass (2026-07-02 audit). */}
       <div
         className={cn(
-          "relative z-10 w-full max-w-lg rounded-2xl border border-white/40 bg-white/95 p-6 shadow-card-hover backdrop-blur-xl",
+          "relative z-10 w-full max-w-lg rounded-2xl border border-white/40 bg-white p-6 shadow-card-hover backdrop-blur-xl",
           "transition-all duration-200 ease-apple",
-          "dark:border-navy-700/60 dark:bg-navy-900/95",
+          "dark:border-navy-700/60 dark:bg-navy-900",
           className
         )}
         onClick={(e) => e.stopPropagation()}

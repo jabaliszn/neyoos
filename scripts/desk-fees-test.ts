@@ -17,8 +17,9 @@ async function main() {
 
   // 1) desk flow: find Kamau's open invoices
   const kamau = await db.student.findFirstOrThrow({ where: { firstName: "Kamau" } });
-  const open = await studentOpenInvoices(receptionist, kamau.id);
+  const { invoices: open, hasFeeInvoices } = await studentOpenInvoices(receptionist, kamau.id);
   console.log("open invoices:", open.length, open[0]?.invoiceNo, "bal", open[0]?.balanceKes, open.length >= 1 ? "✓" : "✗");
+  console.log("hasFeeInvoices (R.2 no-invoice-vs-cleared signal):", hasFeeInvoices ? "✓ true (this student has real invoice history)" : "✗");
 
   // 2) receptionist STK 2000 on it -> mock callback PAID -> ledger applied
   const stk = await stkForInvoice(receptionist, open[0].id, "0733221100", 2000);

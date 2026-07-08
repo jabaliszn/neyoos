@@ -7,7 +7,8 @@
 import * as React from "react";
 import {
   Users, AlertCircle, Loader2, X, Check, Plus, CalendarOff, Briefcase,
-  Star, ShieldAlert, GraduationCap, ArrowUpRight, FileText, Search,
+  Star, ShieldAlert, GraduationCap, ArrowUpRight, FileText, Search, Sparkles,
+  UserCog, RotateCcw, XCircle, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,14 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { MessageButton } from "@/components/messaging/message-button";
+import { BundiIntelligentWizard } from "@/components/bundi/bundi-intelligent-wizard";
+
+const STAFF_BUNDI_FIELD_OPTIONS: Record<string, string> = {
+  fullName: "Full name", role: "Role", phone: "Phone", email: "Email",
+  tscNumber: "TSC number", nationalId: "National ID", kraPin: "KRA PIN",
+  qualifications: "Qualifications", employmentDate: "Employment date",
+  contractType: "Contract type", emergencyContact: "Emergency contact", ignore: "— Skip —",
+};
 
 interface StaffRow { userId: string; name: string; role: string; phone: string | null; email: string | null; tscNumber: string | null; qualifications: string | null; employmentDate: string | null; contractType: string | null; contractEndDate: string | null; hasProfile: boolean }
 interface LeaveRow { id: string; userId: string; userName: string; type: string; startDate: string; endDate: string; days: number; reason: string | null; status: string; decidedByName: string | null; decisionNote: string | null }
@@ -26,7 +35,18 @@ interface Balance { type: string; label: string; allowance: number; used: number
 interface Posting { id: string; title: string; description: string | null; deadline: string | null; open: boolean; applicationCount: number; applications: { id: string; name: string; phone: string; email: string | null; status: string; notes: string | null }[] }
 interface StaffFile { staff: { id: string; fullName: string; role: string; phone: string | null; email: string | null }; profile: Record<string, string | null> | null; leave: LeaveRow[]; appraisals: { id: string; period: string; score: number; strengths: string | null; improvements: string | null; reviewerName: string }[]; disciplinary: { id: string; date: string; category: string; details: string; actionTaken: string | null }[]; training: { id: string; title: string; provider: string | null; date: string; durationDays: number }[]; balances: Balance[] }
 
+interface SubstituteRow {
+  id: string; leaveRequestId: string; originalTeacherName: string;
+  substituteTeacherId: string | null; substituteTeacherName: string | null; status: string;
+  className: string; subjectName: string | null; dayOfWeek: number; dayLabel: string; period: number;
+  coverageDates: string[]; confirmedByName: string | null; confirmedAt: string | null;
+  declineReason: string | null; revertedByName: string | null; revertedAt: string | null;
+  leaveStartDate: string; leaveEndDate: string;
+}
+interface TeacherOpt { userId: string; name: string; role: string }
+
 const LEAVE_STATUS_TONE: Record<string, "green" | "amber" | "red" | "neutral"> = { APPROVED: "green", PENDING: "amber", REJECTED: "red", CANCELLED: "neutral" };
+const SUB_STATUS_TONE: Record<string, "green" | "amber" | "red" | "neutral"> = { PROPOSED: "amber", CONFIRMED: "green", DECLINED: "neutral", UNFILLED: "red", REVERTED: "neutral" };
 const STAFF_ROLES = ["PRINCIPAL", "DEPUTY_PRINCIPAL", "DEAN_OF_STUDIES", "HOD", "TEACHER", "CLASS_TEACHER", "BURSAR", "ACCOUNTANT", "RECEPTIONIST", "LIBRARIAN", "HOSTEL_MASTER", "SUPPORT_STAFF"];
 
 export function StaffClient({ canManage }: { canManage: boolean }) {
@@ -378,7 +398,7 @@ function RecordDialog({ kind, userId, onClose, onDone }: { kind: "appraisal" | "
         )}
         {kind === "training" && (
           <>
-            <div><Label>Training title</Label><Input value={f.title} onChange={set("title")} placeholder="e.g. CBC upskilling workshop" /></div>
+            <div><Label>Training title</Label><Input value={f.title} onChange={set("title")} placeholder="e.g. CBE upskilling workshop" /></div>
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-1"><Label>Provider</Label><Input value={f.provider} onChange={set("provider")} placeholder="KICD" /></div>
               <div><Label>Date</Label><Input type="date" value={f.date} onChange={set("date")} /></div>
@@ -400,6 +420,7 @@ function LeaveTab({ canManage }: { canManage: boolean }) {
   const [error, setError] = React.useState(false);
   const [applyOpen, setApplyOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [subsFor, setSubsFor] = React.useState<LeaveRow | null>(null);
 
   const load = React.useCallback(async () => {
     setError(false);
@@ -419,7 +440,22 @@ function LeaveTab({ canManage }: { canManage: boolean }) {
     try {
       const res = await fetch("/api/hr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "leave_decide", leaveId, approve }) });
       const json = await res.json();
-      if (json.ok) { toast({ title: approve ? "Leave approved — added to the calendar" : "Leave rejected", tone: "success" }); load(); }
+      if (json.ok) {
+        // T.12 — real, honest summary of what was auto-PROPOSED (never
+        // auto-applied) the moment leave is approved.
+        const sub = json.data?.substituteSummary as { proposed: number; unfilled: number } | null | undefined;
+        if (approve && sub && (sub.proposed > 0 || sub.unfilled > 0)) {
+          toast({
+            title: sub.unfilled > 0
+              ? `Leave approved — ${sub.proposed} substitute(s) proposed, ${sub.unfilled} slot(s) need a teacher`
+              : `Leave approved — ${sub.proposed} substitute(s) proposed, review in Substitutes`,
+            tone: sub.unfilled > 0 ? "error" : "success",
+          });
+        } else {
+          toast({ title: approve ? "Leave approved — added to the calendar" : "Leave rejected", tone: "success" });
+        }
+        load();
+      }
       else toast({ title: json.error?.message || "Failed", tone: "error" });
     } finally { setBusy(false); }
   }
@@ -482,7 +518,12 @@ function LeaveTab({ canManage }: { canManage: boolean }) {
                         <Button size="sm" variant="ghost" className="text-red-600" onClick={() => decide(l.id, false)} disabled={busy}>Reject</Button>
                       </div>
                     ) : (
-                      <Badge tone={LEAVE_STATUS_TONE[l.status]}>{l.status.toLowerCase()}</Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge tone={LEAVE_STATUS_TONE[l.status]}>{l.status.toLowerCase()}</Badge>
+                        {l.status === "APPROVED" && (
+                          <Button size="sm" variant="secondary" onClick={() => setSubsFor(l)}><UserCog className="h-3.5 w-3.5" /> Substitutes</Button>
+                        )}
+                      </div>
                     )}
                   </li>
                 ))}
@@ -493,6 +534,177 @@ function LeaveTab({ canManage }: { canManage: boolean }) {
       )}
 
       {applyOpen && <ApplyLeaveDialog balances={mine.balances} onClose={() => setApplyOpen(false)} onDone={() => { setApplyOpen(false); load(); toast({ title: "Leave request submitted", tone: "success" }); }} />}
+      {subsFor && <SubstitutesDrawer leave={subsFor} onClose={() => setSubsFor(null)} />}
+    </div>
+  );
+}
+
+// ---- T.12 — Substitute-teacher coverage (per approved leave) ------------------------
+function SubstitutesDrawer({ leave, onClose }: { leave: LeaveRow; onClose: () => void }) {
+  const { toast } = useToast();
+  const [rows, setRows] = React.useState<SubstituteRow[] | null>(null);
+  const [error, setError] = React.useState(false);
+  const [teachers, setTeachers] = React.useState<TeacherOpt[]>([]);
+  const [declining, setDeclining] = React.useState<SubstituteRow | null>(null);
+  const [reassigning, setReassigning] = React.useState<SubstituteRow | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    setError(false);
+    try {
+      const res = await fetch(`/api/hr?view=substitutes&leaveRequestId=${leave.id}`);
+      const json = await res.json();
+      if (json.ok) setRows(json.data.assignments); else setError(true);
+    } catch { setError(true); }
+  }, [leave.id]);
+  React.useEffect(() => {
+    load();
+    fetch("/api/hr?view=directory").then((r) => r.json()).then((j) => {
+      if (j.ok) setTeachers(j.data.staff.filter((s: { role: string }) => ["TEACHER", "CLASS_TEACHER", "HOD", "DEPUTY_PRINCIPAL", "DEAN_OF_STUDIES"].includes(s.role)).map((s: { userId: string; name: string; role: string }) => ({ userId: s.userId, name: s.name, role: s.role })));
+    }).catch(() => {});
+  }, [load]);
+
+  async function decide(id: string, approve: boolean, declineReason?: string) {
+    setBusyId(id);
+    try {
+      const res = await fetch("/api/hr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "substitute_decide", substituteAssignmentId: id, approve, declineReason }) });
+      const json = await res.json();
+      if (json.ok) { toast({ title: approve ? "Substitute confirmed ✓" : "Substitute declined", tone: "success" }); setDeclining(null); load(); }
+      else toast({ title: json.error?.message || "Failed", tone: "error" });
+    } finally { setBusyId(null); }
+  }
+
+  async function reassign(id: string, substituteTeacherId: string) {
+    setBusyId(id);
+    try {
+      const res = await fetch("/api/hr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "substitute_reassign", substituteAssignmentId: id, substituteTeacherId }) });
+      const json = await res.json();
+      if (json.ok) { toast({ title: "Substitute assigned — review and confirm", tone: "success" }); setReassigning(null); load(); }
+      else toast({ title: json.error?.message || "Failed", tone: "error" });
+    } finally { setBusyId(null); }
+  }
+
+  async function revert(id: string) {
+    if (!window.confirm("Restore the original teacher to this slot? Use this once they're genuinely back.")) return;
+    setBusyId(id);
+    try {
+      const res = await fetch("/api/hr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "substitute_revert", substituteAssignmentId: id }) });
+      const json = await res.json();
+      if (json.ok) { toast({ title: "Original teacher restored", tone: "success" }); load(); }
+      else toast({ title: json.error?.message || "Failed", tone: "error" });
+    } finally { setBusyId(null); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex justify-end bg-navy-950/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="h-full w-full max-w-lg overflow-y-auto bg-white p-6 shadow-card dark:bg-navy-900" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-navy-900 dark:text-navy-50">Substitute cover — {leave.userName}</h3>
+            <p className="text-xs text-navy-400">{leave.startDate} → {leave.endDate}</p>
+          </div>
+          <button onClick={onClose} className="rounded-full p-1 text-navy-400 hover:bg-navy-50 dark:hover:bg-navy-800" aria-label="Close"><X className="h-4 w-4" /></button>
+        </div>
+
+        <p className="mb-4 rounded-2xl border border-navy-100 bg-warm-50 px-3 py-2.5 text-xs text-navy-500 dark:border-navy-800 dark:bg-navy-800 dark:text-navy-300">
+          Substitutes are proposed automatically, but a real teacher only appears on the live timetable once you confirm it here.
+        </p>
+
+        {error ? <LoadError onRetry={load} /> : rows === null ? <Skeletons /> : rows.length === 0 ? (
+          <EmptyState icon={UserCog} title="No real timetable slots to cover" description="This teacher has no live timetable slots during the leave period." />
+        ) : (
+          <div className="space-y-2.5">
+            {rows.map((r) => (
+              <Card key={r.id}>
+                <CardContent className="space-y-2 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-navy-900 dark:text-navy-50">{r.subjectName ?? "—"} · {r.className}</p>
+                      <p className="text-xs text-navy-400">{r.dayLabel} P{r.period} · {r.coverageDates.length} occurrence{r.coverageDates.length === 1 ? "" : "s"} during this leave</p>
+                    </div>
+                    <Badge tone={SUB_STATUS_TONE[r.status] ?? "neutral"}>{r.status.toLowerCase()}</Badge>
+                  </div>
+
+                  {r.status === "UNFILLED" && (
+                    <p className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400"><AlertTriangle className="h-3.5 w-3.5" /> No qualified free teacher was found — pick one manually.</p>
+                  )}
+                  {r.substituteTeacherName && r.status !== "UNFILLED" && (
+                    <p className="text-sm text-navy-700 dark:text-navy-200">Substitute: <span className="font-medium">{r.substituteTeacherName}</span></p>
+                  )}
+                  {r.status === "DECLINED" && r.declineReason && (
+                    <p className="text-xs text-navy-400">Declined — {r.declineReason}</p>
+                  )}
+                  {r.status === "REVERTED" && (
+                    <p className="text-xs text-navy-400">Original teacher restored by {r.revertedByName}.</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {(r.status === "PROPOSED" || r.status === "UNFILLED") && (
+                      <Button size="sm" variant="secondary" onClick={() => setReassigning(r)}><UserCog className="h-3.5 w-3.5" /> {r.status === "UNFILLED" ? "Assign a teacher" : "Change teacher"}</Button>
+                    )}
+                    {r.status === "PROPOSED" && (
+                      <>
+                        <Button size="sm" onClick={() => decide(r.id, true)} disabled={busyId === r.id}>
+                          {busyId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Confirm
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setDeclining(r)} disabled={busyId === r.id}>
+                          <XCircle className="h-3.5 w-3.5" /> Decline
+                        </Button>
+                      </>
+                    )}
+                    {r.status === "CONFIRMED" && (
+                      <Button size="sm" variant="secondary" onClick={() => revert(r.id)} disabled={busyId === r.id}>
+                        <RotateCcw className="h-3.5 w-3.5" /> Restore original teacher
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {declining && (
+        <Modal title={`Decline this substitute for ${declining.className}`} onClose={() => setDeclining(null)}>
+          <DeclineForm onSubmit={(reason) => decide(declining.id, false, reason)} busy={busyId === declining.id} />
+        </Modal>
+      )}
+      {reassigning && (
+        <Modal title={`Pick a substitute — ${reassigning.subjectName ?? reassigning.className}`} onClose={() => setReassigning(null)}>
+          <ReassignForm teachers={teachers} current={reassigning.substituteTeacherId} onSubmit={(id) => reassign(reassigning.id, id)} busy={busyId === reassigning.id} />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function DeclineForm({ onSubmit, busy }: { onSubmit: (reason: string) => void; busy: boolean }) {
+  const [reason, setReason] = React.useState("");
+  return (
+    <div className="space-y-3">
+      <div><Label>Reason (optional)</Label><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Better to leave this as a free period" /></div>
+      <Button onClick={() => onSubmit(reason)} disabled={busy} className="w-full">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Decline
+      </Button>
+    </div>
+  );
+}
+
+function ReassignForm({ teachers, current, onSubmit, busy }: { teachers: TeacherOpt[]; current: string | null; onSubmit: (teacherId: string) => void; busy: boolean }) {
+  const [teacherId, setTeacherId] = React.useState(current ?? "");
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label>Teacher</Label>
+        <select value={teacherId} onChange={(e) => setTeacherId(e.target.value)} className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
+          <option value="">Pick a teacher…</option>
+          {teachers.map((t) => <option key={t.userId} value={t.userId}>{t.name}</option>)}
+        </select>
+      </div>
+      <Button onClick={() => onSubmit(teacherId)} disabled={busy || !teacherId} className="w-full">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCog className="h-4 w-4" />} Save
+      </Button>
     </div>
   );
 }
@@ -500,6 +712,7 @@ function LeaveTab({ canManage }: { canManage: boolean }) {
 function ApplyLeaveDialog({ balances, onClose, onDone }: { balances: Balance[]; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
   const [f, setF] = React.useState({ type: "ANNUAL", startDate: "", endDate: "", reason: "" });
+
   const [saving, setSaving] = React.useState(false);
   const bal = balances.find((b) => b.type === f.type);
 
@@ -688,6 +901,7 @@ interface ImportErrorItem { row: number; name: string; message: string }
 
 function ImportStaffModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
+  const [mode, setMode] = React.useState<"standard" | "bundi">("standard");
   const [text, setText] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const [hasHeader, setHasHeader] = React.useState(true);
@@ -740,17 +954,37 @@ function ImportStaffModal({ onClose, onDone }: { onClose: () => void; onDone: ()
         <div className="mb-4 flex items-center justify-between">
           <div className="space-y-0.5">
             <h3 className="text-base font-bold text-navy-900 dark:text-navy-50">Bulk Import Staff</h3>
-            <p className="text-xs text-navy-400">Upload CSV/XLSX or paste from Excel. Bundi handwriting scan can feed the same import later; this works fully rule-based today.</p>
+            <p className="text-xs text-navy-400">Upload CSV/XLSX or paste from Excel.</p>
           </div>
           <button onClick={onClose} className="rounded-full p-1.5 text-navy-400 hover:bg-navy-50 dark:hover:bg-navy-800" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
+        {!result && (
+          <div className="mb-4 flex gap-1.5 rounded-full bg-navy-50 p-1 text-xs font-semibold dark:bg-navy-800">
+            <button onClick={() => setMode("standard")} className={`flex-1 rounded-full px-3 py-1.5 transition-colors ${mode === "standard" ? "bg-white text-navy-900 shadow-sm dark:bg-navy-900 dark:text-navy-50" : "text-navy-500 dark:text-navy-400"}`}>
+              CSV / Excel / Paste
+            </button>
+            <button onClick={() => setMode("bundi")} className={`flex flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 transition-colors ${mode === "bundi" ? "bg-white text-navy-900 shadow-sm dark:bg-navy-900 dark:text-navy-50" : "text-navy-500 dark:text-navy-400"}`}>
+              <Sparkles className="h-3.5 w-3.5" /> Bundi Intelligent (scan)
+            </button>
+          </div>
+        )}
+
+        {mode === "bundi" && !result ? (
+          <BundiIntelligentWizard
+            domain="STAFF"
+            fieldOptions={STAFF_BUNDI_FIELD_OPTIONS}
+            onClose={onDone}
+            onDone={(r) => toast({ title: `${r.created} staff member(s) imported via Bundi Intelligent`, tone: "success" })}
+          />
+        ) : (
         <div className="space-y-4">
           <div className="rounded-2xl border border-dashed border-green-200 bg-green-50/60 p-4 text-xs dark:border-green-900/40 dark:bg-green-950/15">
             <p className="font-bold text-navy-800 dark:text-navy-100">Accepted columns</p>
             <p className="mt-1 font-mono text-navy-600 dark:text-navy-300">Full Name · Role · Phone · Email · TSC Number · National ID · KRA PIN · Qualifications · Employment Date · Contract Type · Emergency Contact</p>
+
             <p className="mt-2 text-navy-500 dark:text-navy-400">Headers are auto-mapped, phone numbers are normalized to +254, duplicates are denied before any staff account is created.</p>
           </div>
 
@@ -827,6 +1061,7 @@ function ImportStaffModal({ onClose, onDone }: { onClose: () => void; onDone: ()
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

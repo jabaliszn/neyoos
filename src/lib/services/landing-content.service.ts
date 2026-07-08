@@ -69,7 +69,7 @@ export function defaultLandingContent(): LandingContent {
       { value: "KES", label: "Kenyan billing", note: "Local money flows and M-Pesa-ready seams" },
     ],
     products: [
-      { key: "school", name: "School OS", status: "LIVE", description: "Admissions, fees, attendance, exams, learning and parent communication for Kenyan schools.", features: ["Fees and receipts", "Attendance", "CBC and exams", "Learning videos"], mediaUrl: "screenshots/i25-dashboard-sparklines.png" },
+      { key: "school", name: "School OS", status: "LIVE", description: "Admissions, fees, attendance, exams, learning and parent communication for Kenyan schools.", features: ["Fees and receipts", "Attendance", "CBE and exams", "Learning videos"], mediaUrl: "screenshots/i25-dashboard-sparklines.png" },
       { key: "farm", name: "Farm OS", status: "WAITLIST", description: "Operations layer for farms, cooperatives, stock, teams and field records.", features: ["Stock", "Teams", "Payments", "Reports"], mediaUrl: "" },
       { key: "business", name: "Business OS", status: "WAITLIST", description: "Customer, inventory, billing and team workflows for small and growing businesses.", features: ["Customers", "Inventory", "Sales", "Team tasks"], mediaUrl: "" },
       { key: "creator", name: "Creator OS", status: "WAITLIST", description: "A clean operating base for creator businesses, content calendars, sales and community.", features: ["Content calendar", "Sales", "Audience", "Reports"], mediaUrl: "" },

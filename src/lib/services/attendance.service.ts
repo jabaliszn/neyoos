@@ -179,6 +179,18 @@ export async function markRegister(user: SessionUser, input: MarkRegisterInput) 
       sms = await notifyAbsentees(user, input.classId, input.date);
     }
 
+    // Part X — Developer Center 2.0 (founder-requested 2026-07-06): fire
+    // one real "attendance.recorded" webhook per real register submission
+    // (never per-student, to avoid flooding a real integration) — a real
+    // GPS/biometric-device integration or a parent-app integration can
+    // react to this. Best-effort only.
+    try {
+      const { dispatchEvent } = await import("@/lib/services/webhook.service");
+      await dispatchEvent(user.tenantId, "attendance.recorded", {
+        classId: input.classId, date: input.date, counts, total: marks.length,
+      });
+    } catch { /* best-effort */ }
+
     return { saved: marks.length, counts, sms };
   });
 }

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     if (!studentId) return fail("INVALID", "studentId required", 400);
 
     const data = await parentChildPathwayReadiness(user, studentId);
-    return ok({ data });
+    return ok(data);
   } catch (e) {
     return handleError(e);
   }

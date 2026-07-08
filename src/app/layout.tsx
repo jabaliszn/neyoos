@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { getSessionContext } from "@/lib/core/session";
 import { Hammer, Mail, HelpCircle } from "lucide-react";
 import { ExpiredCheckoutClient } from "@/components/public-site/expired-checkout-client";
+import { getLiquidColorLevel } from "@/lib/services/platform-appearance.service";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -97,8 +98,34 @@ export default async function RootLayout({
     }
   }
 
+  // O.2: the signed-in user's personal Glass/Solid popup preference, rendered
+  // server-side (no localStorage, no flash) so it follows them across devices.
+  // Absence of the attribute (logged-out pages, or a user who never opted in)
+  // means "glass" — the platform default — via the CSS only activating on
+  // the explicit [data-popup-style="solid"] selector.
+  const popupStyle = sessionCtx?.user?.popupStyle === "solid" ? "solid" : undefined;
+
+  // O.3: resolve the EFFECTIVE colour/contrast level — the user's personal
+  // override (User.lgContrast) if they set one, else the company default
+  // (PlatformSetting liquid_color_level). Rendered server-side, same
+  // no-flash/cross-device pattern as popupStyle above. "1" (standard) is
+  // the platform default and needs no CSS override, but we still render it
+  // explicitly for clarity/consistency with the existing data-liquid="2".
+  const companyLgContrast = await getLiquidColorLevel();
+  const userLgContrast = sessionCtx?.user?.lgContrast;
+  const hasPersonalLgContrast = Boolean(userLgContrast && userLgContrast !== "company");
+  const effectiveLgContrast = hasPersonalLgContrast ? userLgContrast : companyLgContrast;
+
   return (
-    <html lang="en" className={isLiquidActive ? "glass" : "flat"} data-liquid="2" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={isLiquidActive ? "glass" : "flat"}
+      data-liquid="2"
+      data-lg-contrast={effectiveLgContrast}
+      data-lg-contrast-user-override={hasPersonalLgContrast ? "true" : undefined}
+      {...(popupStyle ? { "data-popup-style": popupStyle } : {})}
+      suppressHydrationWarning
+    >
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -112,7 +139,7 @@ export default async function RootLayout({
             {isMaintenanceActive && !isSuperAdmin ? (
               /* Beautiful Liquid Glass Maintenance Mode Screen */
               <div className="flex min-h-screen flex-col items-center justify-center bg-warm-100 px-4 text-center dark:bg-navy-950 font-sans">
-                <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white/70 p-8 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-900/60">
+                <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-8 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-900">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
                     <Hammer className="h-7 w-7 animate-pulse" />
                   </div>

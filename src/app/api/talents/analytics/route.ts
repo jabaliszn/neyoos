@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const user = await requirePermission("academics.view");
     const termId = req.nextUrl.searchParams.get("termId");
     const analytics = await getTalentParticipationAnalytics(user, { termId: termId || null });
-    return ok({ data: analytics });
+    return ok(analytics);
   } catch (error) {
     return handleError(error);
   }

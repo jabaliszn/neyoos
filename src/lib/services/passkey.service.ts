@@ -334,11 +334,17 @@ export async function getActionAssertionOptions(userId: string) {
   return options;
 }
 
+// R.3 — how long a real biometric-verification ticket stays valid before it
+// must be re-earned. Short on purpose: this proves "you scanned your finger
+// JUST NOW for THIS action", not "you scanned it at some point today".
+const BIOMETRIC_TICKET_TTL_MINUTES = 3;
+
 export async function verifyActionAssertion(
   userId: string,
   response: unknown,
-  requestOrigin?: string
-): Promise<{ verified: true }> {
+  requestOrigin?: string,
+  actionKey?: string
+): Promise<{ verified: true; ticket?: string }> {
   const challenge = await db.webAuthnChallenge.findFirst({
     where: { userId, purpose: "ACTION" },
     orderBy: { createdAt: "desc" },
@@ -383,7 +389,15 @@ export async function verifyActionAssertion(
     throw new AuthServiceError("INVALID_CODE", "Device security check failed.");
   }
 
-  await db.$transaction([
+  // R.3 — when the caller names a specific real action (e.g. a stable key
+  // derived from "record this exact cash payment"), issue a real,
+  // short-lived, single-use ticket the protected server route must present
+  // and consume — this is the actual server-side enforcement, not just a
+  // client-side popup. Without an actionKey, this behaves exactly as before
+  // (e.g. Library/Recycle-Bin's existing client-trusted usages, unchanged).
+  let ticketId: string | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ops: any[] = [
     db.credential.update({
       where: { id: cred.id },
       data: {
@@ -400,9 +414,58 @@ export async function verifyActionAssertion(
         action: "auth.passkey_action_verified",
         entityType: "Credential",
         entityId: cred.id,
+        metadata: actionKey ? JSON.stringify({ actionKey }) : null,
       },
     }),
-  ]);
+  ];
+  if (actionKey) {
+    ticketId = crypto.randomUUID();
+    ops.push(
+      db.biometricActionTicket.create({
+        data: {
+          id: ticketId,
+          userId,
+          tenantId: cred.user.tenantId,
+          actionKey,
+          expiresAt: new Date(Date.now() + BIOMETRIC_TICKET_TTL_MINUTES * 60_000),
+        },
+      })
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await db.$transaction(ops as any);
 
-  return { verified: true };
+  return { verified: true, ticket: ticketId };
+}
+
+/**
+ * R.3 — the REAL server-side enforcement point. A money-moving route calls
+ * this with the ticket the client received from a successful biometric
+ * check, plus the SAME actionKey it will actually perform. Consumes the
+ * ticket atomically (marks usedAt) so it can never be replayed — a stolen
+ * or logged ticket is useless a second time, and a ticket minted for one
+ * amount/student can never be reused for a different one because the
+ * actionKey must match exactly.
+ */
+export async function consumeBiometricActionTicket(
+  userId: string,
+  tenantId: string,
+  actionKey: string,
+  ticketId: string | undefined | null
+): Promise<void> {
+  if (!ticketId) {
+    throw new AuthServiceError("NO_PENDING_CODE", "This action requires a fresh fingerprint/Face ID check.");
+  }
+  const ticket = await db.biometricActionTicket.findUnique({ where: { id: ticketId } });
+  if (
+    !ticket ||
+    ticket.userId !== userId ||
+    ticket.tenantId !== tenantId ||
+    ticket.actionKey !== actionKey ||
+    ticket.usedAt ||
+    ticket.expiresAt < new Date()
+  ) {
+    throw new AuthServiceError("INVALID_CODE", "Your fingerprint/Face ID check has expired or does not match this action — please verify again.");
+  }
+  await db.biometricActionTicket.update({ where: { id: ticket.id }, data: { usedAt: new Date() } });
 }

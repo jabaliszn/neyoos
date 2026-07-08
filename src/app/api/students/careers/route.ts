@@ -13,11 +13,11 @@ export async function GET(req: NextRequest) {
 
     if (view === "profile") {
       const data = await getCareerDiscoveryProfile(user, studentId);
-      return ok({ data });
+      return ok(data);
     }
 
     const data = await getStudentCareerRecords(user, studentId);
-    return ok({ data });
+    return ok(data);
   } catch (error) {
     return handleError(error);
   }
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = careerDiscoverySchema.parse(body);
     const record = await logCareerRecord(user, data);
-    return ok({ data: record }, 201);
+    return ok(record, 201);
   } catch (error) {
     if (error instanceof CareerDiscoveryError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400 };

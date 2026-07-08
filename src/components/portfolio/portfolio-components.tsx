@@ -630,7 +630,7 @@ export function PortfolioItemForm({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="fixed inset-0 bg-navy-900/40 backdrop-blur-sm dark:bg-navy-950/60" onClick={onClose} />
-      <Card className="relative z-10 w-full max-w-4xl overflow-hidden border-white/40 bg-white/90 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-navy-950/90">
+      <Card className="relative z-10 w-full max-w-4xl overflow-hidden border-white/40 bg-white shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-navy-900">
         <form onSubmit={handleSubmit}>
           <CardHeader className="flex flex-row items-center justify-between border-b border-navy-100 px-6 py-4 dark:border-navy-800">
             <CardTitle className="text-lg font-bold">{initial ? "Edit Portfolio Item" : "Create Portfolio Item"}</CardTitle>

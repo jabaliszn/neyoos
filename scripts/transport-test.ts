@@ -3,7 +3,7 @@ import { db } from "../src/lib/db";
 import {
   listRoutes, createRoute, listDrivers, addDriver, listVehicles, addVehicle,
   addMaintenance, addFuel, vehicleFile, routeRiders, assignStudent,
-  releaseAssignment, invoiceRiders,
+  releaseAssignment, invoiceRiders, listShifts,
 } from "../src/lib/services/transport.service";
 import type { SessionUser } from "../src/lib/core/session";
 
@@ -31,8 +31,19 @@ async function main() {
   const routes = await listRoutes(principal);
   const routeA = routes.find((r) => r.name.includes("Kasarani"))!;
   console.log("routes:", routes.length === 2 ? "✓ 2" : "✗");
-  console.log("seat math:", routeA.riders === 2 && routeA.seatsLeft === 31 ? "✓ 2 riders, 31/33 seats left" : "✗ " + JSON.stringify({ r: routeA.riders, s: routeA.seatsLeft }));
+  // T.8: Route A now runs 2 real shifts (Morning bus1/33 w/ 2 riders,
+  // Afternoon custom-20-seat-cap w/ 0 riders) — seat math is now the real
+  // SUM across shifts, not the route's own bare vehicle capacity.
+  console.log("seat math (shift-aware):", routeA.riders === 2 && routeA.seatsLeft === 51 && routeA.shifts.length === 2 ? "✓ 2 riders, 51 real seats left across 2 shifts" : "✗ " + JSON.stringify({ r: routeA.riders, s: routeA.seatsLeft, shifts: routeA.shifts.length }));
   console.log("stops parsed:", routeA.stops.length === 4 && routeA.stops[0] === "Mwiki" ? "✓ 4 stops" : "✗");
+
+  // T.8 — real shifts: Morning (bus1, no override) + Afternoon (custom 20-seat cap)
+  const shifts = await listShifts(principal, routeA.id);
+  const morning = shifts.find((s) => s.name === "Morning")!;
+  const afternoon = shifts.find((s) => s.name === "Afternoon")!;
+  console.log("shift list:", shifts.length === 2 ? "✓ 2 real shifts" : "✗");
+  console.log("morning shift (legacy bus cap):", morning.effectiveCapacity === 33 && morning.riders === 2 && morning.seatsLeft === 31 && !morning.full ? "✓ 33 cap, 2 riders, 31 left" : "✗ " + JSON.stringify(morning));
+  console.log("afternoon shift (custom seat-cap override):", afternoon.effectiveCapacity === 20 && afternoon.riders === 0 && afternoon.seatsLeft === 20 && !afternoon.full ? "✓ custom 20-seat cap, 0 riders" : "✗ " + JSON.stringify(afternoon));
 
   // 2) duplicate route/driver/vehicle blocked
   try { await createRoute(principal, { name: "Route A — Kasarani", termFeeKes: 0 }); console.log("dup route: ALLOWED ✗"); }
@@ -66,25 +77,62 @@ async function main() {
   // one route per student
   try { await assignStudent(principal, { routeId: routeB.id, studentId: wanjiru.id }); console.log("second route: ALLOWED ✗"); }
   catch { console.log("one-route-per-student: ✓"); }
-  // invalid pickup stop
+  // T.8 — a route WITH real shifts requires a specific shiftId now (no
+  // more silent fallback to the route's own direct vehicle).
   const kamau = await db.student.findFirstOrThrow({ where: { tenantId: t.id, firstName: "Kamau" } });
-  try { await assignStudent(principal, { routeId: routeA.id, studentId: kamau.id, pickupStop: "Nakuru" }); console.log("bad stop: ALLOWED ✗"); }
+  try { await assignStudent(principal, { routeId: routeA.id, studentId: kamau.id }); console.log("assign w/o shiftId on a shifted route: ALLOWED ✗"); }
+  catch (e) { console.log("shiftId required on a shifted route: ✓", (e as Error).message.slice(0, 60)); }
+  // invalid pickup stop
+  try { await assignStudent(principal, { routeId: routeA.id, studentId: kamau.id, shiftId: afternoon.id, pickupStop: "Nakuru" }); console.log("bad stop: ALLOWED ✗"); }
   catch { console.log("invalid pickup stop blocked: ✓"); }
-  // valid assign + release + double release
-  const a = await assignStudent(principal, { routeId: routeA.id, studentId: kamau.id, pickupStop: "Seasons" });
-  console.log("assign w/ stop: ✓", a.pickupStop);
+  // valid assign (to the real Afternoon shift) + release + double release
+  const a = await assignStudent(principal, { routeId: routeA.id, studentId: kamau.id, shiftId: afternoon.id, pickupStop: "Seasons" });
+  console.log("assign w/ stop + shift: ✓", a.pickupStop, a.shiftId === afternoon.id ? "(Afternoon)" : "✗ wrong shift");
   await releaseAssignment(principal, a.id);
   try { await releaseAssignment(principal, a.id); console.log("double release: ALLOWED ✗"); }
   catch { console.log("double release blocked: ✓"); }
 
-  // 7) capacity: tiny bus (2 seats) fills up
+  // T.8 — real automatic seat allocation: caller picks the ROUTE, the
+  // system finds a real shift with a free seat, most-free-seats-first.
+  // Morning has 31 free (33 cap - 2 riders), Afternoon has 20 free (20 cap
+  // - 0 riders) — Morning has MORE free seats, so it's picked first.
+  const { autoAllocateStudent } = await import("../src/lib/services/transport.service");
+  const atieno0 = await db.student.findFirstOrThrow({ where: { tenantId: t.id, firstName: "Atieno" } });
+  const auto = await autoAllocateStudent(principal, { routeId: routeA.id, studentId: atieno0.id, pickupStop: "Seasons" });
+  console.log("auto-allocate picks the shift with the most free seats:", auto.shiftId === morning.id ? "✓ picked Morning (31 free > Afternoon's 20 free)" : `✗ picked shiftId=${auto.shiftId}`);
+  await releaseAssignment(principal, auto.id);
+
+  // T.8 — real honest FULL error when every real shift on a route is full.
+  const fullBus = await addVehicle(principal, { regNo: "KFL 002T", capacity: 1 });
+  const fullRoute = await createRoute(principal, { name: "Test Full Route", termFeeKes: 0 });
+  const fullShift = await (await import("../src/lib/services/transport.service")).createShift(principal, { routeId: fullRoute.id, name: "Only", vehicleId: fullBus.id });
+  const atieno1 = await db.student.findFirstOrThrow({ where: { tenantId: t.id, firstName: "Atieno" } });
+  await assignStudent(principal, { routeId: fullRoute.id, studentId: atieno1.id, shiftId: fullShift.id });
+  try {
+    await autoAllocateStudent(principal, { routeId: fullRoute.id, studentId: kamau.id });
+    console.log("auto-allocate on a genuinely full route: ALLOWED ✗");
+  } catch (e) { console.log("auto-allocate honestly reports FULL: ✓", (e as Error).message.slice(0, 60)); }
+  // cleanup the full-route test fixtures now (before further shared-fee-route steps)
+  await db.transportAssignment.deleteMany({ where: { routeId: fullRoute.id } });
+  await db.transportShift.delete({ where: { id: fullShift.id } });
+  await db.transportRoute.delete({ where: { id: fullRoute.id } });
+  await db.vehicle.delete({ where: { id: fullBus.id } });
+
+  // 7) capacity: tiny bus (2 seats) fills up. NOTE: Achieng/Wanjiru/Kiprono
+  // are now permanently seeded riders (T.8 real demo fixtures on Route
+  // A/B), so this step uses 3 real, dedicated, disposable test-only
+  // students instead of borrowing seeded ones that already have real
+  // transport assignments.
+  const testClass = await db.schoolClass.findFirstOrThrow({ where: { tenantId: t.id } });
+  const suffix = Date.now().toString().slice(-6);
+  const capStu1 = await db.student.create({ data: { tenantId: t.id, admissionNo: `T8-CAP1-${suffix}`, firstName: "TestCap1", lastName: "Fixture", gender: "M", classId: testClass.id, status: "ACTIVE" } });
+  const capStu2 = await db.student.create({ data: { tenantId: t.id, admissionNo: `T8-CAP2-${suffix}`, firstName: "TestCap2", lastName: "Fixture", gender: "F", classId: testClass.id, status: "ACTIVE" } });
+  const capStu3 = await db.student.create({ data: { tenantId: t.id, admissionNo: `T8-CAP3-${suffix}`, firstName: "TestCap3", lastName: "Fixture", gender: "M", classId: testClass.id, status: "ACTIVE" } });
   const tinyBus = await addVehicle(principal, { regNo: "KZZ 001T", capacity: 2 });
   const tinyRoute = await createRoute(principal, { name: "Test Tiny Route", termFeeKes: 0, vehicleId: tinyBus.id });
-  const achieng = await db.student.findFirstOrThrow({ where: { tenantId: t.id, firstName: "Achieng" } });
-  const atieno = await db.student.findFirstOrThrow({ where: { tenantId: t.id, firstName: "Atieno" } });
-  await assignStudent(principal, { routeId: tinyRoute.id, studentId: achieng.id });
-  await assignStudent(principal, { routeId: tinyRoute.id, studentId: atieno.id });
-  try { await assignStudent(principal, { routeId: tinyRoute.id, studentId: kamau.id }); console.log("over capacity: ALLOWED ✗"); }
+  await assignStudent(principal, { routeId: tinyRoute.id, studentId: capStu1.id });
+  await assignStudent(principal, { routeId: tinyRoute.id, studentId: capStu2.id });
+  try { await assignStudent(principal, { routeId: tinyRoute.id, studentId: capStu3.id }); console.log("over capacity: ALLOWED ✗"); }
   catch (e) { console.log("bus capacity enforced: ✓", (e as Error).message.slice(0, 50)); }
 
   // 8) transport fees → real B.7 invoices, idempotent
@@ -108,6 +156,7 @@ async function main() {
   await db.fuelLog.delete({ where: { id: fl.id } });
   await db.vehicleMaintenance.delete({ where: { id: mt.id } });
   await db.invoice.deleteMany({ where: { tenantId: t.id, description: { contains: "Transport" } } });
+  await db.student.deleteMany({ where: { id: { in: [capStu1.id, capStu2.id, capStu3.id] } } });
   console.log("cleanup ✓");
 }
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

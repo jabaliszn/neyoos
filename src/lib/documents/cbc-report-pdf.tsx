@@ -60,7 +60,7 @@ export async function renderCbcReportPdf(d: CbcReportData): Promise<Buffer> {
   });
 
   const doc = (
-    <Document title={`CBC report ${d.letterNo}`} author={d.schoolName}>
+    <Document title={`CBE report ${d.letterNo}`} author={d.schoolName}>
       <Page size="A4" style={s.page}>
         <View style={s.header}>
           {d.logoUrl ? <Image src={d.logoUrl} style={{ width: 24, height: 24, objectFit: "contain", marginBottom: 3 }} /> : null}

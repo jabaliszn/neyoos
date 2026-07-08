@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       });
     }
     const templates = await getReportTemplates(user);
-    return ok({ data: templates });
+    return ok(templates);
   } catch (error) {
     return handleError(error);
   }
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = reportTemplateSchema.parse(body);
     const template = await createReportTemplate(user, data);
-    return ok({ data: template }, 201);
+    return ok(template, 201);
   } catch (error) {
     if (error instanceof ReportTemplateError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400, CONFLICT: 409 };
@@ -57,7 +57,7 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const data = reportTemplateSchema.parse(body);
     const template = await updateReportTemplate(user, id, data);
-    return ok({ data: template });
+    return ok(template);
   } catch (error) {
     if (error instanceof ReportTemplateError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400, CONFLICT: 409 };

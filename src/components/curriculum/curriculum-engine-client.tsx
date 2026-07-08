@@ -248,8 +248,8 @@ function modalIcon(modal: NonNullable<ModalState>) {
 function CurriculumModal({ title, icon: Icon, children, onClose }: { title: string; icon: typeof Compass; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-navy-950/35 p-3 backdrop-blur-md">
-      <Card className="max-h-[min(92dvh,44rem)] w-full max-w-2xl overflow-hidden border-white/50 bg-white/95 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-navy-950/95">
-        <CardHeader className="sticky top-0 z-10 border-b border-navy-100 bg-white/90 backdrop-blur-xl dark:border-navy-800 dark:bg-navy-950/90">
+      <Card className="max-h-[min(92dvh,44rem)] w-full max-w-2xl overflow-hidden border-white/50 bg-white shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-navy-900">
+        <CardHeader className="sticky top-0 z-10 border-b border-navy-100 bg-white backdrop-blur-xl dark:border-navy-800 dark:bg-navy-900">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-200"><Icon className="h-5 w-5" /></span>

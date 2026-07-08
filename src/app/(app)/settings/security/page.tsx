@@ -4,7 +4,10 @@ import { TwoFactorCard } from "@/components/settings/two-factor-card";
 import { PasskeysCard } from "@/components/settings/passkeys-card";
 import { ConnectedAccountsCard } from "@/components/settings/connected-accounts-card";
 import { DeviceAppUnlockCard } from "@/components/settings/device-app-unlock-card";
+import { FinanceSecurityCard } from "@/components/settings/finance-security-card";
+import { MyShellCard } from "@/components/settings/my-shell-card";
 import { listPasskeys } from "@/lib/services/passkey.service";
+import { can } from "@/lib/core/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +45,8 @@ export default async function SecuritySettingsPage() {
       <DeviceAppUnlockCard hasPasskey={passkeys.length > 0} />
       <ConnectedAccountsCard />
       <TwoFactorCard initialEnabled={dbUser?.totpEnabled ?? false} />
+      {can(user.role, "tenant.manage_settings") && <FinanceSecurityCard />}
+      <MyShellCard />
     </div>
   );
 }

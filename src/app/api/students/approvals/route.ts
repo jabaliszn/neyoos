@@ -23,10 +23,10 @@ export async function GET(req: NextRequest) {
 
     if (studentId) {
       const history = await getStudentApprovalHistory(user, studentId);
-      return ok({ data: history });
+      return ok(history);
     }
     const pending = await getPendingApprovals(user);
-    return ok({ data: pending });
+    return ok(pending);
   } catch (error) {
     if (error instanceof ApprovalError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400 } as const;
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = studentApprovalRequestSchema.parse(body);
     const request = await submitStudentApprovalRequest(user, data);
-    return ok({ data: request }, 201);
+    return ok(request, 201);
   } catch (error) {
     if ((error as any).name === "ZodError") return fail("INVALID", (error as any).errors[0].message, 400);
     if (error instanceof ApprovalError) {
@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const review = studentApprovalReviewSchema.parse(body);
     const request = await reviewStudentApprovalRequest(user, id, review);
-    return ok({ data: request });
+    return ok(request);
   } catch (error) {
     if ((error as any).name === "ZodError") return fail("INVALID", (error as any).errors[0].message, 400);
     if (error instanceof ApprovalError) {

@@ -14,6 +14,7 @@ import { PaymentError } from "@/lib/services/payment.service";
 import { MessagingError } from "@/lib/services/messaging.service";
 import { ContentModerationError } from "@/lib/services/content-moderation.service";
 import { StorageError } from "@/lib/services/storage.service";
+import { StorageLinkError } from "@/lib/services/storage-vault.service";
 import { RecycleError } from "@/lib/services/recycle.service";
 import { OnboardingError } from "@/lib/services/onboarding.service";
 import { JobError } from "@/lib/jobs/jobs.service";
@@ -47,6 +48,7 @@ import { CbcError } from "@/lib/services/cbc.service";
 import { FinanceError } from "@/lib/services/finance.service";
 import { PayrollError } from "@/lib/services/payroll.service";
 import { HrError } from "@/lib/services/hr.service";
+import { SubstituteError } from "@/lib/services/substitute.service";
 import { PortalError } from "@/lib/services/parent-portal.service";
 import { TeacherPortalError } from "@/lib/services/teacher-portal.service";
 import { LmsError } from "@/lib/services/lms.service";
@@ -65,6 +67,11 @@ import { MzaziError } from "@/lib/services/mzazi.service";
 import { CafeteriaError } from "@/lib/services/cafeteria.service";
 import { FlagError } from "@/lib/services/platform-flags.service";
 import { AppearanceError } from "@/lib/services/platform-appearance.service";
+import { ShellVersionError } from "@/lib/services/shell-version.service";
+import { PricingEngineError } from "@/lib/services/pricing-engine.service";
+import { SchoolQuoteError } from "@/lib/services/school-quote.service";
+import { StorageOptimizerError } from "@/lib/services/storage-optimizer.service";
+import { DeveloperCenterError } from "@/lib/services/developer-center.service";
 import { UniformError } from "@/lib/services/uniform.service";
 import { DisciplineError } from "@/lib/services/discipline.service";
 import { ClinicError } from "@/lib/services/clinic.service";
@@ -199,6 +206,12 @@ export function handleError(err: unknown) {
   if (err instanceof StorageError) {
     const status =
       err.code === "NOT_FOUND" ? 404 : err.code === "TOO_LARGE" ? 413 : 415;
+    return fail(err.code, err.message, status);
+  }
+
+  // R.7 — School-linked external storage problems.
+  if (err instanceof StorageLinkError) {
+    const status = err.code === "FORBIDDEN" ? 403 : err.code === "NOT_FOUND" ? 404 : 422;
     return fail(err.code, err.message, status);
   }
 
@@ -388,6 +401,12 @@ export function handleError(err: unknown) {
     return fail(err.code, err.message, status);
   }
 
+  // Substitute-teacher coverage (T.12).
+  if (err instanceof SubstituteError) {
+    const status = err.code === "NOT_FOUND" ? 404 : err.code === "ALREADY" ? 409 : 422;
+    return fail(err.code, err.message, status);
+  }
+
   // I.6 Principal delegation tasks.
   if (err instanceof DelegationError) {
     const status = err.code === "NOT_FOUND" ? 404 : err.code === "FORBIDDEN" ? 403 : 422;
@@ -454,10 +473,11 @@ export function handleError(err: unknown) {
     return fail(err.code, err.message, status);
   }
 
-  // Transport (B.17).
+  // Transport (B.17 + T.8).
   if (err instanceof TransportError) {
     const status =
       err.code === "NOT_FOUND" ? 404 :
+      err.code === "FORBIDDEN" ? 403 :
       err.code === "DUPLICATE" || err.code === "ALREADY" || err.code === "FULL" ? 409 : 422;
     return fail(err.code, err.message, status);
   }
@@ -511,6 +531,25 @@ export function handleError(err: unknown) {
   // Platform appearance (G.33 2.0).
   if (err instanceof AppearanceError) {
     return fail(err.code, err.message, 422);
+  }
+
+  // Shell Version (NEYO Shell V2, 2026-07-04).
+  if (err instanceof ShellVersionError) {
+    return fail(err.code, err.message, err.code === "NOT_FOUND" ? 404 : 422);
+  }
+
+  // Pricing Engine 2.0 / Capacity-Based Pricing (Part V, 2026-07-06).
+  if (err instanceof PricingEngineError) {
+    return fail(err.code, err.message, err.code === "NOT_FOUND" ? 404 : err.code === "FORBIDDEN" ? 403 : 422);
+  }
+  if (err instanceof SchoolQuoteError) {
+    return fail(err.code, err.message, err.code === "NOT_FOUND" ? 404 : 422);
+  }
+  if (err instanceof StorageOptimizerError) {
+    return fail(err.code, err.message, err.code === "NOT_FOUND" ? 404 : 422);
+  }
+  if (err instanceof DeveloperCenterError) {
+    return fail(err.code, err.message, err.code === "NOT_FOUND" ? 404 : 422);
   }
 
   // Uniform catalogue (G.24).

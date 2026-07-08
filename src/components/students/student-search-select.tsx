@@ -118,7 +118,7 @@ export function StudentSearchSelect({
       {helper && <p className="mt-1 text-[11px] leading-5 text-navy-400 dark:text-navy-500">{helper}</p>}
 
       {open && !disabled && (
-        <div className="absolute z-[80] mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-white/60 bg-white/95 p-1.5 shadow-card backdrop-blur-xl dark:border-white/10 dark:bg-navy-950/95">
+        <div className="absolute z-[80] mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-white/60 bg-white p-1.5 shadow-card backdrop-blur-xl dark:border-white/10 dark:bg-navy-900">
           {results.length === 0 ? (
             <div className="rounded-xl px-3 py-4 text-center text-xs text-navy-400">
               No learner found. Try another name or admission number.

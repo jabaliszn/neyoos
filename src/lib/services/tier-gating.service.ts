@@ -50,6 +50,15 @@ export async function hasEntitlement(tenantId: string, featureKey: string): Prom
   });
   if (!tenant) throw new Error("Tenant not found");
 
+  // Part V — Capacity-Based Pricing 2.0: every school on the new size-based
+  // pricing model pays for real usage (students/staff/parents/storage/AI-OCR),
+  // never for a feature tier. "Every feature included" is the entire premise
+  // of the pivot, so a SIZE_BASED_V2 subscription is automatically entitled
+  // to every premium feature — no plan/add-on lookup needed. The old
+  // plan/add-on/grant logic below is kept only for any hypothetical legacy
+  // subscription that has not been migrated (pricingMode !== "SIZE_BASED_V2").
+  if (tenant.subscription?.pricingMode === "SIZE_BASED_V2") return true;
+
   const planKey = tenant.subscription?.planKey || "free_karibu";
   const planDef = PLANS.find((p) => p.key === planKey);
 

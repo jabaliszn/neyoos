@@ -333,6 +333,7 @@ export async function decideTeacherMessageApproval(
       role: requester.role as Role,
       secondaryRole: requester.secondaryRole as Role | null,
       language: requester.language ?? "en",
+      popupStyle: requester.popupStyle ?? "glass",
     };
 
     const audience = await resolveAudience({ audienceType: req.audienceType, classId: req.classId });

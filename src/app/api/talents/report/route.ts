@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const report = await buildTalentReport(user, { termId: termId || null });
 
     if (format === "json") {
-      return ok({ data: report });
+      return ok(report);
     }
 
     const tenant = await db.tenant.findUniqueOrThrow({ where: { id: user.tenantId } });

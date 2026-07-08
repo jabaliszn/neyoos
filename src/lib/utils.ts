@@ -6,6 +6,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Kenya's Ministry of Education officially rebranded the curriculum from
+ * "Competency-Based Curriculum (CBC)" to "Competency-Based Education (CBE)"
+ * in April 2025. NEYO keeps the internal/stored value as "CBC" (matches
+ * every existing DB row, enum, and API contract — zero data migration
+ * risk), but every real user-facing label always displays "CBE" instead.
+ * Use this wherever a curriculum code is rendered to a school/parent/staff
+ * member; never display the raw stored code directly.
+ */
+export function curriculumLabel(code: string | null | undefined): string {
+  if (!code) return "";
+  if (code === "CBC") return "CBE";
+  if (code === "BOTH") return "CBE & 8-4-4";
+  return code;
+}
+
 /** Format a number as Kenyan Shillings. Always KES, never $. */
 export function formatKES(amount: number): string {
   return new Intl.NumberFormat("en-KE", {

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Settings, Users, BookOpen, Trash2, Loader2, Download, X } from "lucide-react";
+import { Plus, Settings, Users, BookOpen, Trash2, Loader2, Download, X, Sparkles, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,191 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type ReqDraft = { subjectId: string; isCore: boolean; minScorePct: string };
+
+const PATHWAY_GROUP_OPTIONS: { value: "STEM" | "SOCIAL_SCIENCES" | "ARTS_SPORTS"; label: string }[] = [
+  { value: "STEM", label: "STEM" },
+  { value: "SOCIAL_SCIENCES", label: "Social Sciences" },
+  { value: "ARTS_SPORTS", label: "Arts & Sports Science" },
+];
+
+/** P.1 — Senior School pathway type (Triple/Dual) + official KICD taxonomy loader. */
+function PathwaySchoolConfigCard({ onOfficialLoaded }: { onOfficialLoaded: () => void }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(false);
+  const [pathwaySchoolType, setPathwaySchoolType] = React.useState<"NONE" | "TRIPLE" | "DUAL">("NONE");
+  const [enabledGroups, setEnabledGroups] = React.useState<string[]>([]);
+  const [saving, setSaving] = React.useState(false);
+  const [seeding, setSeeding] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const res = await fetch("/api/pathways/school-config");
+      const json = await res.json();
+      if (json.ok) {
+        setPathwaySchoolType(json.data.pathwaySchoolType);
+        setEnabledGroups(json.data.enabledPathwayGroups);
+      } else {
+        setError(true);
+      }
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => { void load(); }, [load]);
+
+  function toggleGroup(g: string) {
+    setEnabledGroups((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]));
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/pathways/school-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pathwaySchoolType, enabledPathwayGroups: enabledGroups }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: "Pathway school type saved", tone: "success" });
+      } else {
+        toast({ title: json.error?.message || "Could not save.", tone: "error" });
+      }
+    } catch {
+      toast({ title: "Network error", tone: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function loadOfficial() {
+    if (enabledGroups.length === 0) {
+      toast({ title: "Select at least one pathway group first.", tone: "error" });
+      return;
+    }
+    setSeeding(true);
+    try {
+      const res = await fetch("/api/pathways/seed-official", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groups: enabledGroups }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        const mathNote = (json.data.mathVariantsApplied || [])
+          .map((m: any) => `${m.group === "STEM" ? "STEM" : m.group === "SOCIAL_SCIENCES" ? "Social Sciences" : "Arts & Sports"} → ${m.variant === "CORE" ? "Core" : "Essential"} Mathematics`)
+          .join(", ");
+        const cslNote = json.data.communityServiceLearning
+          ? `Community Service Learning attached to every pathway (${json.data.communityServiceLearning.strandsCreated} new / ${json.data.communityServiceLearning.strandsMatched} matched grading strands).`
+          : "";
+        toast({
+          title: `Loaded official pathways: ${json.data.pathwaysCreated} created, ${json.data.pathwaysUpdated} updated`,
+          description: `${json.data.subjectsCreated} new subjects, ${json.data.subjectsMatched} matched to existing subjects.${mathNote ? ` Mathematics attached compulsorily: ${mathNote}.` : ""} ${cslNote}`,
+          tone: "success",
+        });
+        onOfficialLoaded();
+      } else {
+        toast({ title: json.error?.message || "Could not load official pathways.", tone: "error" });
+      }
+    } catch {
+      toast({ title: "Network error", tone: "error" });
+    } finally {
+      setSeeding(false);
+    }
+  }
+
+  if (loading) {
+    return <Card><CardContent className="flex h-24 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-navy-400" /></CardContent></Card>;
+  }
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-between p-4 text-sm text-red-600 dark:text-red-400">
+          Couldn&apos;t load pathway school type. <Button size="sm" variant="secondary" onClick={load}>Retry</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-green-100 dark:border-green-900/40">
+      <CardHeader className="pb-3 border-b border-navy-50 dark:border-navy-800">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <GraduationCap className="h-4.5 w-4.5 text-green-600" /> Senior School Pathway Type (KICD, CBE 2026)
+        </CardTitle>
+        <p className="text-xs text-navy-500 dark:text-navy-400">
+          Declare whether this school is a Triple Pathway school (offers all 3 official pathways) or a Dual Pathway school (STEM + exactly one other), then load the real KICD subject lists.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4 pt-4">
+        <div className="grid grid-cols-3 gap-2">
+          {(["NONE", "TRIPLE", "DUAL"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => {
+                setPathwaySchoolType(t);
+                if (t === "TRIPLE") setEnabledGroups(["STEM", "SOCIAL_SCIENCES", "ARTS_SPORTS"]);
+                if (t === "NONE") setEnabledGroups([]);
+              }}
+              className={`rounded-2xl border p-3 text-center text-xs font-bold transition ${
+                pathwaySchoolType === t
+                  ? "border-green-500 bg-green-500/10 text-navy-950 dark:text-white"
+                  : "border-navy-100 bg-white hover:bg-navy-50 text-navy-600 dark:border-navy-800 dark:bg-navy-950"
+              }`}
+            >
+              {t === "NONE" ? "Not configured" : t === "TRIPLE" ? "Triple Pathway" : "Dual Pathway"}
+            </button>
+          ))}
+        </div>
+
+        {pathwaySchoolType !== "NONE" && (
+          <div className="space-y-2">
+            <Label>{pathwaySchoolType === "TRIPLE" ? "All 3 official pathways (Triple)" : "Choose exactly 2, including STEM (Dual)"}</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {PATHWAY_GROUP_OPTIONS.map((g) => (
+                <button
+                  key={g.value}
+                  type="button"
+                  disabled={pathwaySchoolType === "TRIPLE"}
+                  onClick={() => toggleGroup(g.value)}
+                  className={`rounded-xl border p-2.5 text-center text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                    enabledGroups.includes(g.value)
+                      ? "border-green-500 bg-green-500/10 text-navy-950 dark:text-white"
+                      : "border-navy-100 bg-white hover:bg-navy-50 text-navy-600 dark:border-navy-800 dark:bg-navy-950"
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-navy-50 dark:border-navy-800">
+          <Button onClick={save} disabled={saving} size="sm" className="rounded-full">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save pathway type"}
+          </Button>
+          {pathwaySchoolType !== "NONE" && (
+            <Button onClick={loadOfficial} disabled={seeding} variant="secondary" size="sm" className="rounded-full">
+              {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+              Load official KICD pathways &amp; subjects
+            </Button>
+          )}
+        </div>
+        <p className="text-[11px] italic text-navy-400">
+          Loading official pathways creates real subjects (e.g. Physics, Chemistry, Business Studies) and one Pathway per official track — it reuses any subject you already have by code, never duplicates. Safe to run again after changing your groups. Mathematics is attached compulsorily per pathway: STEM learners get Core Mathematics, Social Sciences and Arts &amp; Sports Science learners get Essential Mathematics — one real, separately-taught subject each, per Kenya&apos;s 2026 CBE rules. Community Service Learning is attached compulsorily to every pathway, graded on the standard CBE rubric.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function PathwayManagerClient({ subjects }: { subjects: any[] }) {
   const [pathways, setPathways] = React.useState<any[]>([]);
@@ -63,6 +248,8 @@ export function PathwayManagerClient({ subjects }: { subjects: any[] }) {
 
   return (
     <div className="space-y-6">
+      <PathwaySchoolConfigCard onOfficialLoaded={() => void load()} />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-black text-navy-950 dark:text-white">Senior School Pathways</h2>
@@ -80,7 +267,7 @@ export function PathwayManagerClient({ subjects }: { subjects: any[] }) {
         <EmptyState
           icon={BookOpen}
           title="No pathways defined"
-          description="Create your first pathway, like STEM or Creative Arts, and set the subject requirements students need to join."
+          description="Load the official KICD pathways above, or create your own custom pathway and set the subject requirements students need to join."
           primaryAction={{ label: "Create Pathway", onClick: () => setOpen(true) }}
         />
       ) : (
@@ -93,8 +280,12 @@ export function PathwayManagerClient({ subjects }: { subjects: any[] }) {
                 <CardHeader className="pb-3 border-b border-navy-50 dark:border-navy-800">
                   <div className="flex items-start justify-between">
                     <div>
-                      <Badge tone="neutral" className="mb-2 font-bold text-xs uppercase tracking-widest">{p.code}</Badge>
+                      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                        <Badge tone="neutral" className="font-bold text-xs uppercase tracking-widest">{p.code}</Badge>
+                        {p.isOfficial && <Badge tone="green" className="text-[9px]">OFFICIAL KICD</Badge>}
+                      </div>
                       <CardTitle className="text-lg">{p.name}</CardTitle>
+                      {p.trackName && <p className="mt-0.5 text-[11px] font-semibold text-navy-400">{p.pathwayGroup ? PATHWAY_GROUP_OPTIONS.find((g) => g.value === p.pathwayGroup)?.label : null} track</p>}
                     </div>
                   </div>
                 </CardHeader>
@@ -139,6 +330,7 @@ export function PathwayManagerClient({ subjects }: { subjects: any[] }) {
     </div>
   );
 }
+
 
 function PathwayEditorDialog({ subjects, onClose, onDone }: any) {
   const [name, setName] = React.useState("");

@@ -48,6 +48,16 @@ export function ThemeToggle() {
           localStorage.setItem("neyo-liquid-enabled", String(enabled));
           apply(t, enabled);
         }
+        // O.3: keep the live company colour-intensity in sync too, UNLESS the
+        // signed-in user has a personal override active (data-lg-contrast is
+        // already correctly SSR'd for that case on the next real page load;
+        // this just avoids a stale value if company settings change mid-session
+        // for a user who has no personal override).
+        const colorLevel = j?.data?.liquidColorLevel;
+        const hasPersonalOverride = document.documentElement.getAttribute("data-lg-contrast-user-override") === "true";
+        if (!hasPersonalOverride && (colorLevel === "1" || colorLevel === "2" || colorLevel === "3")) {
+          document.documentElement.setAttribute("data-lg-contrast", colorLevel);
+        }
       })
       .catch(() => {});
   }, []);

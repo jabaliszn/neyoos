@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
       return { tenant, results };
     });
 
-    return ok({ data: { tenant, results } });
+    return ok({ tenant, results });
   } catch (error) {
     return handleError(error);
   }

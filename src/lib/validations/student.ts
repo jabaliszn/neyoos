@@ -43,6 +43,16 @@ export const classSchema = z.object({
 });
 export type ClassInput = z.infer<typeof classSchema>;
 
+// P.5 — bulk-create N streams for a level in one action (e.g. "Form 1 has 4
+// streams this year"), instead of creating each class/stream by hand.
+export const bulkCreateStreamsSchema = z.object({
+  level: z.string().trim().min(1, "Level is required, e.g. Form 1 or Grade 9.").max(40),
+  curriculum: z.enum(CURRICULA).default("CBC"),
+  streamNames: z.array(z.string().trim().min(1).max(40)).min(1, "Provide at least one stream name.").max(26),
+  capacity: z.coerce.number().int().min(1).max(500).optional(),
+});
+export type BulkCreateStreamsInput = z.infer<typeof bulkCreateStreamsSchema>;
+
 // --- Student create ---
 export const createStudentSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required.").max(40),

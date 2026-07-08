@@ -106,8 +106,33 @@ export async function getVisitor(id: string) {
 export async function recordWalkInPayment(
   tenantId: string,
   input: WalkInPaymentInput,
-  actor: { id: string; name: string }
+  actor: { id: string; name: string },
+  opts?: { skipBiometricCheck?: boolean }
 ) {
+  // R.3 — real server-side enforcement: if this school has opted into
+  // requireBiometricForFinance, a fresh, single-use, server-verified
+  // fingerprint/Face ID/passkey ticket for THIS EXACT payment is mandatory
+  // — never optional, never skippable by calling the API directly.
+  //
+  // Deliberate, documented exception: the bulk bank-statement CSV importer
+  // (api/reception/bank-import) reconciles money that has ALREADY landed in
+  // the school's bank account days earlier — it is not a live cash handover
+  // at the counter, and a human cannot practically scan their fingerprint
+  // once per CSV row. It passes skipBiometricCheck:true for exactly that
+  // reason. The single walk-in payment dialog (cash/M-Pesa/bank-slip typed
+  // in one at a time at the desk) is NEVER exempt and always enforces this.
+  const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { requireBiometricForFinance: true } });
+  if (tenant?.requireBiometricForFinance && !opts?.skipBiometricCheck) {
+    const { cashPaymentActionKey } = await import("@/lib/validations/reception");
+    const { consumeBiometricActionTicket } = await import("@/lib/services/passkey.service");
+    await consumeBiometricActionTicket(
+      actor.id,
+      tenantId,
+      cashPaymentActionKey({ amount: input.amount, method: input.method, accountRef: input.accountRef }),
+      input.biometricTicket
+    );
+  }
+
   // Guard against re-entering the same M-Pesa/bank receipt.
   if ((input.method === "mpesa" || input.method === "bank") && input.mpesaRef) {
     const dup = await db.payment.findUnique({ where: { mpesaRef: input.mpesaRef } });
@@ -151,6 +176,16 @@ export async function recordWalkInPayment(
     const { queueReceiptForPayment } = await import("@/lib/services/print-queue.service");
     await queueReceiptForPayment(tenantId, payment.id, `System (${input.method} at desk)`);
   } catch { /* queue is best-effort; payment is already safe */ }
+
+  // R.5 — the receipt lands in the parent's NEYO portal automatically, even
+  // if the desk printer never actually prints it (off, station not open,
+  // receptionist forgot). Only fires when the payment can genuinely be
+  // matched to a real student (via accountRef = their admission number) —
+  // never guessed.
+  try {
+    const { deliverReceiptToPortal } = await import("@/lib/services/receipt-delivery.service");
+    await deliverReceiptToPortal(tenantId, payment.id);
+  } catch { /* best-effort; payment is already safe */ }
 
   return payment;
 }

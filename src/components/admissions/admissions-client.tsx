@@ -455,7 +455,7 @@ function EntranceExamVaultModal({ classes, onClose }: { classes: ClassOpt[]; onC
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/45 p-4 backdrop-blur-md" onClick={onClose}>
-      <div className="w-full max-w-3xl rounded-3xl border border-white/20 bg-white/90 p-6 shadow-pop dark:border-navy-800 dark:bg-navy-900/95" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-3xl rounded-3xl border border-white/20 bg-white p-6 shadow-pop dark:border-navy-800 dark:bg-navy-900" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="space-y-1">
             <h3 className="flex items-center gap-2 text-base font-bold text-navy-900 dark:text-navy-50">

@@ -39,11 +39,12 @@ export async function POST(req: NextRequest) {
       tenantId: user.tenantId,
       recipientId: user.id,
       title: "Student import complete",
-      body: `${result.created} learner${result.created === 1 ? "" : "s"} created · ${result.failed.length} row${result.failed.length === 1 ? "" : "s"} need review.`,
+      body: `${result.created} learner${result.created === 1 ? "" : "s"} created${result.updated ? ` · ${result.updated} updated` : ""} · ${result.failed.length} row${result.failed.length === 1 ? "" : "s"} need review.`,
       category: "system",
       href: "/students/import",
     });
     return ok(result);
+
   } catch (e) {
     return handleError(e);
   }

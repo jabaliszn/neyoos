@@ -26,6 +26,8 @@ export interface SessionUser {
   role: Role;
   secondaryRole: Role | null;
   language: string;
+  popupStyle?: string; // O.2 personal popup rendering: "glass" | "solid" — optional so older/ad-hoc SessionUser constructions (tests, seams) stay valid; treat missing as "glass".
+  lgContrast?: string; // O.3 personal colour-intensity override: "company" | "1" | "2" | "3" — optional for the same reason.
 }
 
 /** Full session context, including impersonation (A.2.9). */
@@ -108,6 +110,8 @@ function toSessionUser(u: {
   role: string;
   secondaryRole?: string | null;
   language?: string;
+  popupStyle?: string;
+  lgContrast?: string;
 }): SessionUser {
   return {
     id: u.id,
@@ -119,6 +123,8 @@ function toSessionUser(u: {
     role: isRole(u.role) ? u.role : ("STUDENT" as Role),
     secondaryRole: u.secondaryRole && isRole(u.secondaryRole) ? u.secondaryRole : null,
     language: u.language ?? "en",
+    popupStyle: u.popupStyle === "solid" ? "solid" : "glass",
+    lgContrast: (["1", "2", "3"] as const).includes(u.lgContrast as any) ? u.lgContrast : "company",
   };
 }
 

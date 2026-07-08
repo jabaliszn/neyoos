@@ -55,7 +55,11 @@ export async function POST(req: NextRequest) {
       const dup = await db.payment.findUnique({ where: { mpesaRef: row.ref } });
       if (dup) { duplicates++; continue; }
       const inv = await findInvoice(user.tenantId, row.accountRef);
-      const payment = await recordWalkInPayment(user.tenantId, { amount: row.amount, phone: row.phone, method: "bank", accountRef: row.accountRef, mpesaRef: row.ref, description: row.description }, { id: user.id, name: user.fullName });
+      // R.3 — this is a bulk reconciliation of money that already landed in
+      // the bank days earlier (not a live counter handover), so a per-row
+      // fingerprint check is impractical and deliberately skipped here —
+      // see the documented exception in recordWalkInPayment() itself.
+      const payment = await recordWalkInPayment(user.tenantId, { amount: row.amount, phone: row.phone, method: "bank", accountRef: row.accountRef, mpesaRef: row.ref, description: row.description }, { id: user.id, name: user.fullName }, { skipBiometricCheck: true });
       imported++;
       if (inv) {
         await db.payment.update({ where: { id: payment.id }, data: { invoiceId: inv.id } });

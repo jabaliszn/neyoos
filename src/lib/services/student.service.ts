@@ -21,7 +21,7 @@ type GuardianInput = z.infer<typeof guardianInputSchema>;
 type UpdateGuardianInput = z.infer<typeof updateGuardianSchema>;
 
 export class StudentError extends Error {
-  constructor(public code: "NOT_FOUND" | "DUPLICATE" | "FORBIDDEN", message: string) {
+  constructor(public code: "NOT_FOUND" | "DUPLICATE" | "FORBIDDEN" | "INVALID", message: string) {
     super(message);
     this.name = "StudentError";
   }
@@ -126,6 +126,66 @@ export async function createClass(input: ClassInput) {
       classTeacherId: input.classTeacherId || null,
       capacity: input.capacity ?? null,
     } as never,
+  });
+}
+
+// P.5 — "specify how many streams a level has" bulk creator. A real Kenyan
+// school opening a new level (e.g. "Form 1 has 4 streams this year") should
+// not have to click "add class" 4 times by hand. This creates every
+// requested stream in one real transaction-like pass, skips any stream name
+// that already exists for the level (idempotent, never duplicates), and
+// immediately wires a default TimetableConfig row for each NEW class so it
+// shows up ready-to-configure in the Timetable Engine without a separate
+// manual step — directly answering the "generate the same in relation to
+// the timetable too" part of the founder's P.5 ask.
+export async function bulkCreateStreams(
+  user: SessionUser,
+  input: { level: string; curriculum: "CBC" | "8-4-4"; streamNames: string[]; capacity?: number | null }
+) {
+  return withTenant(user.tenantId, async () => {
+    const level = input.level.trim();
+    if (!level) throw new StudentError("INVALID", "Level is required, e.g. Form 1 or Grade 9.");
+    const streamNames = Array.from(new Set(input.streamNames.map((s) => s.trim()).filter(Boolean)));
+    if (streamNames.length === 0) throw new StudentError("INVALID", "Provide at least one stream name.");
+    if (streamNames.length > 26) throw new StudentError("INVALID", "That is an unusually large number of streams for one level — please confirm and split the request.");
+
+    const tdb = tenantDb();
+    const existing = await tdb.schoolClass.findMany({ where: { level }, select: { stream: true } });
+    const existingStreams = new Set(existing.map((c) => c.stream ?? ""));
+
+    const created: { id: string; level: string; stream: string | null }[] = [];
+    const skipped: string[] = [];
+
+    for (const stream of streamNames) {
+      if (existingStreams.has(stream)) { skipped.push(stream); continue; }
+      const cls = await tdb.schoolClass.create({
+        data: {
+          level,
+          stream,
+          curriculum: input.curriculum,
+          capacity: input.capacity ?? null,
+        } as never,
+      });
+      // Wire a default TimetableConfig immediately so this new stream is
+      // ready-to-configure the moment the school opens the Timetable Engine —
+      // real defaults (8 periods/day, Saturday on with 4 periods), not a
+      // placeholder row; the school can tune every field afterward as normal.
+      await tdb.timetableConfig.create({
+        data: {
+          tenantId: user.tenantId,
+          classId: cls.id,
+          periodsPerDay: 8,
+          freePeriodsPerWeek: 4,
+          coCurricularCount: 2,
+          coCurricularName: "Games",
+          hasSaturday: true,
+          saturdayPeriodsCount: 4,
+        },
+      });
+      created.push({ id: cls.id, level: cls.level, stream: cls.stream });
+    }
+
+    return { level, created, skipped, createdCount: created.length, skippedCount: skipped.length };
   });
 }
 
@@ -397,6 +457,21 @@ export async function createStudent(
         metadata: JSON.stringify({ admissionNo, name: `${input.firstName} ${input.lastName}` }),
       },
     });
+
+    // Part X — Developer Center 2.0 (founder-requested 2026-07-06): fire the
+    // real "student.created" webhook for any real integration a school has
+    // subscribed (e.g. a card-printing company per the founder's own
+    // "Example 9: Student ID Cards" scenario). Best-effort only.
+    try {
+      const { dispatchEvent } = await import("@/lib/services/webhook.service");
+      await dispatchEvent(user.tenantId, "student.created", {
+        studentId: student.id,
+        admissionNo,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        classId: input.classId ?? null,
+      });
+    } catch { /* best-effort */ }
 
     return { id: student.id, admissionNo };
   });

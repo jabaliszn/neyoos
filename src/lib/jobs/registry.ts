@@ -6,6 +6,7 @@
 import { runSubscriptionStateMachine } from "@/lib/services/billing.service";
 import { retryDueDeliveries } from "@/lib/services/webhook.service";
 import { db } from "@/lib/db";
+import { checkAllTenantsForReprice } from "@/lib/services/pricing-engine.service";
 
 export interface JobContext {
   payload?: unknown;
@@ -31,6 +32,19 @@ async function subscriptionTick(ctx: JobContext): Promise<{ changed: number }> {
   const changed = await runSubscriptionStateMachine();
   await ctx.progress(100);
   return { changed };
+}
+
+/** Part V — Capacity-Based Pricing 2.0 (founder-confirmed 2026-07-06): the
+ * real, scheduled check for every real school's usage growth crossing a
+ * real NEYO-Ops-configured threshold. Never collects anything mid-term —
+ * only updates the real price that applies at each school's own next
+ * renewal, and sends a real, honest, cause-only notice (never exact
+ * headcounts) via the existing billing-notice channel. */
+async function pricingReprice(ctx: JobContext): Promise<{ checked: number; repriced: number }> {
+  await ctx.progress(10);
+  const result = await checkAllTenantsForReprice();
+  await ctx.progress(100);
+  return result;
 }
 
 /** Overdue fee reminders for every tenant (B.7.12). */
@@ -79,6 +93,7 @@ async function dataRetention(ctx: JobContext): Promise<{
   auditsArchived: number;
   expiredPassportsPurged: number;
   oldPortfoliosPurged: number;
+  apiUsageLogsPurged: number;
 }> {
   await ctx.progress(15);
   const notifCutoff = new Date(Date.now() - 90 * 24 * 3600 * 1000); // 90 days
@@ -86,14 +101,24 @@ async function dataRetention(ctx: JobContext): Promise<{
     where: { NOT: { readAt: null }, readAt: { lt: notifCutoff } },
   });
 
-  await ctx.progress(45);
+  await ctx.progress(40);
   // Compliance audit log retention (e.g., older than 7 years soft archive or purge)
   const auditCutoff = new Date(Date.now() - 7 * 365 * 24 * 3600 * 1000); // 7 years
   const resAudit = await db.auditLog.deleteMany({
     where: { createdAt: { lt: auditCutoff } },
   });
 
-  await ctx.progress(70);
+  await ctx.progress(60);
+  // Part X — Developer Center 2.0: real per-request ApiUsageLog rows are a
+  // genuinely high-volume table at scale — real analytics only ever look
+  // back a real 90-day window (getApiUsageDashboard()'s own max), so
+  // anything older is real, safe, low-risk operational data to purge.
+  const apiUsageCutoff = new Date(Date.now() - 90 * 24 * 3600 * 1000); // 90 days
+  const resApiUsage = await db.apiUsageLog.deleteMany({
+    where: { createdAt: { lt: apiUsageCutoff } },
+  });
+
+  await ctx.progress(75);
   // J.22 — run the real compliance retention engine: wipe expired transfer
   // passport payloads (data minimization) and purge stale unapproved portfolio
   // evidence. Previously this engine existed but was never invoked (dead code).
@@ -106,6 +131,7 @@ async function dataRetention(ctx: JobContext): Promise<{
     auditsArchived: resAudit.count,
     expiredPassportsPurged: compliance.expiredPassportsPurged,
     oldPortfoliosPurged: compliance.oldPortfoliosPurged,
+    apiUsageLogsPurged: resApiUsage.count,
   };
 }
 
@@ -162,6 +188,21 @@ async function storageHealthCheck(ctx: JobContext) {
   return summary;
 }
 
+/** W.1 — Storage Intelligence Engine (founder-requested 2026-07-06): a real
+ * nightly, company-wide sweep — duplicate-file detection, genuinely safe
+ * TEMPORARY-file cleanup (real-deletes only if NEYO Ops has explicitly
+ * switched autoDeleteTemporaryFiles on; otherwise a real, safe dry-run
+ * report), and flagging (never deleting) real long-unused files. */
+async function storageOptimizerRun(ctx: JobContext) {
+  await ctx.progress(10);
+  const { runStorageOptimizer } = await import("@/lib/services/storage-optimizer.service");
+  const { getStorageOptimizerConfig } = await import("@/lib/services/storage-optimizer.service");
+  const config = await getStorageOptimizerConfig();
+  const result = await runStorageOptimizer("SCHEDULED_CRON", { dryRun: !config.autoDeleteTemporaryFiles });
+  await ctx.progress(100);
+  return result;
+}
+
 /** G.28 — check and auto-flag broken/kept promises. */
 async function promiseCheck(ctx: JobContext) {
   await ctx.progress(10);
@@ -178,6 +219,7 @@ async function promiseCheck(ctx: JobContext) {
 
 export const JOBS: Record<string, JobHandler> = {
   "subscription-state-machine": subscriptionTick,
+  "pricing-reprice-check": pricingReprice,
   "recycle-purge": recyclePurge,
   "webhook-deliver": webhookDeliver,
   "fee-reminders": feeReminders,
@@ -190,6 +232,7 @@ export const JOBS: Record<string, JobHandler> = {
   "finance-digest-daily": financeDigestDaily,
   "finance-digest-weekly": financeDigestWeekly,
   "storage-health-check": storageHealthCheck,
+  "storage-optimizer-run": storageOptimizerRun,
 };
 
 export function isJob(name: string): boolean {
@@ -211,6 +254,7 @@ export interface CronDef {
 
 export const CRON_SCHEDULES: CronDef[] = [
   { name: "subscription-state-machine", hour: 1, minute: 0, description: "Daily 01:00 EAT — advance subscription states" },
+  { name: "pricing-reprice-check", hour: 5, minute: 0, description: "Daily 05:00 EAT — Capacity-Based Pricing 2.0: check every real school's usage growth against NEYO Ops thresholds, reprice for their next renewal only (Part V)" },
   { name: "recycle-purge", hour: 2, minute: 0, description: "Daily 02:00 EAT — purge recycle bin >30 days" },
   { name: "fee-reminders", hour: 9, minute: 0, description: "Daily 09:00 EAT — SMS overdue fee reminders (3-day dedupe)" },
   { name: "demo-purge", hour: 3, minute: 0, description: "Daily 03:00 EAT — hard-delete expired demo tenants (G.14)" },
@@ -220,6 +264,7 @@ export const CRON_SCHEDULES: CronDef[] = [
   { name: "finance-digest-daily", hour: 17, minute: 30, description: "Daily 17:30 EAT — fees digest to bursar and principal (I.99)" },
   { name: "finance-digest-weekly", hour: 7, minute: 30, dow: 1, description: "Monday 07:30 EAT — weekly fees digest to bursar and principal (I.99)" },
   { name: "storage-health-check", hour: 6, minute: 15, description: "Daily 06:15 EAT — Storage Vault quota/health checks and upgrade warnings (I.56)" },
+  { name: "storage-optimizer-run", hour: 2, minute: 30, description: "Daily 02:30 EAT — Storage Intelligence Engine: duplicate-file detection, real TEMPORARY-file cleanup, and unused-file flagging (W.1)" },
 ];
 
 /**

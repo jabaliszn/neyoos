@@ -17,6 +17,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
           <nav className="ml-auto flex gap-4 text-sm text-navy-500 dark:text-navy-400">
             <Link href="/privacy" className="hover:text-navy-800 dark:hover:text-navy-100">Privacy</Link>
             <Link href="/terms" className="hover:text-navy-800 dark:hover:text-navy-100">Terms</Link>
+            <Link href="/developers" className="hover:text-navy-800 dark:hover:text-navy-100">Developers</Link>
             <Link href="/status" className="hover:text-navy-800 dark:hover:text-navy-100">Status</Link>
           </nav>
         </div>

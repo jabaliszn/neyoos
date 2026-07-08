@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const studentId = req.nextUrl.searchParams.get("studentId");
     if (!studentId) return fail("INVALID", "studentId required", 400);
     const preferences = await getStudentPreferences(user, studentId);
-    return ok({ data: preferences });
+    return ok(preferences);
   } catch (error) {
     return handleError(error);
   }
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { preferences } = setStudentPreferencesSchema.parse(body);
     const updated = await setStudentPreferences(user, studentId, preferences);
-    return ok({ data: updated });
+    return ok(updated);
   } catch (error) {
     return handleError(error);
   }

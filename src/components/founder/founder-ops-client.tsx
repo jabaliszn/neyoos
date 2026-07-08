@@ -6,6 +6,7 @@ import {
   BookOpenCheck,
   CalendarClock,
   ClipboardCheck,
+  LayoutGrid,
   Loader2,
   MessageSquareQuote,
   Plus,
@@ -44,8 +45,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { formatKES } from "@/lib/utils";
+import { PricingEngineOpsTab } from "@/components/founder/pricing-engine-ops-tab";
+import { StorageOptimizerOpsTab } from "@/components/founder/storage-optimizer-ops-tab";
+import { DeveloperCenterOpsTab } from "@/components/founder/developer-center-ops-tab";
 
-const TABS = ["Overview", "Build log", "Metrics", "Cadence", "Interviews", "Platform Flags", "Feature Toggles", "Revenue Grants", "Revenue Ops", "Bundi Import", "Curriculum Library", "Business Operations", "Ecosystem Trends"] as const;
+const TABS = ["Overview", "Build log", "Metrics", "Cadence", "Interviews", "Platform Flags", "Feature Toggles", "Revenue Grants", "Revenue Ops", "Pricing Engine", "Storage Intelligence", "Developer Center", "Bundi Import", "Curriculum Library", "Business Operations", "Ecosystem Trends"] as const;
 type Tab = (typeof TABS)[number];
 
 type Dashboard = {
@@ -772,10 +776,18 @@ export function FounderOpsClient() {
       {tab === "Metrics" && <MetricsTab rows={data.metrics} value={metric} setValue={setMetric} saving={saving} onSave={() => mutate("upsert_metric", metric, "Metrics snapshot saved")} onDelete={(id: string) => remove("metrics", id)} />}
       {tab === "Cadence" && <Card><CardHeader><CardTitle>Founder rhythm cadence</CardTitle></CardHeader><CardContent><CadenceTab rows={data.entries} value={entry} setValue={setEntry} saving={saving} onSave={() => mutate("upsert_entry", { ...entry, completedAt: entry.completedAt ? new Date(entry.completedAt).toISOString() : null, decisions: lines(entry.decisionsText), actionItems: actionItems(entry.actionItemsText) }, "Founder cadence entry saved")} onDelete={(id: string) => remove("entries", id)} /></CardContent></Card>}
       {tab === "Interviews" && <InterviewsTab rows={data.interviews} value={interview} setValue={setInterview} saving={saving} onSave={() => mutate("create_interview", { ...interview, painPoints: lines(interview.painPointsText), quotes: lines(interview.quotesText), opportunities: lines(interview.opportunitiesText) }, "Customer interview saved")} onDelete={(id: string) => remove("interviews", id)} />}
-      {tab === "Platform Flags" && <PlatformFlagsTab flags={flags} toggling={saving} onToggle={toggleFlag} />}
+      {tab === "Platform Flags" && (
+        <div className="space-y-6">
+          <PlatformFlagsTab flags={flags} toggling={saving} onToggle={toggleFlag} />
+          <ShellReleaseCard />
+        </div>
+      )}
       {tab === "Feature Toggles" && <JFeatureTogglesTab />}
       {tab === "Revenue Grants" && <RevenueGrantsOpsTab />}
       {tab === "Revenue Ops" && <RevenueOpsTab />}
+      {tab === "Pricing Engine" && <PricingEngineOpsTab />}
+      {tab === "Storage Intelligence" && <StorageOptimizerOpsTab />}
+      {tab === "Developer Center" && <DeveloperCenterOpsTab />}
       {tab === "Bundi Import" && <BundiImportOpsTab />}
       {tab === "Curriculum Library" && <CurriculumLibraryOpsTab />}
       
@@ -1014,6 +1026,141 @@ function PlatformFlagsTab({ flags, toggling, onToggle }: { flags: any[]; togglin
   );
 }
 
+// =============================================================================
+// NEYO Shell V2 — personal-toggle RELEASE GATE (founder-requested "NEYO 2.0"
+// phase 2, 2026-07-05). Founder's own answer when scoped: NEYO Ops
+// configures the release via a real master on/off switch PLUS a per-school
+// early-access list (a genuine staged rollout, not an all-or-nothing flip),
+// same JSON-in-PlatformSetting shape already used by the J.23 Revenue
+// Grants system right above. Separate from the platform DEFAULT card in
+// Settings -> School Profile (which only picks v1-vs-v2 for schools with no
+// personal preference of their own) — this card controls whether staff can
+// pick a personal preference AT ALL.
+// =============================================================================
+function ShellReleaseCard() {
+  const { toast } = useToast();
+  const [data, setData] = React.useState<{ released: boolean; earlyAccessTenantIds: string[]; schools: any[] } | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/platform/shell-version/release");
+      const json = await res.json();
+      if (json.ok) setData(json.data);
+      else setError(json.error?.message || "Failed to load the shell release state");
+    } catch {
+      setError("Failed to load the shell release state");
+    }
+  }, []);
+
+  React.useEffect(() => { void load(); }, [load]);
+
+  async function setMaster(released: boolean) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/platform/shell-version/release", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ released }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: released ? "Personal Shell choice released to every school" : "Personal Shell choice un-released platform-wide", tone: "success" });
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed", tone: "error" });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setEarlyAccess(tenantId: string, earlyAccess: boolean) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/platform/shell-version/release", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, earlyAccess }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: earlyAccess ? "Early access granted" : "Early access revoked", tone: "success" });
+        await load();
+      } else {
+        toast({ title: json.error?.message || "Failed", tone: "error" });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <LayoutGrid className="h-5 w-5 text-green-600" />
+          NEYO Shell V2 — personal choice release
+        </CardTitle>
+        <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">
+          Controls whether individual staff members can pick their OWN app shell (Shell V1 or Shell V2) in their own Settings, independent of the platform default. Off by default so nobody sees a personal-preference picker before you're ready. Once released for a school, a staff member who hasn't chosen yet still follows the platform default.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+            {error} <Button size="sm" variant="secondary" className="ml-2" onClick={() => void load()}>Retry</Button>
+          </div>
+        ) : data === null ? (
+          <div className="space-y-3">{[0, 1].map((i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}</div>
+        ) : (
+          <div className="space-y-5">
+            <div className={`flex items-center justify-between gap-3 rounded-2xl border p-4.5 ${data.released ? "border-green-200/70 bg-green-50/60 dark:border-green-900 dark:bg-green-900/10" : "border-navy-100 bg-white/70 dark:border-navy-800 dark:bg-navy-900/60"}`}>
+              <div>
+                <p className="font-bold text-navy-900 dark:text-navy-50">Master switch — release to EVERY school</p>
+                <p className="mt-0.5 text-xs text-navy-500 dark:text-navy-400">
+                  {data.released ? "Released platform-wide. Every school's staff can now pick their own shell." : "Not released yet. Only schools given early access below can pick a personal shell."}
+                </p>
+              </div>
+              <Button size="sm" disabled={busy} variant={data.released ? "secondary" : "primary"} onClick={() => setMaster(!data.released)}>
+                {data.released ? "Un-release" : "Release to everyone"}
+              </Button>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-navy-400">Staged early access (before the master switch)</p>
+              {data.schools.length === 0 ? (
+                <EmptyState icon={Users} title="No schools yet" description="Schools will appear here once they are onboarded." />
+              ) : (
+                <div className="space-y-2">
+                  {data.schools.map((sc: any) => {
+                    const has = data.earlyAccessTenantIds.includes(sc.id);
+                    return (
+                      <div key={sc.id} className="flex items-center justify-between gap-3 rounded-2xl border border-navy-100 bg-white/70 p-3.5 dark:border-navy-800 dark:bg-navy-900/60">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-navy-900 dark:text-navy-50">{sc.name}</span>
+                          <Badge tone={has ? "green" : "neutral"}>{has ? "Early access" : "Not yet"}</Badge>
+                        </div>
+                        <Button size="sm" disabled={busy || data.released} variant={has ? "secondary" : "primary"} onClick={() => setEarlyAccess(sc.id, !has)}>
+                          {has ? "Revoke" : "Grant early access"}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {data.released && (
+                <p className="mt-2 text-[11px] text-navy-400">Early-access grants are hidden behind the master switch while it's on — every school already has access.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function NeyoBusinessOsCockpit({ schools, waitlist, maintActive, paymentSummary }: { schools: any[]; waitlist: any[]; maintActive: boolean; paymentSummary?: any }) {
   const cards = [
@@ -2485,10 +2632,10 @@ function CurriculumLibraryOpsTab() {
       <Card>
         <CardHeader>
           <CardTitle>New curriculum template</CardTitle>
-          <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">Create a company-level template (CBC Kenya, 8-4-4 legacy, or custom) that schools can adopt.</p>
+          <p className="mt-1 text-xs text-navy-500 dark:text-navy-400">Create a company-level template (CBE Kenya, 8-4-4 legacy, or custom) that schools can adopt.</p>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="CBC Kenya Junior School" /></div>
+          <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="CBE Kenya Junior School" /></div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><Label>Country</Label><Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} /></div>
             <div className="space-y-1"><Label>Version</Label><Input value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} placeholder="2026 Release" /></div>

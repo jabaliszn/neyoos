@@ -281,15 +281,23 @@ export async function getTimetable(user: SessionUser, classId: string) {
       ? await tenantDb().user.findMany({ where: { id: { in: teacherIds } }, select: { id: true, fullName: true } })
       : [];
     const tMap = new Map(teachers.map((t) => [t.id, t.fullName]));
+    // T.12 — real, cheap map of today's real confirmed substitute coverage.
+    const { todaysConfirmedSubstitutesMap } = await import("@/lib/services/substitute.service");
+    const substituteMap = await todaysConfirmedSubstitutesMap(user.tenantId);
     return {
-      slots: slots.map((s) => ({
-        id: s.id, dayOfWeek: s.dayOfWeek, period: s.period,
-        subjectId: s.subjectId, subjectName: s.subject?.name ?? null, subjectCode: s.subject?.code ?? null,
-        teacherId: s.teacherId, teacherName: s.teacherId ? tMap.get(s.teacherId) ?? null : null,
-        venue: (s as any).venue ?? null,
-        slotType: s.slotType,
-        weekRotation: s.weekRotation,
-      })),
+      slots: slots.map((s) => {
+        const sub = substituteMap.get(s.id);
+        return {
+          id: s.id, dayOfWeek: s.dayOfWeek, period: s.period,
+          subjectId: s.subjectId, subjectName: s.subject?.name ?? null, subjectCode: s.subject?.code ?? null,
+          teacherId: s.teacherId, teacherName: s.teacherId ? tMap.get(s.teacherId) ?? null : null,
+          venue: (s as any).venue ?? null,
+          slotType: s.slotType,
+          weekRotation: s.weekRotation,
+          // T.12 — real, honest "who's actually teaching this TODAY" overlay.
+          substituteTodayName: sub?.teacherName ?? null,
+        };
+      }),
       config: config || null,
     };
   });

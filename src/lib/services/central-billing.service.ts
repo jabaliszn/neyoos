@@ -20,6 +20,23 @@ async function secretOrEnv(key: string, envName: string) {
   return (await readCompanySecret(key)) || process.env[envName] || "";
 }
 
+/**
+ * The central billing callback URL, WITH the shared webhook token appended —
+ * this is a security-critical URL: Daraja has no HMAC signing, and this
+ * callback activates a real school subscription, so it must always carry
+ * the same `DARAJA_WEBHOOK_TOKEN` the route itself verifies (matching the
+ * per-tenant `/api/payments/webhook/[slug]?t=...` pattern). Never build this
+ * URL without the token — a bare URL would either be rejected by the route
+ * (if a token is configured) or, worse, silently accepted by an
+ * unauthenticated route (the exact real gap found and fixed in this audit).
+ */
+function centralCallbackUrl(): string {
+  const token = process.env.DARAJA_WEBHOOK_TOKEN;
+  const base = `${appBaseUrl()}/api/billing/central-callback`;
+  return token ? `${base}?t=${encodeURIComponent(token)}` : base;
+}
+
+
 async function centralCreds(): Promise<ProviderCredentials | null> {
   const shortcode = await secretOrEnv("central_daraja_shortcode", "NEYO_MPESA_SHORTCODE");
   const environmentRaw = (await secretOrEnv("central_daraja_environment", "NEYO_MPESA_ENVIRONMENT")) || "sandbox";
@@ -63,7 +80,7 @@ export async function getCentralBillingGatewayStatus() {
     required: 5,
     liveReady: configured >= 4,
     source: configured > 0 ? "neyo_ops_vault" : process.env.NEYO_DARAJA_CONSUMER_KEY ? "env" : "dev_mock",
-    callbackUrl: `${appBaseUrl()}/api/billing/central-callback`,
+    callbackUrl: centralCallbackUrl(),
     masked: statuses.map((s) => s?.masked || null),
   };
 }
@@ -130,7 +147,7 @@ export async function initiateCentralSubscriptionStk(input: { tenantId: string; 
     phone: input.phone,
     accountRef,
     description: `NEYO Subscription ${tenant.name}`.slice(0, 60),
-    callbackUrl: `${appBaseUrl()}/api/billing/central-callback`,
+    callbackUrl: centralCallbackUrl(),
   });
   if (!result.ok || !result.checkoutRequestId) {
     await db.subscriptionPayment.update({ where: { id: payment.id }, data: { status: "FAILED", resultDesc: result.message } });

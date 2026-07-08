@@ -20,6 +20,8 @@ export default async function FinancePage() {
         canStructure={can(user.role, "finance.manage_structure")}
         canInvoice={can(user.role, "finance.create_invoice")}
         canRecord={can(user.role, "finance.record_payment")}
+        canDiscount={can(user.role, "finance.manage_structure")}
+        canManageSiblingDiscount={can(user.role, "tenant.manage_settings")}
       />
     </div>
   );

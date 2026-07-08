@@ -209,8 +209,25 @@ export async function generateWholeSchoolTimetable(user: SessionUser) {
     const classes = inputs.classes;
     if (classes.length === 0) throw new TimetableSolverError("NOT_FOUND", "No active classes found.");
 
-    // 2) Prepare the scheduler structures
-    const DAYS = [1, 2, 3, 4, 5]; // Mon-Fri
+    // 2) Prepare the scheduler structures.
+    // P.5 — Saturday is folded in per-class (not hardcoded to Mon-Fri only),
+    // and every class's real period count comes from its own TimetableConfig
+    // row rather than one hardcoded number for the whole school.
+    const WEEKDAYS = [1, 2, 3, 4, 5];
+    const SATURDAY_DAY = 6;
+    const configByClassId = new Map(inputs.configs.map((c) => [c.classId, c]));
+    function daysForClassId(classId: string): number[] {
+      const cfg = configByClassId.get(classId);
+      if (cfg?.hasSaturday === false) return WEEKDAYS;
+      return [...WEEKDAYS, SATURDAY_DAY];
+    }
+    function maxPeriodsForClassId(classId: string, day: number): number {
+      const cfg = configByClassId.get(classId);
+      if (day === SATURDAY_DAY) return cfg?.saturdayPeriodsCount ?? 4;
+      return cfg?.periodsPerDay ?? 8;
+    }
+    // Kept as a fallback constant only for the fixed co-curricular block below,
+    // which is deliberately Friday-only and unaffected by Saturday.
     const MAX_PERIODS = 8;
 
     // Grid states for checking constraints in-memory (Academic)
@@ -228,8 +245,12 @@ export async function generateWholeSchoolTimetable(user: SessionUser) {
       teacherRemedialCount.set(t.id, 0);
     }
 
-    // WIPE all existing timetable slots
-    await tdb.timetableSlot.deleteMany({});
+    // P.5 bugfix: this generator only regenerates ACADEMIC/REMEDIAL/PREP slots
+    // itself, so the wipe must be scoped to those slot types — an unscoped
+    // deleteMany({}) here was a real pre-existing bug that silently destroyed
+    // manually-placed ACTIVITY slots (from the Activities timetable feature)
+    // on every run, found during the P.5 audit.
+    await tdb.timetableSlot.deleteMany({ where: { slotType: { in: ["ACADEMIC", "REMEDIAL", "PREP"] } } });
 
     const unplacedLoads: Array<{ classLabel: string; subjectCode: string; reason: string }> = [];
 
@@ -278,7 +299,8 @@ export async function generateWholeSchoolTimetable(user: SessionUser) {
 
       // Schedule Lunch Shifts (Shift 1 = Period 5, Shift 2 = Period 6, Shift 3 = Period 7)
       const lunchPeriod = (config.lunchShift ?? 1) === 1 ? 5 : (config.lunchShift ?? 1) === 2 ? 6 : 7;
-      for (const day of DAYS) {
+      for (const day of daysForClassId(c.id)) {
+        if (lunchPeriod > maxPeriodsForClassId(c.id, day)) continue; // short Saturday may have no lunch period
         const key = `${c.id}:${day}:${lunchPeriod}`;
         classGrid.set(key, lunchSubject.id); // Reserve in classGrid so academic lessons never double-book lunch!
         
@@ -295,8 +317,9 @@ export async function generateWholeSchoolTimetable(user: SessionUser) {
 
       // Schedule Co-curriculars: Friday Periods 7 & 8 (skip if already allocated for Lunch)
       if (config.coCurricularCount > 0) {
+        const classMaxP = maxPeriodsForClassId(c.id, 5);
         const slotsToPlace = Math.min(config.coCurricularCount, 2);
-        for (let p = MAX_PERIODS - slotsToPlace + 1; p <= MAX_PERIODS; p++) {
+        for (let p = classMaxP - slotsToPlace + 1; p <= classMaxP; p++) {
           const key = `${c.id}:5:${p}`; // Friday (5), Period p
           if (!classGrid.has(key)) {
             classGrid.set(key, cocSubject.id);
@@ -309,7 +332,8 @@ export async function generateWholeSchoolTimetable(user: SessionUser) {
       const freeNeeded = config.freePeriodsPerWeek;
       if (freeNeeded > 0) {
         for (let d = 1; d <= 5; d++) {
-          for (let p = 1; p <= MAX_PERIODS; p++) {
+          const classMaxP = maxPeriodsForClassId(c.id, d);
+          for (let p = 1; p <= classMaxP; p++) {
             const key = `${c.id}:${d}:${p}`;
             if (freeScheduled < freeNeeded && !classGrid.has(key)) {
               classGrid.set(key, freeSubject.id);
@@ -355,14 +379,21 @@ export async function generateWholeSchoolTimetable(user: SessionUser) {
       return 0;
     });
 
-    // 5) Backtracking Placement Solver for ACADEMIC slots
+    // 5) Backtracking Placement Solver for ACADEMIC slots.
+    // P.5 bugfix: this used to report a hardcoded FAKE unplaced load
+    // ("Form 2 East" / "MAT") on any failure, regardless of what actually
+    // failed — a real zero-placeholder violation found during the P.5 audit.
+    // It now records the REAL card that could not be placed.
+    const realUnplacedCardRef: { current: { classLabel: string; subjectCode: string } | null } = { current: null };
     function solve(cardIndex: number): boolean {
       if (cardIndex >= cardsToPlace.length) return true;
 
       const card = cardsToPlace[cardIndex];
+      let triedAnySlot = false;
 
-      for (const day of DAYS) {
-        for (let period = 1; period <= MAX_PERIODS; period++) {
+      for (const day of daysForClassId(card.classId)) {
+        const maxP = maxPeriodsForClassId(card.classId, day);
+        for (let period = 1; period <= maxP; period++) {
           const classKey = `${card.classId}:${day}:${period}`;
           const teacherKey = card.teacherId ? `${card.teacherId}:${day}:${period}` : null;
           const spreadKey = `${card.classId}:${card.subjectId}:${day}`;
@@ -373,6 +404,7 @@ export async function generateWholeSchoolTimetable(user: SessionUser) {
           const currentSpread = subjectDayCount.get(spreadKey) ?? 0;
           if (currentSpread >= 2) continue;
 
+          triedAnySlot = true;
           // Place card
           classGrid.set(classKey, card.subjectId);
           if (teacherKey) teacherGrid.set(teacherKey, card.classId);
@@ -387,15 +419,18 @@ export async function generateWholeSchoolTimetable(user: SessionUser) {
         }
       }
 
+      if (!triedAnySlot && !realUnplacedCardRef.current) {
+        realUnplacedCardRef.current = { classLabel: card.classLabel, subjectCode: card.subjectCode };
+      }
       return false;
     }
 
     const solvedOk = solve(0);
     if (!solvedOk) {
       unplacedLoads.push({
-        classLabel: "Form 2 East",
-        subjectCode: "MAT",
-        reason: "Teacher double-booking constraint could not be resolved at Period 3.",
+        classLabel: realUnplacedCardRef.current?.classLabel ?? "Unknown class",
+        subjectCode: realUnplacedCardRef.current?.subjectCode ?? "Unknown subject",
+        reason: "No conflict-free slot found under current constraints (teacher double-booking or class period limits).",
       });
     }
 
@@ -452,7 +487,7 @@ export async function generateWholeSchoolTimetable(user: SessionUser) {
       const config = inputs.configs.find((cfg) => cfg.classId === c.id);
       if (!config?.hasPreps) continue;
 
-      for (const day of DAYS) {
+      for (const day of WEEKDAYS) {
         for (const p of [1, 2]) {
           prepSlotsToCreate.push({
             tenantId: user.tenantId,

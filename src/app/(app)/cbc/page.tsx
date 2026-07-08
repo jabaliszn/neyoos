@@ -11,7 +11,7 @@ export default async function CbcPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-navy-900 dark:text-navy-50">CBC</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-navy-900 dark:text-navy-50">CBE</h1>
         <p className="mt-1 text-sm text-navy-500 dark:text-navy-400">
           Competency strands, formative observations on the EE/ME/AE/BE rubric, and learner reports.
         </p>

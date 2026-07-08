@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import {
-  Building2, Loader2, Plus, Trash2, ImagePlus, Save, ListChecks, MapPin, Palette,
+  Building2, Loader2, Plus, Trash2, ImagePlus, Save, ListChecks, MapPin, Palette, Square, Sparkle, LayoutGrid, Rows3,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,24 @@ export function SchoolProfileEditor() {
   const [customThemeOn, setCustomThemeOn] = React.useState(true);
   const [activationSummary, setActivationSummary] = React.useState<any | null>(null);
 
+  // Shell Version (founder-requested "NEYO 2.0", 2026-07-04) — company-wide
+  // today, same PlatformSetting family + save pattern as liquidLevel above.
+  const [shellVersion, setShellVersion] = React.useState<"v1" | "v2">("v1");
+  const [shellVersionSaving, setShellVersionSaving] = React.useState(false);
+
+  // O.2 — personal Glass vs Solid popup preference (server-side, per-user,
+  // independent of the company liquid_level above and the device intensity
+  // slider below — this one only changes how POPUPS/MODALS render).
+  const [popupStyle, setPopupStyleState] = React.useState<"glass" | "solid">("glass");
+  const [popupStyleSaving, setPopupStyleSaving] = React.useState(false);
+
+  // O.3 — colour/contrast intensity: a company-wide default (SUPER_ADMIN only,
+  // same PlatformSetting family as liquidLevel) PLUS a personal per-user
+  // override, independent of blur depth entirely.
+  const [liquidColorLevel, setLiquidColorLevel] = React.useState("1");
+  const [lgContrast, setLgContrastState] = React.useState<"company" | "1" | "2" | "3">("company");
+  const [lgContrastSaving, setLgContrastSaving] = React.useState(false);
+
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const lvl = localStorage.getItem("neyo-liquid") || "2";
@@ -76,14 +94,58 @@ export function SchoolProfileEditor() {
       const customOn = localStorage.getItem("neyo-custom-theme-active") !== "false";
       setCustomThemeOn(customOn);
     }
-    fetch("/api/auth/me").then((r) => r.json()).then((j) => setIsSuperAdmin(j?.data?.user?.role === "SUPER_ADMIN")).catch(() => {});
+    fetch("/api/auth/me").then((r) => r.json()).then((j) => {
+      setIsSuperAdmin(j?.data?.user?.role === "SUPER_ADMIN");
+      if (j?.data?.user?.popupStyle === "solid") {
+        setPopupStyleState("solid");
+        if (typeof document !== "undefined") document.documentElement.setAttribute("data-popup-style", "solid");
+      }
+      const savedContrast = j?.data?.user?.lgContrast;
+      if (savedContrast === "1" || savedContrast === "2" || savedContrast === "3" || savedContrast === "company") {
+        setLgContrastState(savedContrast);
+      }
+    }).catch(() => {});
     fetch("/api/platform/appearance").then((r) => r.json()).then((j) => {
       if (j.ok) {
         setLiquidLevel(j.data.liquidLevel);
         setLiquidEnabled(j.data.liquidEnabled !== false);
+        if (j.data.liquidColorLevel === "1" || j.data.liquidColorLevel === "2" || j.data.liquidColorLevel === "3") {
+          setLiquidColorLevel(j.data.liquidColorLevel);
+        }
+      }
+    }).catch(() => {});
+    fetch("/api/platform/shell-version").then((r) => r.json()).then((j) => {
+      if (j.ok && (j.data.shellVersion === "v1" || j.data.shellVersion === "v2")) {
+        setShellVersion(j.data.shellVersion);
       }
     }).catch(() => {});
   }, []);
+
+  async function saveShellVersion(next: "v1" | "v2") {
+    if (!isSuperAdmin) {
+      toast({ title: "Only NEYO company Super Admin can change the platform shell version.", tone: "error" });
+      return;
+    }
+    setShellVersionSaving(true);
+    try {
+      const res = await fetch("/api/platform/shell-version", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shellVersion: next }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setShellVersion(json.data.shellVersion);
+        toast({ title: next === "v2" ? "NEYO Shell V2 is now the platform default" : "Shell V1 (classic sidebar) is now the platform default", tone: "success" });
+      } else {
+        toast({ title: json.error?.message || "Could not save.", tone: "error" });
+      }
+    } catch {
+      toast({ title: "Network problem — try again.", tone: "error" });
+    } finally {
+      setShellVersionSaving(false);
+    }
+  }
 
   function applyLiquidIntensity(value: number) {
     if (typeof window === "undefined") return;
@@ -103,7 +165,7 @@ export function SchoolProfileEditor() {
     applyLiquidIntensity(liquidIntensity);
   }
 
-  async function savePlatformAppearance(input: { liquidLevel?: string; liquidEnabled?: boolean }) {
+  async function savePlatformAppearance(input: { liquidLevel?: string; liquidEnabled?: boolean; liquidColorLevel?: string }) {
     if (!isSuperAdmin) {
       toast({ title: "Only NEYO company Super Admin can change platform Liquid Glass.", tone: "error" });
       return;
@@ -120,6 +182,13 @@ export function SchoolProfileEditor() {
       setLiquidLevel(json.data.liquidLevel);
       setLiquidEnabled(json.data.liquidEnabled);
       applyLiquid(json.data.liquidEnabled, json.data.liquidLevel);
+      if (json.data.liquidColorLevel === "1" || json.data.liquidColorLevel === "2" || json.data.liquidColorLevel === "3") {
+        setLiquidColorLevel(json.data.liquidColorLevel);
+        // Only reflect the new company default live if this user has no personal override set.
+        if (typeof document !== "undefined" && document.documentElement.getAttribute("data-lg-contrast-user-override") !== "true") {
+          document.documentElement.setAttribute("data-lg-contrast", json.data.liquidColorLevel);
+        }
+      }
       toast({ title: "Platform Liquid Glass setting saved", tone: "success" });
     } catch (e) {
       toast({ title: e instanceof Error ? e.message : "Could not save platform appearance.", tone: "error" });
@@ -131,6 +200,64 @@ export function SchoolProfileEditor() {
   function handleLiquidChange(val: string) {
     setLiquidLevel(val);
     savePlatformAppearance({ liquidLevel: val });
+  }
+
+  function handleLiquidColorChange(val: string) {
+    setLiquidColorLevel(val);
+    savePlatformAppearance({ liquidColorLevel: val });
+  }
+
+  // O.3 — save + instantly apply the PERSONAL colour-intensity override.
+  // "company" clears the override (defers back to the school-wide default).
+  async function saveLgContrast(next: "company" | "1" | "2" | "3") {
+    setLgContrastState(next);
+    if (typeof document !== "undefined") {
+      const effective = next === "company" ? liquidColorLevel : next;
+      document.documentElement.setAttribute("data-lg-contrast", effective);
+      document.documentElement.setAttribute("data-lg-contrast-user-override", next === "company" ? "false" : "true");
+    }
+    setLgContrastSaving(true);
+    try {
+      const res = await fetch("/api/me/lg-contrast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lgContrast: next }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || "Could not save your colour-intensity preference.");
+      toast({
+        title: next === "company" ? "Following your school's default colour intensity again." : `Colour intensity set to level ${next} just for you.`,
+        tone: "success",
+      });
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Could not save your colour-intensity preference.", tone: "error" });
+    } finally {
+      setLgContrastSaving(false);
+    }
+  }
+
+  // O.2 — save + instantly apply the personal popup style (no page reload).
+  async function savePopupStyle(next: "glass" | "solid") {
+    setPopupStyleState(next);
+    if (typeof document !== "undefined") {
+      if (next === "solid") document.documentElement.setAttribute("data-popup-style", "solid");
+      else document.documentElement.removeAttribute("data-popup-style");
+    }
+    setPopupStyleSaving(true);
+    try {
+      const res = await fetch("/api/me/popup-style", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ popupStyle: next }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message || "Could not save your popup preference.");
+      toast({ title: next === "solid" ? "Popups will now render Solid for you." : "Popups will now render Liquid Glass for you.", tone: "success" });
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Could not save your popup preference.", tone: "error" });
+    } finally {
+      setPopupStyleSaving(false);
+    }
   }
 
   function handleCustomThemeToggle(val: boolean) {
@@ -326,6 +453,70 @@ export function SchoolProfileEditor() {
             </div>
           </div>
 
+          {/* O.3 — Colour/Contrast Intensity: a SEPARATE dimension from the
+              blur/transparency level above. Fixes visibility on busy glass
+              surfaces without changing how much blur is applied. */}
+          <div className="space-y-1.5">
+            <Label>Liquid Glass Colour Intensity (company default)</Label>
+            <p className="text-[10px] font-semibold text-navy-400">
+              Independent of the transparency level above — boosts background contrast for visibility without changing blur depth.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { val: "1", label: "Standard", desc: "Platform default contrast" },
+                { val: "2", label: "Enhanced", desc: "Higher contrast for busy backgrounds" },
+                { val: "3", label: "Maximum", desc: "Highest visibility, near-opaque cards" },
+              ].map((item) => (
+                <button
+                  key={item.val}
+                  type="button"
+                  disabled={!isSuperAdmin || appearanceSaving}
+                  onClick={() => handleLiquidColorChange(item.val)}
+                  className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    liquidColorLevel === item.val
+                      ? "border-green-500 bg-green-500/10 text-navy-950 font-bold dark:text-white"
+                      : "border-navy-100 bg-white hover:bg-navy-50 text-navy-600 dark:border-navy-800 dark:bg-navy-950"
+                  }`}
+                >
+                  <span className="text-xs">{item.label}</span>
+                  <span className="text-[10px] text-navy-400 font-normal mt-0.5">{item.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* O.3 — My personal colour-intensity override, for any signed-in
+              user (not just SUPER_ADMIN) — independent of the school default
+              above, mirroring O.2's "My Popup Style" personal-override model. */}
+          <div className="space-y-2 rounded-2xl border border-navy-100 bg-white/50 p-3.5 dark:border-navy-800 dark:bg-navy-950/30">
+            <Label>My Colour Intensity Override</Label>
+            <p className="text-[10px] font-semibold text-navy-400">
+              Personal override, saved to your account: pick your own contrast level regardless of your school&apos;s default above. Choose &quot;School default&quot; to always follow it.
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { val: "company" as const, label: "School default" },
+                { val: "1" as const, label: "Standard" },
+                { val: "2" as const, label: "Enhanced" },
+                { val: "3" as const, label: "Maximum" },
+              ].map((item) => (
+                <button
+                  key={item.val}
+                  type="button"
+                  disabled={lgContrastSaving}
+                  onClick={() => saveLgContrast(item.val)}
+                  className={`flex items-center justify-center p-2.5 rounded-2xl border text-center text-xs transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    lgContrast === item.val
+                      ? "border-green-500 bg-green-500/10 text-navy-950 font-bold dark:text-white"
+                      : "border-navy-100 bg-white hover:bg-navy-50 text-navy-600 dark:border-navy-800 dark:bg-navy-950"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-2 rounded-2xl border border-navy-100 bg-white/50 p-3.5 dark:border-navy-800 dark:bg-navy-950/30">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -348,6 +539,46 @@ export function SchoolProfileEditor() {
             />
             <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-navy-400">
               <span>Matte</span><span>Balanced</span><span>Deep Glass</span>
+            </div>
+          </div>
+
+          {/* O.2 — My Popup Style: personal Glass vs Solid, independent of the
+              company master toggle and the intensity slider above — this only
+              changes how POPUPS/MODALS (not cards, sidebar or topbar) render. */}
+          <div className="space-y-2 rounded-2xl border border-navy-100 bg-white/50 p-3.5 dark:border-navy-800 dark:bg-navy-950/30">
+            <Label>My Popup Style</Label>
+            <p className="text-[10px] font-semibold text-navy-400">
+              Personal preference, saved to your account: how "Sync with your phone"-style pop-up windows render for you. Everything else on the platform keeps the company&apos;s Liquid Glass setting above.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={popupStyleSaving}
+                onClick={() => savePopupStyle("glass")}
+                className={`flex flex-col items-center justify-center gap-1 p-3 rounded-2xl border text-center transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  popupStyle === "glass"
+                    ? "border-green-500 bg-green-500/10 text-navy-950 font-bold dark:text-white"
+                    : "border-navy-100 bg-white hover:bg-navy-50 text-navy-600 dark:border-navy-800 dark:bg-navy-950"
+                }`}
+              >
+                <Sparkle className="h-4 w-4" />
+                <span className="text-xs">Liquid Glass</span>
+                <span className="text-[10px] text-navy-400 font-normal">Frosted, matches the platform default</span>
+              </button>
+              <button
+                type="button"
+                disabled={popupStyleSaving}
+                onClick={() => savePopupStyle("solid")}
+                className={`flex flex-col items-center justify-center gap-1 p-3 rounded-2xl border text-center transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  popupStyle === "solid"
+                    ? "border-green-500 bg-green-500/10 text-navy-950 font-bold dark:text-white"
+                    : "border-navy-100 bg-white hover:bg-navy-50 text-navy-600 dark:border-navy-800 dark:bg-navy-950"
+                }`}
+              >
+                <Square className="h-4 w-4" />
+                <span className="text-xs">Solid</span>
+                <span className="text-[10px] text-navy-400 font-normal">Plain card, no blur or sheen</span>
+              </button>
             </div>
           </div>
 
@@ -404,6 +635,64 @@ export function SchoolProfileEditor() {
               </Field>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* NEYO Shell Version — founder-requested "NEYO 2.0" (2026-07-04):
+          the floating brand-colored bottom module bar + left Activity/
+          Intercom rail, as an alternative to today's classic sidebar.
+          Same company-wide-only pattern as Liquid Glass above; the
+          founder's own stated plan is to add a school-level override and
+          then a personal per-user toggle once this launches. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <LayoutGrid className="h-5 w-5 text-green-600" />
+            NEYO Shell Version
+          </CardTitle>
+          <p className="text-xs text-navy-400">
+            Company-wide default for how the app navigation looks. Only NEYO Super Admin can change this for now — a school-level override and a personal per-user choice are planned once this launches.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!isSuperAdmin && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              This is a NEYO Ops company control. It decides which shell every school sees.
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={!isSuperAdmin || shellVersionSaving}
+              onClick={() => saveShellVersion("v1")}
+              className={`flex flex-col items-start gap-1.5 rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                shellVersion === "v1"
+                  ? "border-green-500 bg-green-500/10 text-navy-950 font-bold dark:text-white"
+                  : "border-navy-100 bg-white hover:bg-navy-50 text-navy-600 dark:border-navy-800 dark:bg-navy-950"
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-sm"><Rows3 className="h-4 w-4" /> Shell V1 — Classic sidebar</span>
+              <span className="text-[11px] font-normal text-navy-400">Today's persistent left navigation column. The current platform default.</span>
+              {shellVersion === "v1" && <Badge tone="green" className="mt-1">Platform default</Badge>}
+            </button>
+            <button
+              type="button"
+              disabled={!isSuperAdmin || shellVersionSaving}
+              onClick={() => saveShellVersion("v2")}
+              className={`flex flex-col items-start gap-1.5 rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                shellVersion === "v2"
+                  ? "border-green-500 bg-green-500/10 text-navy-950 font-bold dark:text-white"
+                  : "border-navy-100 bg-white hover:bg-navy-50 text-navy-600 dark:border-navy-800 dark:bg-navy-950"
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-sm"><LayoutGrid className="h-4 w-4" /> Shell V2 — Floating bar (new)</span>
+              <span className="text-[11px] font-normal text-navy-400">A brand-colored floating bottom module bar (like a chat app's tab bar), with Recent Activity and the NEYO Intercom moved to a full-height left panel.</span>
+              {shellVersion === "v2" && <Badge tone="green" className="mt-1">Platform default</Badge>}
+            </button>
+          </div>
+          <p className="text-[10px] text-navy-400">
+            Switching here changes what every school sees on their next page load — nothing is deleted; you can switch back to Shell V1 at any time.
+          </p>
         </CardContent>
       </Card>
 

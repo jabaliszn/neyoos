@@ -16,7 +16,8 @@ import { ComputationDashboardClient } from "./computation-dashboard";
 import {
   BookOpen, Building2, CalendarRange, Grid3X3, NotebookPen, Plus,
   AlertCircle, Loader2, X, Sparkles, Trash2, Check, Calendar, Printer, Palette, Sliders, Info, HelpCircle, Save, Trophy,
-  Calculator, FileText, Clock3, Wand2, RefreshCw, Link2, Ban, Users, TimerReset, ShieldCheck, RotateCcw, ClipboardList
+  Calculator, FileText, Clock3, Wand2, RefreshCw, Link2, Ban, Users, TimerReset, ShieldCheck, RotateCcw, ClipboardList,
+  GraduationCap
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,13 +29,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { TableContainer, Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, curriculumLabel } from "@/lib/utils";
 
 interface Subject { id: string; name: string; code: string; curriculum: string; departmentId: string | null; departmentName: string | null; archived: boolean }
 interface Dept { id: string; name: string; hodId: string | null; hodName: string | null; subjectCount: number }
 interface Term { id: string; year: number; term: number; startDate: string; endDate: string; current: boolean }
 interface ClassOpt { id: string; name: string }
-interface Slot { id: string; dayOfWeek: number; period: number; subjectId?: string | null; subjectName?: string | null; subjectCode?: string | null; activityCategoryId?: string | null; activityCategoryName?: string | null; activityCategoryColor?: string | null; teacherId: string | null; teacherName: string | null; venue?: string | null; className?: string; slotType?: string; weekRotation?: string; isCombined?: boolean; combinedDetails?: string; }
+interface Slot { id: string; dayOfWeek: number; period: number; subjectId?: string | null; subjectName?: string | null; subjectCode?: string | null; activityCategoryId?: string | null; activityCategoryName?: string | null; activityCategoryColor?: string | null; teacherId: string | null; teacherName: string | null; venue?: string | null; className?: string; slotType?: string; weekRotation?: string; isCombined?: boolean; combinedDetails?: string; substituteTodayName?: string | null; }
 interface TimetablePrintGroup { id: string; title: string; subtitle: string; config: any; slots: Slot[] }
 interface TimetablePrintBundle { mode: "classes" | "teachers" | "venues"; groups: TimetablePrintGroup[] }
 interface Plan { id: string; date: string; topic: string; status: string; subjectName: string; subjectCode: string; className: string; teacherName: string }
@@ -152,7 +153,7 @@ function SubjectsTab({ canManage }: { canManage: boolean }) {
     try {
       const res = await fetch("/api/academics/subjects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preset }) });
       const json = await res.json();
-      if (json.ok) { toast({ title: `${json.data.added} ${preset} subjects added`, tone: "success" }); load(); }
+      if (json.ok) { toast({ title: `${json.data.added} ${preset === "CBC" ? "CBE" : preset} subjects added`, tone: "success" }); load(); }
       else toast({ title: json.error?.message || "Failed", tone: "error" });
     } finally { setBusy(false); }
   }
@@ -165,12 +166,12 @@ function SubjectsTab({ canManage }: { canManage: boolean }) {
       {canManage && (
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => setDialog(true)}><Plus className="h-4 w-4" /> New subject</Button>
-          <Button variant="secondary" disabled={busy} onClick={() => addPreset("CBC")}><Sparkles className="h-4 w-4" /> Add CBC set</Button>
+          <Button variant="secondary" disabled={busy} onClick={() => addPreset("CBC")}><Sparkles className="h-4 w-4" /> Add CBE set</Button>
           <Button variant="secondary" disabled={busy} onClick={() => addPreset("8-4-4")}><Sparkles className="h-4 w-4" /> Add 8-4-4 set</Button>
         </div>
       )}
       {subjects.length === 0 ? (
-        <EmptyState icon={BookOpen} title="No subjects yet" description='Use "Add CBC set" or "Add 8-4-4 set" to load the standard Kenyan subjects in one click.' />
+        <EmptyState icon={BookOpen} title="No subjects yet" description='Use "Add CBE set" or "Add 8-4-4 set" to load the standard Kenyan subjects in one click.' />
       ) : (
         <TableContainer>
           <Table>
@@ -180,7 +181,7 @@ function SubjectsTab({ canManage }: { canManage: boolean }) {
                 <TR key={s.id}>
                   <TD className="font-mono text-xs">{s.code}</TD>
                   <TD className="font-medium">{s.name}</TD>
-                  <TD><Badge tone={s.curriculum === "CBC" ? "green" : s.curriculum === "8-4-4" ? "blue" : "neutral"}>{s.curriculum}</Badge></TD>
+                  <TD><Badge tone={s.curriculum === "CBC" ? "green" : s.curriculum === "8-4-4" ? "blue" : "neutral"}>{curriculumLabel(s.curriculum)}</Badge></TD>
                   <TD className="text-navy-400">{s.departmentName ?? "—"}</TD>
                 </TR>
               ))}
@@ -215,7 +216,7 @@ function SubjectDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
           <div>
             <Label>Curriculum</Label>
             <select value={f.curriculum} onChange={(e) => setF({ ...f, curriculum: e.target.value })} className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
-              <option value="BOTH">Both</option><option value="CBC">CBC</option><option value="8-4-4">8-4-4</option>
+              <option value="BOTH">Both</option><option value="CBC">CBE</option><option value="8-4-4">8-4-4</option>
             </select>
           </div>
         </div>
@@ -672,6 +673,10 @@ function TimetableSlotCard({ slot, isBandW, fontSize, canManage, onClick, teache
             <span>{teacherFirst ? slot.className || slot.teacherName : slot.teacherName}</span>
             {slot.venue && <span className="font-bold text-green-700 dark:text-green-300">@ {slot.venue}</span>}
             {slot.isCombined && slot.combinedDetails && <span className="text-[8px] italic truncate max-w-[100px]">{slot.combinedDetails}</span>}
+            {/* T.12 — real, honest "who's actually teaching this TODAY" overlay */}
+            {slot.substituteTodayName && (
+              <span className="font-bold text-amber-700 dark:text-amber-300">Sub today: {slot.substituteTodayName}</span>
+            )}
           </div>
         </>
       ) : (
@@ -1122,20 +1127,20 @@ function SlotDialog({ classId, day, period, existing, subjects, activities, staf
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 backdrop-blur-sm px-4 animate-fade-in" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-navy-100 bg-white p-6 shadow-pop text-left" onClick={(e)=>e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between border-b border-navy-50 pb-2">
-          <h4 className="font-bold text-navy-950">Set Lesson Slot</h4>
-          <button onClick={onClose} className="rounded-full p-1 text-navy-400 hover:bg-navy-50"><X className="h-5 w-5" /></button>
+      <div className="w-full max-w-sm rounded-2xl border border-navy-100 bg-white p-6 shadow-pop text-left dark:border-navy-800 dark:bg-navy-900" onClick={(e)=>e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between border-b border-navy-50 pb-2 dark:border-navy-800">
+          <h4 className="font-bold text-navy-950 dark:text-white">Set Lesson Slot</h4>
+          <button onClick={onClose} className="rounded-full p-1 text-navy-400 hover:bg-navy-50 dark:hover:bg-navy-800"><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-4">
           <div className="space-y-1"><Label>Subject</Label>
-            <select value={subId} onChange={(e)=>setSubId(e.target.value)} className="w-full h-10 rounded-full border border-navy-200 bg-white px-3 text-sm">
+            <select value={subId} onChange={(e)=>setSubId(e.target.value)} className="w-full h-10 rounded-full border border-navy-200 bg-white px-3 text-sm dark:border-navy-700 dark:bg-navy-900 dark:text-navy-50">
               <option value="">Unassigned (Free Period)</option>
               {subjects.map((s: any)=><option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
             </select>
           </div>
           <div className="space-y-1"><Label>Teacher</Label>
-            <select value={teacherId} onChange={(e)=>setStaffId(e.target.value)} className="w-full h-10 rounded-full border border-navy-200 bg-white px-3 text-sm">
+            <select value={teacherId} onChange={(e)=>setStaffId(e.target.value)} className="w-full h-10 rounded-full border border-navy-200 bg-white px-3 text-sm dark:border-navy-700 dark:bg-navy-900 dark:text-navy-50">
               <option value="">Unassigned</option>
               {staff.map((s: any)=><option key={s.id} value={s.id}>{s.fullName}</option>)}
             </select>
@@ -1411,7 +1416,7 @@ function PlanDialog({ subjects, classes, competencies, assessmentPlans, onClose,
         <div><Label>Activities (optional)</Label><Input value={f.activities} onChange={(e) => setF({ ...f, activities: e.target.value })} /></div>
 
         <div className="rounded-xl border border-navy-200 p-3 dark:border-navy-700">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-navy-400">Link to curriculum (CBC objectives)</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-navy-400">Link to curriculum (CBE objectives)</p>
           <div className="grid grid-cols-1 gap-2">
             <div>
               <Label>Curriculum strand / objective (optional)</Label>
@@ -1501,7 +1506,7 @@ function ObservationDialog({ plan, onClose, onDone }: { plan: PlanRow; onClose: 
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className={areaClass} placeholder="e.g. Most learners grasped factorisation; 4 still struggle with sign changes." />
         </div>
         <div>
-          <Label>CBC proficiency level (optional, 1–4)</Label>
+          <Label>CBE proficiency level (optional, 1–4)</Label>
           <select value={level} onChange={(e) => setLevel(e.target.value)} className={selectClass}>
             <option value="">—</option>
             <option value="1">1 — Below expectation</option>
@@ -1777,16 +1782,16 @@ function TimetableGeneratorTab({ canManage }: { canManage: boolean }) {
       {/* PRE-GENERATION CONSTRAINTS VALIDATION MODAL */}
       {validationOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 backdrop-blur-sm px-4 animate-fade-in" onClick={() => setValidationOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-navy-100 bg-white p-6 shadow-pop text-center" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-2xl border border-navy-100 bg-white p-6 shadow-pop text-center dark:border-navy-800 dark:bg-navy-900" onClick={(e) => e.stopPropagation()}>
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 mb-4">
               <HelpCircle className="h-8 w-8 animate-bounce" />
             </div>
 
-            <h3 className="text-base font-bold text-navy-950">
+            <h3 className="text-base font-bold text-navy-950 dark:text-white">
               Review Subject Constraints?
             </h3>
             
-            <p className="mt-3 text-xs leading-relaxed text-navy-500">
+            <p className="mt-3 text-xs leading-relaxed text-navy-500 dark:text-navy-400">
               Are you sure you would like to generate the timetable without your own configured subject weights constraints?
             </p>
 
@@ -1819,6 +1824,92 @@ function TimetableGeneratorTab({ canManage }: { canManage: boolean }) {
   );
 }
 
+
+// P.5 — an OPTIONAL, one-click "Apply official KICD Senior School template"
+// action. It never forces anything: a school picks one Senior class + its 3
+// real pathway electives, and NEYO fills that class's TimetableConfig +
+// ClassSubjectNeed with the real KICD 40-lesson/week numbers (English 5,
+// Kiswahili 5, Math 5, CSL 3, 3 electives x 5, PE 3, ICT Skills 2, PPI 1,
+// Personal/Group Study 1) — a starting point the school can still edit
+// afterward exactly like any other class, matching the founder's explicit
+// "let a school tweak how they would like" instruction.
+function KicdSeniorTemplateCard({ canManage, classes, subjects, onApplied }: { canManage: boolean; classes: any[]; subjects: any[]; onApplied: () => void }) {
+  const { toast } = useToast();
+  const [classId, setClassId] = React.useState("");
+  const [electiveIds, setElectiveIds] = React.useState<string[]>(["", "", ""]);
+  const [saving, setSaving] = React.useState(false);
+  const [lastResult, setLastResult] = React.useState<any>(null);
+
+  async function apply() {
+    if (!classId) return toast({ title: "Pick a Senior School class first.", tone: "error" });
+    const chosen = electiveIds.filter(Boolean);
+    if (chosen.length !== 3 || new Set(chosen).size !== 3) {
+      return toast({ title: "Pick exactly 3 different real electives for this class's pathway.", tone: "error" });
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/academics/timetable/engine", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "apply_kicd_senior_template", classId, electiveSubjectIds: chosen }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setLastResult(json.data);
+        toast({ title: `Applied — ${json.data.totalLessonsPerWeek} lessons/week configured`, tone: "success" });
+        onApplied();
+      } else {
+        toast({ title: json.error?.message || "Could not apply the KICD template.", tone: "error" });
+      }
+    } catch {
+      toast({ title: "Network error", tone: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="border border-indigo-100 bg-indigo-50/40 dark:border-indigo-900/40 dark:bg-indigo-950/10">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base"><GraduationCap className="h-5 w-5 text-indigo-600" /> Official KICD Senior School template (optional)</CardTitle>
+        <p className="text-xs text-navy-500 dark:text-navy-400">
+          40 lessons/week @ 40 minutes: English 5, Kiswahili 5, Mathematics 5 (real Core/Essential variant), Community Service Learning 3,
+          3 pathway electives x 5, PE 3, ICT Skills 2, PPI 1, Personal/Group Study 1. This is a starting point — every number stays fully
+          editable afterward, and nothing here is forced onto any class.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1">
+            <Label>Senior School class</Label>
+            <select value={classId} onChange={(e) => setClassId(e.target.value)} className="w-full rounded-2xl border border-navy-200 bg-white px-3.5 py-2.5 text-sm dark:border-navy-700 dark:bg-navy-900">
+              <option value="">Select a class…</option>
+              {classes.map((c: any) => <option key={c.id} value={c.id}>{[c.level, c.stream].filter(Boolean).join(" ")}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {[0, 1, 2].map((idx) => (
+            <div key={idx} className="space-y-1">
+              <Label>Elective {idx + 1}</Label>
+              <select value={electiveIds[idx]} onChange={(e) => setElectiveIds((prev) => prev.map((v, i) => i === idx ? e.target.value : v))} className="w-full rounded-2xl border border-navy-200 bg-white px-3.5 py-2.5 text-sm dark:border-navy-700 dark:bg-navy-900">
+                <option value="">Select…</option>
+                {subjects.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+        {lastResult && (
+          <div className="rounded-2xl border border-green-100 bg-green-50/70 p-3 text-xs text-green-800 dark:border-green-900/40 dark:bg-green-950/20 dark:text-green-300">
+            Applied: {lastResult.totalLessonsPerWeek} lessons/week configured, Mathematics variant used: <strong>{lastResult.mathVariantApplied}</strong>.
+          </div>
+        )}
+        <Button onClick={apply} disabled={!canManage || saving} className="w-full">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <GraduationCap className="h-4 w-4" />} Apply KICD template to this class
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 function TimetableEngineTab({ canManage, schoolLevelActivation }: { canManage: boolean; schoolLevelActivation?: { isSeniorSchool: boolean; isJuniorSchool: boolean; isMixedSchool: boolean; educationLevelsOffered: string[] } }) {
   const { toast } = useToast();
@@ -2160,6 +2251,10 @@ function TimetableEngineTab({ canManage, schoolLevelActivation }: { canManage: b
           </CardContent>
         </Card>
       </div>
+
+      {schoolLevelActivation?.isSeniorSchool && (
+        <KicdSeniorTemplateCard canManage={canManage} classes={classes} subjects={subjects} onApplied={load} />
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
@@ -3853,6 +3948,7 @@ function ExamAutoGeneratorTab({ canManage, schoolLevelActivation }: { canManage:
     endDate: '',
     notes: schoolLevelActivation?.isSeniorSchool ? 'Use richer subject paper structures where configured.' : schoolLevelActivation?.isJuniorSchool ? 'Use subject-selection-aware setup where needed.' : '',
     autoGenerateInvigilators: true,
+    excludeSaturday: false,
     periods: schoolLevelActivation?.isSeniorSchool ? [
       { label: 'Morning 1', startTime: '08:00', endTime: '10:00' },
       { label: 'Morning 2', startTime: '10:30', endTime: '12:30' },
@@ -4035,6 +4131,11 @@ function ExamAutoGeneratorTab({ canManage, schoolLevelActivation }: { canManage:
               <input type="checkbox" checked={form.autoGenerateInvigilators} onChange={(e) => setForm((p) => ({ ...p, autoGenerateInvigilators: e.target.checked }))} className="h-4 w-4 rounded border-navy-300 text-green-600 focus:ring-green-500" />
               Generate invigilators immediately after building the timetable
             </label>
+            <label className="flex items-center gap-2 text-sm text-navy-600 dark:text-navy-300">
+              <input type="checkbox" checked={form.excludeSaturday} onChange={(e) => setForm((p) => ({ ...p, excludeSaturday: e.target.checked }))} className="h-4 w-4 rounded border-navy-300 text-green-600 focus:ring-green-500" />
+              Don&apos;t use Saturday for this exam sitting (Sunday is never used)
+            </label>
+            <p className="text-xs text-navy-400">Combined classes taught a subject together (Timetable Engine combinations) automatically sit that paper together, at the same date and period, instead of separately.</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <Button variant="secondary" onClick={previewGenerator} disabled={!canManage || saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />} Preview Timetable

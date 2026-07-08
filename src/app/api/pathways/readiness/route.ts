@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     const studentId = req.nextUrl.searchParams.get("studentId");
     if (!studentId) return fail("INVALID", "studentId required", 400);
     const readiness = await getStudentPathwayReadiness(user, studentId);
-    return ok({ data: readiness });
+    return ok(readiness);
   } catch (error) {
     return handleError(error);
   }

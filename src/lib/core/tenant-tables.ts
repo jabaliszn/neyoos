@@ -39,6 +39,11 @@ export const TENANT_OWNED_MODELS = [
   "apiKey",
   "webhookSubscription",
   "webhookDelivery",
+  // NOTE: "apiUsageLog" (Part X — Developer Center 2.0) is DELIBERATELY NOT
+  // tenant-owned — a genuinely failed/unauthenticated real API request has
+  // no resolved tenant at all (tenantId: null), same "no single active
+  // tenant" reasoning as schoolQuoteRequest/storageOptimizerRun above —
+  // queried directly via the raw `db` client, never tenantDb().
   "calendarEvent",
   "visitorLog",
   "admissionInquiry",
@@ -100,6 +105,9 @@ export const TENANT_OWNED_MODELS = [
   "vehicleMaintenance",
   "fuelLog",
   "transportAssignment",
+  "transportShift", // T.8 — per-route real shifts (morning/afternoon, own vehicle/driver/capacity)
+  "transportRouteChangeRequest", // T.8 — real parent-initiated route/shift change requests
+  "substituteAssignment", // T.12 — real date-scoped substitute-teacher coverage overlays for approved leave
   "store",
   "stockItem",
   "stockBatch",
@@ -196,6 +204,21 @@ export const TENANT_OWNED_MODELS = [
   "newsPost",
   "smsMarginLedger", // M.2 SMS margin revenue ledger
   "referralCredit", // M.1 referral engine credit ledger
+  "schoolActivity", // R.6 — School Activities/Trips ("Form 4 trip"-style optional fee tracker)
+  "schoolActivityClass", // R.6 — which real classes an activity's roster is drawn from
+  "activityParticipant", // R.6 — one real roster row per real student per activity
+  "tenantPricingSnapshot", // Part V — Capacity-Based Pricing 2.0: real per-school price-calculation history
+  // NOTE: "schoolQuoteRequest" is DELIBERATELY NOT tenant-owned — a quote
+  // request can exist for a genuinely prospective school with NO real
+  // tenantId yet (before they've ever signed up), so it is queried directly
+  // via the raw `db` client (same pattern as PlatformSetting/PlatformFlag),
+  // never via tenantDb()/withTenant(), which requires an active tenant.
+  // NOTE: "storageOptimizerRun" (W.1) is ALSO DELIBERATELY NOT tenant-owned
+  // — a real nightly Storage Intelligence Engine sweep runs CROSS-TENANT
+  // (tenantId: null for a company-wide run) as well as being triggerable
+  // per-school by NEYO Ops (a real tenantId in that case) — queried
+  // directly via the raw `db` client for the same "no single active tenant
+  // context" reason as schoolQuoteRequest above.
 ] as const;
 
 export type TenantOwnedModel = (typeof TENANT_OWNED_MODELS)[number];

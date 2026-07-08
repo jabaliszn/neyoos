@@ -127,7 +127,7 @@ async function main() {
     await expectError(() => checkUnlockCode(principal.tenantId, expiredCode.code), "EXPIRED", "an expired code is rejected");
 
     // 4) Field template
-    const emptyTemplate = await getFieldTemplate(principal);
+    const emptyTemplate = await getFieldTemplate(principal, "STUDENT");
     assert(Array.isArray(emptyTemplate.fields) && emptyTemplate.fields.length === 0, "a school with no saved template gets an empty array, not an error");
 
     const templateFields = [
@@ -135,14 +135,14 @@ async function main() {
       { label: "Jinsia", description: "M or F", mapsTo: "gender" },
       { label: "Nyumba", description: "Boarding house name", mapsTo: "custom", customLabel: "House" },
     ];
-    const savedTemplate = await saveFieldTemplate(principal, { fields: templateFields as any });
+    const savedTemplate = await saveFieldTemplate(principal, { domain: "STUDENT", fields: templateFields as any });
     assert(savedTemplate.fields.length === 3, "field template saves all 3 school-described columns");
-    const reloadedTemplate = await getFieldTemplate(principal);
+    const reloadedTemplate = await getFieldTemplate(principal, "STUDENT");
     assert((reloadedTemplate.fields as any[])[2].customLabel === "House", "field template persists the custom label across reload");
 
     // 5) Starting a session consumes one use + enforces the page cap
     await expectError(
-      () => startImportSession(principal, { unlockCode: schoolCode.code, storedFileId: "does-not-exist", fileName: "test.jpg", pageCount: 5 }),
+      () => startImportSession(principal, { domain: "STUDENT", unlockCode: schoolCode.code, storedFileId: "does-not-exist", fileName: "test.jpg", pageCount: 5 }),
       "INVALID",
       "starting a session above the NEYO-Ops-configured page cap (2) is rejected"
     );
@@ -157,14 +157,14 @@ async function main() {
       },
     }));
 
-    const session = await startImportSession(principal, { unlockCode: schoolCode.code, storedFileId: fakeFile.id, fileName: "register-page-1.jpg", pageCount: 1 });
+    const session = await startImportSession(principal, { domain: "STUDENT", unlockCode: schoolCode.code, storedFileId: fakeFile.id, fileName: "register-page-1.jpg", pageCount: 1 });
     createdSessionIds.push(session.id);
     assert(session.status === "UPLOADED", "new session starts in UPLOADED status");
 
     const afterStartCheck = await db.bundiImportUnlockCode.findUniqueOrThrow({ where: { id: schoolCode.id } });
     assert(afterStartCheck.usedCount === 1, "starting a session consumed exactly ONE real use of the code");
     await expectError(
-      () => startImportSession(principal, { unlockCode: schoolCode.code, storedFileId: fakeFile.id, fileName: "register-page-2.jpg", pageCount: 1 }),
+      () => startImportSession(principal, { domain: "STUDENT", unlockCode: schoolCode.code, storedFileId: fakeFile.id, fileName: "register-page-2.jpg", pageCount: 1 }),
       "EXHAUSTED",
       "the one-time code cannot be reused after its single use is consumed"
     );
@@ -195,13 +195,13 @@ async function main() {
         outputTokens: 300,
         costUsd: 0.05,
         costKes: 0.05 * 145,
-        extractedRowsJson: JSON.stringify([{ cells: { "Jina (Name)": "Wanjiku Grace Njeri", "Jinsia": "F", "Nyumba": "Kilimanjaro" } }]),
-        reviewedRowsJson: JSON.stringify([{ cells: { "Jina (Name)": "Wanjiku Grace Njeri", "Jinsia": "F", "Nyumba": "Kilimanjaro" } }]),
+        extractedRowsJson: JSON.stringify([{ cells: { "Jina (Name)": { value: "Wanjiku Grace Njeri", source: "MANUAL" as const }, "Jinsia": { value: "F", source: "MANUAL" as const }, "Nyumba": { value: "Kilimanjaro", source: "MANUAL" as const } } }]),
+        reviewedRowsJson: JSON.stringify([{ cells: { "Jina (Name)": { value: "Wanjiku Grace Njeri", source: "MANUAL" as const }, "Jinsia": { value: "F", source: "MANUAL" as const }, "Nyumba": { value: "Kilimanjaro", source: "MANUAL" as const } } }]),
       },
     }));
 
     const reviewed = await reviewSession(principal, session.id, {
-      rows: [{ cells: { "Jina (Name)": "Wanjiku Grace Njeri", "Jinsia": "F", "Nyumba": "Kilimanjaro" } }],
+      rows: [{ cells: { "Jina (Name)": { value: "Wanjiku Grace Njeri", source: "MANUAL" as const }, "Jinsia": { value: "F", source: "MANUAL" as const }, "Nyumba": { value: "Kilimanjaro", source: "MANUAL" as const } } }],
     });
     assert(reviewed.status === "REVIEW", "review save keeps the session in REVIEW status");
 
@@ -237,7 +237,7 @@ async function main() {
         size: 100, category: "bundi_import", uploadedById: principal.id,
       },
     }));
-    const cancelSessionRow = await startImportSession(principal, { unlockCode: cancelTestCode.code, storedFileId: cancelFile.id, fileName: "cancel-test.jpg", pageCount: 1 });
+    const cancelSessionRow = await startImportSession(principal, { domain: "STUDENT", unlockCode: cancelTestCode.code, storedFileId: cancelFile.id, fileName: "cancel-test.jpg", pageCount: 1 });
     createdSessionIds.push(cancelSessionRow.id);
     const cancelled = await cancelSession(principal, cancelSessionRow.id);
     assert(cancelled.ok, "a not-yet-committed session can be cancelled");

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const classId = req.nextUrl.searchParams.get("classId");
     if (!termId || !classId) return fail("INVALID", "termId and classId are required.", 400);
     const data = await getMasterReportCards(user.tenantId, termId, classId);
-    return ok({ data });
+    return ok(data);
   } catch (error) {
     if (error instanceof ComputationError) return fail("INVALID", error.message, 400);
     return handleError(error);
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     
     if (body.action === "COMPUTE") {
       const res = await triggerTermComputation(user.tenantId, body.portalId);
-      return ok({ data: res }, 202); // 202 Accepted (Background processing)
+      return ok(res, 202); // 202 Accepted (Background processing)
     }
     
     if (body.action === "RELEASE") {
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
         return fail("FORBIDDEN", "Only Principal or Deputy can release results.", 403);
       }
       const res = await releaseTermResults(user.tenantId, body.portalId, user.id);
-      return ok({ data: res });
+      return ok(res);
     }
 
     return fail("INVALID", "Unknown action", 400);

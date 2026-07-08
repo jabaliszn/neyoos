@@ -34,6 +34,8 @@ interface ApiKey {
   revokedAt: string | null;
   createdAt: string;
   status: "active" | "revoked" | "expired";
+  tier: string;
+  environment: "live" | "sandbox";
 }
 interface WebhookRow {
   id: string;
@@ -52,6 +54,12 @@ const WEBHOOK_EVENTS = [
   "subscription.updated",
   "user.created",
   "notification.sent",
+  "student.created",
+  "student.admitted",
+  "invoice.created",
+  "invoice.paid",
+  "attendance.recorded",
+  "exam.published",
 ];
 
 function fmtDate(s: string | null): string {
@@ -88,7 +96,75 @@ export function DeveloperPanel() {
       <DeveloperClarityCard />
       <ApiKeysSection />
       <WebhooksSection />
+      <ApiUsageSection />
     </div>
+  );
+}
+
+// =============================================================================
+// API USAGE (Part X — Developer Center 2.0)
+// =============================================================================
+function ApiUsageSection() {
+  const [usage, setUsage] = React.useState<{
+    windowDays: number; totalRequests: number; failedRequests: number; successRate: number;
+    recent: { method: string; path: string; statusCode: number; durationMs: number; outcome: string; createdAt: string }[];
+  } | null>(null);
+  const [error, setError] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    setError(false);
+    try {
+      const res = await fetch("/api/api-keys/usage?days=7");
+      const json = await res.json();
+      if (json.ok) setUsage(json.data);
+      else setError(true);
+    } catch {
+      setError(true);
+    }
+  }, []);
+
+  React.useEffect(() => { void load(); }, [load]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>API usage — last 7 days</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">Couldn&apos;t load usage.</p>
+        ) : usage === null ? (
+          <Skeleton className="h-16 w-full rounded-2xl" />
+        ) : usage.totalRequests === 0 ? (
+          <EmptyState icon={KeyRound} title="No API calls yet" description="Once your integration starts calling the NEYO API, real usage will show up here." />
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-navy-100 bg-white/70 p-4 dark:border-navy-800 dark:bg-navy-900/60">
+                <p className="text-xs text-navy-400">Total requests</p>
+                <p className="mt-1 text-lg font-bold text-navy-900 dark:text-navy-50">{usage.totalRequests}</p>
+              </div>
+              <div className="rounded-2xl border border-navy-100 bg-white/70 p-4 dark:border-navy-800 dark:bg-navy-900/60">
+                <p className="text-xs text-navy-400">Failed requests</p>
+                <p className="mt-1 text-lg font-bold text-navy-900 dark:text-navy-50">{usage.failedRequests}</p>
+              </div>
+              <div className="rounded-2xl border border-green-200/70 bg-green-50/60 p-4 dark:border-green-900 dark:bg-green-900/10">
+                <p className="text-xs text-navy-400">Success rate</p>
+                <p className="mt-1 text-lg font-bold text-green-700 dark:text-green-400">{usage.successRate}%</p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              {usage.recent.map((r, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 rounded-xl border border-navy-100 bg-white/60 px-3 py-2 text-xs dark:border-navy-800 dark:bg-navy-900/50">
+                  <span className="font-mono text-navy-600 dark:text-navy-300">{r.method} {r.path}</span>
+                  <span className={r.outcome === "OK" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{r.statusCode} · {r.durationMs}ms</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -123,6 +199,7 @@ function ApiKeysSection() {
   const [error, setError] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const [name, setName] = React.useState("");
+  const [environment, setEnvironment] = React.useState<"live" | "sandbox">("live");
   const [busy, setBusy] = React.useState<string | null>(null);
   const [newToken, setNewToken] = React.useState<string | null>(null);
 
@@ -152,7 +229,7 @@ function ApiKeysSection() {
       const res = await fetch("/api/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), scopes: ["*"] }),
+        body: JSON.stringify({ name: name.trim(), scopes: ["*"], environment }),
       });
       const json = await res.json();
       if (json.ok) {
@@ -202,6 +279,9 @@ function ApiKeysSection() {
             curl -H &quot;Authorization: Bearer neyo_sk_…&quot; /api/v1/me
           </code>
         </p>
+        <p className="text-xs text-navy-500 dark:text-navy-400">
+          <strong>Sandbox</strong> keys build/test against a real, isolated demo dataset — never your school&apos;s real data. Switch to <strong>Live</strong> once your integration is ready.
+        </p>
 
         {/* one-time secret reveal */}
         {newToken && (
@@ -237,6 +317,18 @@ function ApiKeysSection() {
               placeholder="e.g. SIS integration"
               onKeyDown={(e) => e.key === "Enter" && create()}
             />
+          </div>
+          <div className="flex gap-2">
+            {(["live", "sandbox"] as const).map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => setEnvironment(e)}
+                className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${environment === e ? "border-green-500 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" : "border-navy-200 text-navy-600 hover:bg-navy-50 dark:border-navy-700 dark:text-navy-300"}`}
+              >
+                {e === "live" ? "Live" : "Sandbox"}
+              </button>
+            ))}
           </div>
           <Button onClick={create} disabled={creating} className="shrink-0">
             {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -284,6 +376,7 @@ function ApiKeysSection() {
                     >
                       {k.status}
                     </Badge>
+                    {k.environment === "sandbox" && <Badge tone="blue">sandbox</Badge>}
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-navy-500 dark:text-navy-400">
                     <code className="font-mono">{k.keyPrefix}…</code>

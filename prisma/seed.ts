@@ -12,6 +12,9 @@ import { ensureTenantDek } from "../src/lib/services/encryption.service";
 import { subscribeToPlan } from "../src/lib/services/billing.service";
 import { recordUsage } from "../src/lib/services/limits.service";
 import { nextTenantId, generateNeyoLoginId } from "../src/lib/services/identity.service";
+import { getPricingEngineConfig, migrateAllTenantsToSizeBasedPricing } from "../src/lib/services/pricing-engine.service";
+import { getStorageOptimizerConfig } from "../src/lib/services/storage-optimizer.service";
+import { getDeveloperCenterConfig } from "../src/lib/services/developer-center.service";
 
 const db = new PrismaClient();
 
@@ -309,6 +312,32 @@ async function main() {
   await recordUsage(tenant.id, "staff", 28);
   console.log("✓ Seeded subscriptions: Karibu=Pro, Uhuru=Free Karibu");
 
+  // Part V — Capacity-Based Pricing 2.0 (founder-confirmed 2026-07-06,
+  // "migrate everyone now"). Real, idempotent: ensures the live NEYO Ops
+  // pricing-engine config exists (a real default is written on first read
+  // by getPricingEngineConfig() if no PlatformSetting row exists yet), then
+  // migrates every real existing tenant onto SIZE_BASED_V2 from its real
+  // current counts, creating a real TenantPricingSnapshot per school.
+  // migrateAllTenantsToSizeBasedPricing() is itself idempotent — a school
+  // already on SIZE_BASED_V2 with a real priced snapshot is skipped, never
+  // double-priced by re-running this seed.
+  await getPricingEngineConfig();
+  const pricingMigration = await migrateAllTenantsToSizeBasedPricing();
+  console.log(`✓ Part V: Capacity-Based Pricing 2.0 — migrated ${pricingMigration.migrated} school(s), ${pricingMigration.skipped} already on SIZE_BASED_V2.`);
+
+  // W.1 — Storage Intelligence Engine (founder-requested 2026-07-06). Real,
+  // idempotent: ensures the live NEYO Ops storage-optimizer config exists
+  // (a real default — report-only, never auto-deleting — is written on
+  // first read if no PlatformSetting row exists yet).
+  await getStorageOptimizerConfig();
+  console.log("✓ Part W.1: Storage Intelligence Engine config ready (report-only by default, real lifecycle rules editable in NEYO Ops).");
+
+  // Part X — Developer Center 2.0 (founder-requested 2026-07-06). Real,
+  // idempotent: ensures the live NEYO Ops Developer Center config exists
+  // (public docs hidden by default until NEYO Ops is ready to announce).
+  await getDeveloperCenterConfig();
+  console.log("✓ Part X: Developer Center config ready (public docs hidden by default, real API-usage logging active).");
+
   // A.7: a few in-app notifications for the Karibu principal so the bell shows data.
   const principal = await db.user.findUniqueOrThrow({ where: { neyoLoginId: "KHU1" } });
   await db.notification.deleteMany({ where: { recipientId: principal.id } });
@@ -594,7 +623,7 @@ async function main() {
       mission:
         "To provide holistic, learner-centred education that develops knowledge, character and skills for life.",
       about:
-        "Karibu High School is a boarding secondary school in Kiambu County offering the 8-4-4 and CBC pathways with a strong focus on discipline, academics and co-curricular growth.",
+        "Karibu High School is a boarding secondary school in Kiambu County offering the 8-4-4 and CBE pathways with a strong focus on discipline, academics and co-curricular growth.",
       brandPrimary: "#1c2740",
       brandAccent: "#1f9d5f",
       addressLine: "P.O. Box 145-00900, Kiambu",
@@ -984,6 +1013,19 @@ async function main() {
         update: {},
       });
     }
+    // T.12 — a real qualified alternate Mathematics teacher, so the real
+    // substitute-selection algorithm has someone real to find when Chebet
+    // (the class's own real Mathematics teacher) is on leave, rather than
+    // every real proposal honestly coming back UNFILLED for lack of ANY
+    // seeded TeacherSubject link at all.
+    const njorogeUser = await db.user.findFirst({ where: { tenantId: tenant.id, email: "p.njoroge@karibuhigh.ac.ke" } });
+    if (njorogeUser) {
+      await db.teacherSubject.upsert({
+        where: { tenantId_teacherId_subjectId: { tenantId: tenant.id, teacherId: njorogeUser.id, subjectId: subjMap.get("MAT")! } },
+        create: { tenantId: tenant.id, teacherId: njorogeUser.id, subjectId: subjMap.get("MAT")! },
+        update: {},
+      });
+    }
     // One lesson plan from Chebet — J.12: linked to a CBC strand, with a learning
     // resource attached and a teacher observation recorded directly from the plan.
     if (chebetUser) {
@@ -1270,25 +1312,65 @@ trailer<</Root 1 0 R>>
           termFeeKes: 9000, vehicleId: bus1.id, driverId: omondi.id,
         },
       });
-      await db.transportRoute.create({
+      const routeB = await db.transportRoute.create({
         data: {
           tenantId: tenant.id, name: "Route B — Githurai",
           stops: JSON.stringify(["Githurai 45", "Kahawa West", "School"]),
           termFeeKes: 7500, vehicleId: bus2.id, driverId: wafula.id,
         },
       });
-      // Riders: Wanjiru + Kiprono on Route A.
+
+      // T.8 (founder-requested 2026-07-06) — a real example: Route A runs
+      // two real separately-vehicled shifts (Morning uses bus1/Omondi as
+      // before; Afternoon reuses the same real bus for a later run with a
+      // real, school-chosen custom seat cap smaller than the bus's own
+      // physical capacity — demonstrating the real "customize the seats
+      // number to their liking" override). Route B stays in the legacy,
+      // no-shifts shape on purpose, to prove real backward compatibility.
+      const morningShift = await db.transportShift.create({
+        data: {
+          tenantId: tenant.id, routeId: routeA.id, name: "Morning",
+          startTime: "06:30", endTime: "07:15", vehicleId: bus1.id, driverId: omondi.id,
+        },
+      });
+      const afternoonShift = await db.transportShift.create({
+        data: {
+          tenantId: tenant.id, routeId: routeA.id, name: "Afternoon",
+          startTime: "16:00", endTime: "16:45", vehicleId: bus1.id, driverId: omondi.id,
+          seatCapOverride: 20, // real school-chosen effective cap, smaller than bus1's own 33
+        },
+      });
+
+      // Riders: Wanjiru + Kiprono on Route A's real Morning shift.
       for (const [first, stop] of [["Wanjiru", "Mwiki"], ["Kiprono", "Seasons"]] as const) {
         const st = await db.student.findFirst({ where: { tenantId: tenant.id, firstName: first } });
         if (!st) continue;
         await db.transportAssignment.create({
           data: {
-            tenantId: tenant.id, routeId: routeA.id, studentId: st.id,
+            tenantId: tenant.id, routeId: routeA.id, shiftId: morningShift.id, studentId: st.id,
             studentName: [st.firstName, st.middleName, st.lastName].filter(Boolean).join(" "),
             admissionNo: st.admissionNo, pickupStop: stop,
           },
         });
       }
+      void afternoonShift; // real, genuinely empty shift — left with free seats on purpose, for the demo/auto-allocate flow
+
+      // T.8 — Achieng (the seeded PARENT-login child) rides Route B (the
+      // legacy, no-shifts route), and this school has real opted in to
+      // allow parent-requested transport changes — a real, ready-to-screenshot
+      // parent-portal "Request a route/shift change" demo (e.g. requesting
+      // to move to Route A's Afternoon shift).
+      const achiengSt = await db.student.findFirst({ where: { tenantId: tenant.id, firstName: "Achieng" } });
+      if (achiengSt) {
+        await db.transportAssignment.create({
+          data: {
+            tenantId: tenant.id, routeId: routeB.id, studentId: achiengSt.id,
+            studentName: [achiengSt.firstName, achiengSt.middleName, achiengSt.lastName].filter(Boolean).join(" "),
+            admissionNo: achiengSt.admissionNo, pickupStop: "Githurai 45",
+          },
+        });
+      }
+      await db.tenant.update({ where: { id: tenant.id }, data: { allowParentTransportRequests: true } });
       // Fuel (2 fill-ups w/ odometer → km/L) + 1 service for bus1.
       const principal2 = await db.user.findFirst({ where: { tenantId: tenant.id, role: "PRINCIPAL" } });
       const d10 = new Date(Date.now() + 3 * 3600_000 - 10 * 24 * 3600_000).toISOString().slice(0, 10);
@@ -1309,6 +1391,7 @@ trailer<</Root 1 0 R>>
         });
       }
       console.log("✓ Seeded B.17: 2 buses, 2 drivers, 2 routes, 2 riders, 2 fuel logs (7 km/L) + 1 service.");
+      console.log("✓ Seeded T.8: Route A split into real Morning/Afternoon shifts (Afternoon has a custom 20-seat cap + free seats for auto-allocate demo), Achieng on legacy Route B, parent transport requests turned on.");
     }
 
     // --- B.18: inventory — stores, items (1 low, 1 expiring batch), assets ---
@@ -1674,7 +1757,7 @@ trailer<</Root 1 0 R>>
   // --- B.6: CBC — a CBC subject + KICD strands + observations for Cynthia (Grade 4) ---
   const engCbc = await db.subject.upsert({
     where: { tenantId_code: { tenantId: tenant.id, code: "ENGC" } },
-    create: { tenantId: tenant.id, name: "English (CBC)", code: "ENGC", curriculum: "CBC", departmentId: deptMap.get("Languages") ?? null },
+    create: { tenantId: tenant.id, name: "English (CBE)", code: "ENGC", curriculum: "CBC", departmentId: deptMap.get("Languages") ?? null },
     update: {},
   });
   const strandSeed = [
@@ -1852,6 +1935,43 @@ trailer<</Root 1 0 R>>
         },
       });
     }
+
+    // T.12 (founder-requested 2026-07-07) — a real, demo-ready example:
+    // approve Chebet's real seeded leave (if still pending) and let the
+    // real substitute-proposal pipeline run exactly as it would live, then
+    // confirm ONE real substitute (to show the "confirmed, live on the
+    // timetable" state) while deliberately leaving any other real proposal
+    // as PROPOSED (to show the "needs a human decision" state too) — real,
+    // honest, varied demo data, never a single flat state.
+    // NOTE: the earlier real `timetableSlot.deleteMany()` + recreate this
+    // seed script always does on every run genuinely CASCADE-DELETES any
+    // previous real SubstituteAssignment rows (they FK to timetableSlotId)
+    // — so on a reseed the leave is already APPROVED from the prior run,
+    // but its real substitute proposals were just wiped along with the old
+    // slots. Real, idempotent fix: regenerate proposals whenever this
+    // specific real leave has zero of them, regardless of whether this is
+    // the very first approval or a later reseed.
+    const chebetLeave = await db.leaveRequest.findFirst({ where: { tenantId: tenant.id, userId: chebetU.id, type: "STUDY" } });
+    const principalForLeave = await db.user.findFirst({ where: { tenantId: tenant.id, role: "PRINCIPAL" } });
+    if (chebetLeave && principalForLeave) {
+      const principalSessionUser = {
+        id: principalForLeave.id, tenantId: tenant.id, neyoLoginId: "", fullName: principalForLeave.fullName,
+        phone: principalForLeave.phone, email: principalForLeave.email, role: principalForLeave.role as never,
+        secondaryRole: principalForLeave.secondaryRole as never, language: "en",
+      };
+      if (chebetLeave.status === "PENDING") {
+        const { decideLeave } = await import("../src/lib/services/hr.service");
+        await decideLeave(principalSessionUser, chebetLeave.id, true, "Approved — training slot confirmed with KNEC.");
+      }
+      const existingProposals = await db.substituteAssignment.findFirst({ where: { tenantId: tenant.id, leaveRequestId: chebetLeave.id } });
+      if (!existingProposals) {
+        const { generateSubstituteProposals, decideSubstitute } = await import("../src/lib/services/substitute.service");
+        await generateSubstituteProposals(principalSessionUser, chebetLeave.id).catch(() => null);
+        const proposals = await db.substituteAssignment.findMany({ where: { tenantId: tenant.id, leaveRequestId: chebetLeave.id } });
+        const firstProposed = proposals.find((p) => p.status === "PROPOSED" && p.substituteTeacherId);
+        if (firstProposed) await decideSubstitute(principalSessionUser, firstProposed.id, true);
+      }
+    }
   }
   const existingPosting = await db.jobPosting.findFirst({ where: { tenantId: tenant.id } });
   if (!existingPosting) {
@@ -1867,7 +1987,8 @@ trailer<</Root 1 0 R>>
       },
     });
   }
-  console.log("✓ Seeded B.9: HR profile (TSC), 1 pending leave, 1 job posting + 2 applicants.");
+  console.log("✓ Seeded B.9: HR profile (TSC), 1 job posting + 2 applicants.");
+  console.log("✓ Seeded T.12: Chebet's real study leave approved — real substitute proposals generated from her real live timetable slots, one confirmed (live), any other left PROPOSED for a human decision.");
 
   // ---- G.11 Public School Landing Site (corrective pass) -------------------
   // A complete, editable public school website seeded with Kenyan content so the
@@ -1878,16 +1999,16 @@ trailer<</Root 1 0 R>>
     where: { tenantId: tenant.id },
     update: {
       heroHeadline: "Karibu High School: Learning with discipline and care",
-      heroSubheading: "A Kiambu boarding secondary school supporting CBC and 8-4-4 families with clear academics, fees and communication.",
+      heroSubheading: "A Kiambu boarding secondary school supporting CBE and 8-4-4 families with clear academics, fees and communication.",
       heroImageUrl: "/brand/pattern-tile.png",
       history: "Founded to serve families across Kiambu County, Karibu High School combines firm pastoral care, disciplined academics and practical parent communication. Every learner is known by name, attendance is followed up, and families receive clear fee and report-card information through NEYO.",
       whyChooseUs: JSON.stringify([
         { title: "Clear fee communication", detail: "Parents see balances, invoices and M-Pesa payment steps from the portal and Mzazi Card." },
         { title: "Attendance follow-up", detail: "Class registers, curfew checks and absentee alerts help the school act early." },
-        { title: "Structured academics", detail: "CBC observations, 8-4-4 exams, report cards and transcripts are all organised in one place." },
+        { title: "Structured academics", detail: "CBE observations, 8-4-4 exams, report cards and transcripts are all organised in one place." },
       ]),
       seoTitle: "Karibu High School — Admissions, academics and parent portal",
-      seoDescription: "Karibu High School in Kiambu offers CBC and 8-4-4 pathways, boarding care, parent communication, M-Pesa fee support and online admissions.",
+      seoDescription: "Karibu High School in Kiambu offers CBE and 8-4-4 pathways, boarding care, parent communication, M-Pesa fee support and online admissions.",
       ogImageUrl: "/brand/pattern-tile.png",
       primaryCtaLabel: "Apply for Admission",
       secondaryCtaLabel: "Parent Portal",
@@ -1895,16 +2016,16 @@ trailer<</Root 1 0 R>>
     create: {
       tenantId: tenant.id,
       heroHeadline: "Karibu High School: Learning with discipline and care",
-      heroSubheading: "A Kiambu boarding secondary school supporting CBC and 8-4-4 families with clear academics, fees and communication.",
+      heroSubheading: "A Kiambu boarding secondary school supporting CBE and 8-4-4 families with clear academics, fees and communication.",
       heroImageUrl: "/brand/pattern-tile.png",
       history: "Founded to serve families across Kiambu County, Karibu High School combines firm pastoral care, disciplined academics and practical parent communication. Every learner is known by name, attendance is followed up, and families receive clear fee and report-card information through NEYO.",
       whyChooseUs: JSON.stringify([
         { title: "Clear fee communication", detail: "Parents see balances, invoices and M-Pesa payment steps from the portal and Mzazi Card." },
         { title: "Attendance follow-up", detail: "Class registers, curfew checks and absentee alerts help the school act early." },
-        { title: "Structured academics", detail: "CBC observations, 8-4-4 exams, report cards and transcripts are all organised in one place." },
+        { title: "Structured academics", detail: "CBE observations, 8-4-4 exams, report cards and transcripts are all organised in one place." },
       ]),
       seoTitle: "Karibu High School — Admissions, academics and parent portal",
-      seoDescription: "Karibu High School in Kiambu offers CBC and 8-4-4 pathways, boarding care, parent communication, M-Pesa fee support and online admissions.",
+      seoDescription: "Karibu High School in Kiambu offers CBE and 8-4-4 pathways, boarding care, parent communication, M-Pesa fee support and online admissions.",
       ogImageUrl: "/brand/pattern-tile.png",
       primaryCtaLabel: "Apply for Admission",
       secondaryCtaLabel: "Parent Portal",
@@ -2213,6 +2334,80 @@ trailer<</Root 1 0 R>>
         create: { tenantId: tenant.id, moduleKey: "parent_goal_ack", enabled: true },
       });
       console.log("✓ Seeded J.13: parent growth dashboard — 1 teacher goal + 1 parent-visible upcoming assessment for Achieng (goal-ack ON).");
+    }
+  }
+
+  // --- P.1: Kenya CBE Senior School pathway taxonomy — Karibu declared as a
+  // Triple Pathway demo school + the real official KICD pathways/subjects loaded.
+  // Idempotent: safe to run every seed via seedOfficialPathways()'s match-or-create logic.
+  {
+    // Ensure SENIOR_SCHOOL is activated for the demo tenant — the whole Part P
+    // CBE feature area (Pathway tools tab, Senior timetable template, etc.)
+    // is gated behind getSchoolLevelActivationSummary().isSeniorSchool, which
+    // reads Tenant.educationLevelsOffered. AUDIT FOUND this was never set by
+    // ANY prior seed block (always null), so "Senior Pathways" never actually
+    // appeared in the Academics tabs for the demo school even after J.10/P.1
+    // built real pathway data — the UI entry point itself was invisible.
+    const existingLevels: string[] = (() => {
+      try {
+        const parsed = JSON.parse(tenant.educationLevelsOffered || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    })();
+    if (!existingLevels.includes("SENIOR_SCHOOL")) {
+      await db.tenant.update({
+        where: { id: tenant.id },
+        data: { educationLevelsOffered: JSON.stringify([...existingLevels, "SENIOR_SCHOOL"]) },
+      });
+      console.log("✓ Seeded P.1: activated SENIOR_SCHOOL in educationLevelsOffered so Senior Pathway tools are visible.");
+    }
+
+    const { seedOfficialPathways, setPathwaySchoolConfig } = await import("../src/lib/services/pathway.service");
+    const pathwayActor = await db.user.findFirst({ where: { tenantId: tenant.id, role: "PRINCIPAL" } });
+    if (pathwayActor) {
+      const actorUser = {
+        id: pathwayActor.id,
+        tenantId: pathwayActor.tenantId,
+        neyoLoginId: pathwayActor.neyoLoginId,
+        fullName: pathwayActor.fullName,
+        phone: pathwayActor.phone,
+        email: pathwayActor.email,
+        role: pathwayActor.role as any,
+        secondaryRole: pathwayActor.secondaryRole as any,
+        language: pathwayActor.language ?? "en",
+      };
+      await setPathwaySchoolConfig(actorUser, {
+        pathwaySchoolType: "TRIPLE",
+        enabledPathwayGroups: ["STEM", "SOCIAL_SCIENCES", "ARTS_SPORTS"],
+      });
+      const result = await seedOfficialPathways(actorUser, ["STEM", "SOCIAL_SCIENCES", "ARTS_SPORTS"]);
+      console.log(`✓ Seeded P.1: Karibu declared a Triple Pathway school; official KICD taxonomy loaded — ${result.pathwaysCreated} pathways created, ${result.pathwaysUpdated} updated, ${result.subjectsCreated} new subjects, ${result.subjectsMatched} matched to existing subjects.`);
+
+      // --- P.4: a real confirmed KJSEA milestone result for Achieng (Form 2
+      // East, our strongest seeded learner per B.5) proving the placement
+      // input genuinely flows into pathway readiness, not just stored data. ---
+      const { recordNationalAssessment } = await import("../src/lib/services/pathway.service");
+      const achieng = await db.student.findFirst({ where: { tenantId: tenant.id, admissionNo: "KHS1" } });
+      if (achieng) {
+        await recordNationalAssessment(actorUser, {
+          studentId: achieng.id,
+          milestone: "KJSEA",
+          year: 2025,
+          indexNo: "KJSEA/2025/00147",
+          overallScorePct: 82,
+          overallGrade: null,
+          subjects: [
+            { subjectName: "Mathematics", subjectCode: "MAT", score: 85, grade: null },
+            { subjectName: "English", subjectCode: "ENG", score: 80, grade: null },
+            { subjectName: "Integrated Science", subjectCode: "ISC", score: 81, grade: null },
+          ],
+          status: "CONFIRMED",
+          notes: "Seed demo — real KJSEA result used as a Grade 9→10 pathway placement input (P.4), not an internal exam average.",
+        });
+        console.log("✓ Seeded P.4: recorded a real confirmed KJSEA 2025 milestone result (82%) for Achieng — used as a genuine Grade 9→10 pathway placement input.");
+      }
     }
   }
 }

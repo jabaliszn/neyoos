@@ -238,7 +238,7 @@ export function AssessmentEngineHero({ canManage, onCreatePlan, onSeedTypes }: {
               Assess projects, practicals, oral work and observations without replacing exams.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-navy-600 dark:text-navy-300">
-              Formal exams, CBC observations and LMS work stay intact. This layer adds flexible plans, scoring, evidence and release control on top.
+              Formal exams, CBE observations and LMS work stay intact. This layer adds flexible plans, scoring, evidence and release control on top.
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-2">
               {canManage && onCreatePlan ? <Button onClick={onCreatePlan}><Plus className="h-4 w-4" /> New assessment plan</Button> : null}

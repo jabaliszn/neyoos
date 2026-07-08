@@ -61,7 +61,7 @@ export function SkillsPassportHero({ profile, onRecordRating, onDownloadPdf, sav
             {profile.student.name}
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-navy-100 dark:text-navy-200">
-            Formal exams, CBC observations and LMS work stay intact. The Skills Passport aggregates academic, competency, talent and leadership growth into one portable digital identity to prove growth beyond marks.
+            Formal exams, CBE observations and LMS work stay intact. The Skills Passport aggregates academic, competency, talent and leadership growth into one portable digital identity to prove growth beyond marks.
           </p>
           <p className="text-xs font-medium text-green-400">{profile.student.className ?? "Unassigned Class"} · Verified Learner Profile</p>
         </div>
@@ -306,7 +306,7 @@ export function SkillRatingForm({ studentId, onSubmit, onClose, saving }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="fixed inset-0 bg-navy-900/40 backdrop-blur-sm dark:bg-navy-950/60" onClick={onClose} />
-      <Card className="relative z-10 w-full max-w-lg overflow-hidden border-white/40 bg-white/90 backdrop-blur-2xl dark:border-white/10 dark:bg-navy-950/90 shadow-2xl">
+      <Card className="relative z-10 w-full max-w-lg overflow-hidden border-white/40 bg-white backdrop-blur-2xl dark:border-white/10 dark:bg-navy-900 shadow-2xl">
         <form onSubmit={handleSubmit}>
           <CardHeader className="flex flex-row items-center justify-between border-b border-navy-100 px-6 py-4 dark:border-navy-800">
             <CardTitle className="text-lg font-bold">Log Skill Rating</CardTitle>

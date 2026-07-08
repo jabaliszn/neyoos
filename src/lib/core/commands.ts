@@ -143,10 +143,10 @@ export const APP_COMMANDS: AppCommand[] = [
   },
   {
     id: "go-cbc",
-    label: "Go to CBC Management",
+    label: "Go to CBE Management",
     href: "/cbc",
     permission: "academics.view",
-    keywords: ["cbc strands", "rubrics", "competency", "formative"],
+    keywords: ["cbc strands", "cbe", "rubrics", "competency", "formative"],
   },
   {
     id: "go-staff",

@@ -104,6 +104,14 @@ export async function teacherHome(user: SessionUser) {
       for (const c of extra) classMap.set(c.id, classLabel(c));
     }
 
+    // T.12 — a real confirmed substitute covering one of THIS teacher's own
+    // slots today means it's genuinely not theirs to teach right now (they
+    // are on leave); honestly excluded from "today's lessons" rather than
+    // silently showing a lesson they are not actually delivering.
+    const { todaysConfirmedSubstitutesMap } = await import("@/lib/services/substitute.service");
+    const substituteMap = await todaysConfirmedSubstitutesMap(user.tenantId);
+    const myTodaySlots = todaySlots.filter((s) => !substituteMap.has(s.id));
+
     // Open homework count per class (due today or later).
     const todayStr = nairobiNow.toISOString().slice(0, 10);
     const openHw = await tenantDb().homework.findMany({
@@ -123,7 +131,7 @@ export async function teacherHome(user: SessionUser) {
         subjects: [...(subjByClass.get(c.id) ?? [])],
         openHomework: hwByClass.get(c.id) ?? 0,
       })),
-      todayLessons: todaySlots.map((s) => ({
+      todayLessons: myTodaySlots.map((s) => ({
         period: s.period,
         subjectName: s.subject?.name ?? null,
         subjectCode: s.subject?.code ?? null,

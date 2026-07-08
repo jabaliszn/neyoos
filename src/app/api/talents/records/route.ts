@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const studentId = req.nextUrl.searchParams.get("studentId");
     if (!studentId) return fail("INVALID", "studentId required", 400);
     const records = await getStudentTalentRecords(user, studentId);
-    return ok({ data: records });
+    return ok(records);
   } catch (error) {
     return handleError(error);
   }
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = talentRecordSchema.parse(body);
     const record = await recordStudentTalent(user, data);
-    return ok({ data: record }, 201);
+    return ok(record, 201);
   } catch (error) {
     if (error instanceof TalentError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400, CONFLICT: 409 };

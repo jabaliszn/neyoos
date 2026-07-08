@@ -132,7 +132,7 @@ export function ReportBuilderClient({ canManage, schoolLevelActivation }: { canM
 const AVAILABLE_SECTIONS = [
   { type: "HEADER", label: "School Header & Student Info" },
   { type: "ACADEMIC_MARKS", label: "Academic Marks Table" },
-  { type: "COMPETENCIES", label: "CBC Competencies" },
+  { type: "COMPETENCIES", label: "CBE Competencies" },
   { type: "ATTENDANCE", label: "Attendance Summary" },
   { type: "DISCIPLINE", label: "Behavior / Discipline" },
   { type: "TALENTS", label: "Talents & Co-curricular" },
@@ -184,7 +184,7 @@ function TemplateEditorDialog({ template, onClose, onDone }: any) {
         <DialogHeader><DialogTitle>{template ? "Edit Report Template" : "New Report Template"}</DialogTitle></DialogHeader>
         <div className="flex-1 overflow-y-auto space-y-6 py-4 pr-2">
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1"><Label>Template Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. CBC Comprehensive Report" /></div>
+            <div className="space-y-1"><Label>Template Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. CBE Comprehensive Report" /></div>
             <div className="space-y-1"><Label>Description</Label><Input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="What this report is for" /></div>
           </div>
           <div className="flex items-center gap-2 border border-navy-100 dark:border-navy-800 p-3 rounded-xl bg-navy-50/50 dark:bg-navy-900/30">

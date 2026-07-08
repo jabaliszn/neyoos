@@ -162,7 +162,7 @@ export function ComputationDashboardClient({ canManage, schoolLevelActivation }:
                         <span className="text-xs font-black text-blue-700 dark:text-blue-300">{p.computationProgress}%</span>
                       </div>
                       <Progress value={p.computationProgress} className="h-2 bg-blue-200 dark:bg-blue-950" indicatorClassName="bg-blue-600" />
-                      <p className="text-[10px] text-blue-500 mt-2 italic">Computing micro-weights (PP1/PP2), macro-weights (CAT+Exam), and mapping CBC rubrics. Please wait.</p>
+                      <p className="text-[10px] text-blue-500 mt-2 italic">Computing micro-weights (PP1/PP2), macro-weights (CAT+Exam), and mapping CBE rubrics. Please wait.</p>
                     </div>
                   )}
 

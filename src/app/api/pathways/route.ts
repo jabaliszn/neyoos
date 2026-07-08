@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const user = await requirePermission("academics.view");
     await requireRevenueFeature(user, "pathway_guidance");
     const pathways = await getPathways(user);
-    return ok({ data: pathways });
+    return ok(pathways);
   } catch (error) {
     return handleError(error);
   }
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = pathwaySchema.parse(body);
     const pathway = await createPathway(user, data);
-    return ok({ data: pathway }, 201);
+    return ok(pathway, 201);
   } catch (error) {
     if (error instanceof PathwayError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400, CONFLICT: 409 };

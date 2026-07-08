@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const user = await requirePermission("reception.operate");
     const studentId = req.nextUrl.searchParams.get("studentId");
     if (!studentId) return fail("MISSING", "studentId required.", 400);
-    return ok({ invoices: await studentOpenInvoices(user, studentId) });
+    return ok(await studentOpenInvoices(user, studentId));
   } catch (e) {
     return handleError(e);
   }

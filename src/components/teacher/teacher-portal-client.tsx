@@ -12,7 +12,7 @@
 import * as React from "react";
 import {
   School, AlertCircle, Loader2, X, Plus, BookOpen, FileText, Trash2,
-  CalendarCheck, ClipboardList, Users, BarChart3, CalendarDays, Download,
+  CalendarCheck, ClipboardList, Users, BarChart3, CalendarDays, Download, UserCog,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ interface ClassCard { id: string; label: string; curriculum: string; isClassTeac
 interface TodayLesson { period: number; subjectName: string; subjectCode: string; className: string; classId: string }
 interface Home { classes: ClassCard[]; todayLessons: TodayLesson[] }
 interface TtSlot { id: string; dayOfWeek: number; period: number; subjectName: string; subjectCode: string; className: string }
+interface CoverageRow { id: string; period: number; classId: string; className: string; subjectName: string | null; originalTeacherName: string }
 interface HwRow { id: string; classId: string; className: string; subjectName: string; subjectCode: string; teacherName: string; title: string; instructions: string | null; dueDate: string; fileUrl: string | null; fileName: string | null; mine: boolean }
 interface NoteRow { id: string; classId: string; className: string; subjectName: string; subjectCode: string; teacherName: string; title: string; description: string | null; fileUrl: string; fileName: string; mine: boolean }
 interface Subject { id: string; name: string; code: string }
@@ -108,12 +109,37 @@ export function TeacherPortalClient({ canAssign }: { canAssign: boolean }) {
 
 function Overview({ home }: { home: Home }) {
   const [slots, setSlots] = React.useState<TtSlot[] | null>(null);
+  const [coverage, setCoverage] = React.useState<CoverageRow[] | null>(null);
   React.useEffect(() => {
     fetch("/api/teacher/timetable").then((r) => r.json()).then((j) => j.ok && setSlots(j.data.slots)).catch(() => setSlots([]));
+    fetch("/api/hr?view=my-coverage").then((r) => r.json()).then((j) => j.ok && setCoverage(j.data.coverage)).catch(() => setCoverage([]));
   }, []);
 
   return (
     <div className="space-y-4">
+      {/* T.12 — real substitute-cover duties for THIS teacher, today only */}
+      {coverage !== null && coverage.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><UserCog className="h-4 w-4 text-amber-600" /> You're covering a class today</CardTitle></CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-navy-50 dark:divide-navy-800">
+              {coverage.map((c) => (
+                <li key={c.id} className="flex items-center justify-between py-2 text-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 font-mono text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">P{c.period}</span>
+                    <div>
+                      <p className="font-medium text-navy-900 dark:text-navy-50">{c.subjectName ?? c.className}</p>
+                      <p className="text-xs text-navy-400">{c.className} · covering for {c.originalTeacherName}</p>
+                    </div>
+                  </div>
+                  <Badge tone="amber">substitute</Badge>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
       {/* today's lessons */}
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-green-600" /> Today&apos;s lessons</CardTitle></CardHeader>

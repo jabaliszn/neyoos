@@ -269,7 +269,7 @@ function CreateExamMaterialDialog({ onClose, onDone }: { onClose: () => void; on
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-950/40 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/60 bg-white/90 p-6 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-950/92" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/60 bg-white p-6 shadow-pop backdrop-blur-xl dark:border-white/10 dark:bg-navy-900" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between">
           <div><h3 className="text-base font-bold text-navy-900 dark:text-navy-50">Add exam material record</h3><p className="text-xs text-navy-400">Record applications, assembled papers and physical file locations.</p></div>
           <button onClick={onClose} className="rounded-full p-1.5 text-navy-400 hover:bg-navy-100 dark:hover:bg-white/10" aria-label="Close"><X className="h-4 w-4" /></button>

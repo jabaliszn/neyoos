@@ -22,8 +22,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return ok(await stkForInvoice(user, params.id, input.phone, input.amountKes));
     }
     const user = await requirePermission("finance.manage_structure");
-    const input = z.object({ amountKes: z.coerce.number().int().min(1).max(10_000_000), reason: z.string().trim().min(3).max(120) }).parse(body);
-    return ok(await applyDiscount(user, params.id, input.amountKes, input.reason));
+    const input = z.object({
+      amountKes: z.coerce.number().int().min(1).max(10_000_000),
+      reason: z.string().trim().min(3).max(120),
+      // R.3 — real single-use server ticket, required only if the school
+      // has turned on requireBiometricForFinance (see applyDiscount()).
+      biometricTicket: z.string().trim().max(80).optional(),
+    }).parse(body);
+    return ok(await applyDiscount(user, params.id, input.amountKes, input.reason, input.biometricTicket));
   } catch (e) {
     return handleError(e);
   }

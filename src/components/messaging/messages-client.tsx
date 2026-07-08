@@ -617,7 +617,7 @@ export function MessagesClient() {
       </div>
     {reportOpen && (
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-navy-950/45 p-4 backdrop-blur-md">
-        <div className="w-full max-w-lg rounded-3xl border border-white/20 bg-white p-5 shadow-pop dark:bg-navy-950">
+        <div className="w-full max-w-lg rounded-3xl border border-white/20 bg-white p-5 shadow-pop dark:border-navy-800 dark:bg-navy-900">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-600">Delivery report</p>

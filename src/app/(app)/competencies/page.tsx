@@ -17,7 +17,7 @@ export default async function CompetenciesPage() {
       <div>
         <div className="flex items-center gap-2 text-sm font-semibold text-green-700 dark:text-green-300"><Brain className="h-4 w-4" /> Future-proof growth tracking</div>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy-900 dark:text-navy-50">Competency Framework</h1>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-navy-500 dark:text-navy-400">Track learner growth through configurable competencies connected to curriculum, CBC observations, flexible assessments and teacher evidence.</p>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-navy-500 dark:text-navy-400">Track learner growth through configurable competencies connected to curriculum, CBE observations, flexible assessments and teacher evidence.</p>
       </div>
       <CompetencyFrameworkClient />
     </div>

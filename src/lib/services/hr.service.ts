@@ -184,6 +184,7 @@ export async function decideLeave(user: SessionUser, leaveId: string, approve: b
     });
 
     // Approved leave appears on the shared calendar (A.17 reuse).
+    let substituteSummary: { proposed: number; unfilled: number } | null = null;
     if (approve) {
       const { createEvent } = await import("@/lib/services/calendar.service");
       await createEvent(
@@ -194,9 +195,23 @@ export async function decideLeave(user: SessionUser, leaveId: string, approve: b
         } as never,
         user.id
       ).catch(() => null);
+
+      // T.12 (founder-requested 2026-07-07) — the real gap this session
+      // closes: approved leave used to only touch the shared calendar and
+      // never the real timetable at all. The moment leave is approved,
+      // real substitute-coverage PROPOSALS (never auto-applied — founder's
+      // own confirmed answer) are generated for every real live
+      // TimetableSlot this teacher has during the real leave window.
+      // Best-effort: a failure here must never block the leave decision
+      // itself from being recorded.
+      try {
+        const { generateSubstituteProposals } = await import("@/lib/services/substitute.service");
+        const result = await generateSubstituteProposals(user, leaveId);
+        substituteSummary = { proposed: result.proposed, unfilled: result.unfilled };
+      } catch { /* best-effort — e.g. this teacher has zero live timetable slots */ }
     }
-    await audit(user, approve ? "hr.leave_approved" : "hr.leave_rejected", "leaveRequest", leaveId, { days: leave.days, note });
-    return { id: leaveId, status };
+    await audit(user, approve ? "hr.leave_approved" : "hr.leave_rejected", "leaveRequest", leaveId, { days: leave.days, note, substituteSummary });
+    return { id: leaveId, status, substituteSummary };
   });
 }
 

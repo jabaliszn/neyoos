@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     
     const data = studentPathwayAllocationSchema.parse(body);
     const pref = await allocateStudentToPathway(user, studentId, data);
-    return ok({ data: pref }, 201);
+    return ok(pref, 201);
   } catch (error) {
     return handleError(error);
   }

@@ -62,7 +62,7 @@ export function RubricHero({ canManage, onSeedDefaults, onNewRubric, seeding }: 
             Structured Evaluation & Rubric Framework
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-navy-100 dark:text-navy-200">
-            Formal exams, CBC observations and LMS work stay intact. Rubrics provide structured evaluation for projects, practicals, portfolios and competencies to track growth beyond marks.
+            Formal exams, CBE observations and LMS work stay intact. Rubrics provide structured evaluation for projects, practicals, portfolios and competencies to track growth beyond marks.
           </p>
         </div>
         {canManage && (
@@ -165,7 +165,7 @@ export function RubricEmptyState({ canManage, onSeedDefaults, onNewRubric }: {
     <EmptyState
       icon={ListChecks}
       title="No rubrics configured yet"
-      description="Start by seeding the default CBC and Project rubrics, or create a custom rubric definition for your school's unique evaluation needs."
+      description="Start by seeding the default CBE and Project rubrics, or create a custom rubric definition for your school's unique evaluation needs."
       primaryAction={canManage ? { label: "Seed default rubrics", onClick: onSeedDefaults } : undefined}
       secondaryAction={canManage ? { label: "Create custom rubric", onClick: onNewRubric } : undefined}
     />
@@ -187,7 +187,7 @@ export function RubricCard({ rubric, canManage, onEdit, onToggleArchive, busy }:
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={rubric.category === "CBC" ? "green" : rubric.category === "PROJECT" ? "blue" : "amber"}>
-                {rubric.category}
+                {rubric.category === "CBC" ? "CBE" : rubric.category}
               </Badge>
               {rubric.isArchived && <Badge tone="neutral">Archived</Badge>}
             </div>
@@ -275,7 +275,7 @@ export function RubricForm({ initial, onSubmit, onClose, saving }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div className="fixed inset-0 bg-navy-900/40 backdrop-blur-sm dark:bg-navy-950/60" onClick={onClose} />
-      <Card className="relative z-10 w-full max-w-3xl overflow-hidden border-white/40 bg-white/90 backdrop-blur-2xl dark:border-white/10 dark:bg-navy-950/90 shadow-2xl">
+      <Card className="relative z-10 w-full max-w-3xl overflow-hidden border-white/40 bg-white backdrop-blur-2xl dark:border-white/10 dark:bg-navy-900 shadow-2xl">
         <form onSubmit={handleSubmit}>
           <CardHeader className="flex flex-row items-center justify-between border-b border-navy-100 px-6 py-4 dark:border-navy-800">
             <CardTitle className="text-lg font-bold">{initial ? "Edit Rubric Definition" : "Create New Rubric"}</CardTitle>

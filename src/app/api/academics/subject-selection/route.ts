@@ -11,10 +11,10 @@ export async function GET(req: NextRequest) {
     
     if (portalId) {
       const data = await getSelectionReport(user, portalId);
-      return ok({ data });
+      return ok(data);
     } else {
       const data = await listAllSelectionPortals(user);
-      return ok({ data });
+      return ok(data);
     }
   } catch (error) {
     return handleError(error);
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const data = createSelectionPortalSchema.parse(body);
     
     const portal = await createSelectionPortal(user, data);
-    return ok({ data: portal }, 201);
+    return ok(portal, 201);
   } catch (error) {
     if (error instanceof SelectionError) {
       const statusMap = { NOT_FOUND: 404, FORBIDDEN: 403, INVALID: 400, CLOSED: 423, CONFLICT: 409 };

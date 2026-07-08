@@ -180,6 +180,62 @@ html.glass.dark {
 html.glass.dark[data-liquid="1"] { --lg-card: rgba(17, 25, 43, 0.74); --lg-shell: rgba(13, 20, 36, 0.70); --lg-side: rgba(20, 29, 50, 0.80); }
 html.glass.dark[data-liquid="3"] { --lg-card: rgba(17, 25, 43, 0.38); --lg-shell: rgba(13, 20, 36, 0.30); --lg-side: rgba(20, 29, 50, 0.46); }
 
+/* ===========================================================================
+   O.3 — LIQUID GLASS COLOUR/CONTRAST INTENSITY (founder-requested 2026-07-02).
+   A DELIBERATELY SEPARATE dimension from the blur-depth liquidity level
+   above (data-liquid="1|2|3") and from the per-device blur/sheen slider
+   (I.81, --lg-user-blur-boost / --lg-user-sheen-extra). This one boosts
+   BACKGROUND OPACITY on glass surfaces — fixing low-contrast/visibility
+   trouble spots — WITHOUT touching blur radius or saturation at all.
+   Set via <html data-lg-contrast="2|3">; "1" / absent = today's exact
+   values (zero regression for anyone who never touches this control).
+   Placed AFTER the data-liquid rules above so it wins the cascade (equal
+   selector specificity, later source order) regardless of which blur
+   depth is active — a school on liquid_level=3 (deep/most-transparent)
+   can still choose liquid_color_level=3 (maximum contrast) and get a
+   fully legible, high-contrast glass surface while keeping the deep blur.
+   ======================================================================== */
+html.glass[data-lg-contrast="2"] {
+  --lg-card: rgba(255, 255, 255, 0.62);
+  --lg-card-border: rgba(255, 255, 255, 0.85);
+  --lg-shell: rgba(255, 255, 255, 0.50);
+  --lg-side: rgba(244, 248, 252, 0.72);
+  --lg-side-border: rgba(28, 39, 64, 0.16);
+  --lg-input: rgba(255, 255, 255, 0.75);
+  --lg-pill: rgba(28, 39, 64, 0.12);
+  --lg-sheen: rgba(255, 255, 255, 0.95);
+}
+html.glass[data-lg-contrast="3"] {
+  --lg-card: rgba(255, 255, 255, 0.82);
+  --lg-card-border: rgba(255, 255, 255, 0.95);
+  --lg-shell: rgba(255, 255, 255, 0.70);
+  --lg-side: rgba(244, 248, 252, 0.88);
+  --lg-side-border: rgba(28, 39, 64, 0.22);
+  --lg-input: rgba(255, 255, 255, 0.90);
+  --lg-pill: rgba(28, 39, 64, 0.18);
+  --lg-sheen: rgba(255, 255, 255, 1);
+}
+html.glass.dark[data-lg-contrast="2"] {
+  --lg-card: rgba(17, 25, 43, 0.72);
+  --lg-card-border: rgba(255, 255, 255, 0.22);
+  --lg-shell: rgba(13, 20, 36, 0.65);
+  --lg-side: rgba(20, 29, 50, 0.80);
+  --lg-side-border: rgba(255, 255, 255, 0.16);
+  --lg-input: rgba(13, 20, 36, 0.75);
+  --lg-pill: rgba(255, 255, 255, 0.14);
+  --lg-sheen: rgba(255, 255, 255, 0.24);
+}
+html.glass.dark[data-lg-contrast="3"] {
+  --lg-card: rgba(17, 25, 43, 0.90);
+  --lg-card-border: rgba(255, 255, 255, 0.30);
+  --lg-shell: rgba(13, 20, 36, 0.85);
+  --lg-side: rgba(20, 29, 50, 0.94);
+  --lg-side-border: rgba(255, 255, 255, 0.22);
+  --lg-input: rgba(13, 20, 36, 0.92);
+  --lg-pill: rgba(255, 255, 255, 0.20);
+  --lg-sheen: rgba(255, 255, 255, 0.32);
+}
+
 /* ---- Ambient liquid backdrop (light) ----------------------------------- */
 html.glass body,
 html.glass .bg-warm-100 {
@@ -242,12 +298,16 @@ html.glass.dark .shadow-pop {
   100% { transform: translateX(160%) rotate(8deg); }
 }
 html.glass .rounded-2xl.bg-white,
-html.glass.dark .rounded-2xl.bg-navy-900 {
+html.glass.dark .rounded-2xl.bg-navy-900,
+html.glass .rounded-3xl.bg-white,
+html.glass.dark .rounded-3xl.bg-navy-900 {
   position: relative;
   overflow: hidden;
 }
 html.glass .rounded-2xl.bg-white::before,
-html.glass.dark .rounded-2xl.bg-navy-900::before {
+html.glass.dark .rounded-2xl.bg-navy-900::before,
+html.glass .rounded-3xl.bg-white::before,
+html.glass.dark .rounded-3xl.bg-navy-900::before {
   content: "";
   position: absolute;
   top: 0; left: 0;
@@ -258,8 +318,10 @@ html.glass.dark .rounded-2xl.bg-navy-900::before {
   animation: lg-sheen-drift 14s linear infinite;
 }
 /* Levels tune the sheen: subtle = off, deep = brighter. */
-html.glass[data-liquid="1"] .rounded-2xl.bg-white::before { animation: none; opacity: 0; }
-html.glass[data-liquid="3"] .rounded-2xl.bg-white::before { opacity: 0.22; }
+html.glass[data-liquid="1"] .rounded-2xl.bg-white::before,
+html.glass[data-liquid="1"] .rounded-3xl.bg-white::before { animation: none; opacity: 0; }
+html.glass[data-liquid="3"] .rounded-2xl.bg-white::before,
+html.glass[data-liquid="3"] .rounded-3xl.bg-white::before { opacity: 0.22; }
 
 /* ---- Shell: topbar + content header get glass; SIDEBAR is distinct ----- */
 html.glass header,
@@ -284,6 +346,56 @@ html.glass.dark aside {
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06), 6px 0 24px -12px rgba(0, 0, 0, 0.55);
 }
 
+/* ---- Shell V2: the floating brand-colored module bar -------------------
+   (founder-requested "NEYO 2.0", 2026-07-04). Unlike other glass surfaces,
+   this one carries its OWN school-brand gradient (set inline via React
+   style, Tenant.brandPrimary/brandAccent) rather than a fixed navy/white
+   background — the glass layer here only ADDS blur/saturation/sheen on top
+   of that gradient, it never overrides the color, so the bar always stays
+   visibly the school's own brand while still feeling like real frosted
+   glass (WWDC-style specular highlight along the top edge). */
+html.glass [data-lg-bar] {
+  /* 2026-07-05 fix: raised from *0.6 to a full, strong blur+saturation —
+     paired with the component's own move to real translucent RGBA brand
+     colors (not opaque hex), this is what makes the bar read as genuine
+     frosted glass "in all its areas" at ALL times, never conditional on
+     scroll state, matching Apple's own WWDC26 Liquid Glass material
+     (translucent + reflects/refracts surroundings + reacts with specular
+     highlights — apple.com/newsroom, June 2025). */
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(calc(var(--lg-sat) + 25%));
+  backdrop-filter: blur(var(--lg-blur)) saturate(calc(var(--lg-sat) + 25%));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 10px 36px -8px rgba(18, 26, 46, 0.5),
+    0 1px 1px rgba(255, 255, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    inset 0 0 24px rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+html.glass [data-lg-bar]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, 0.22) 50%, transparent 75%);
+  animation: lg-sheen-drift 12s linear infinite;
+}
+html.glass[data-liquid="1"] [data-lg-bar] {
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur) * 0.7)) saturate(var(--lg-sat));
+  backdrop-filter: blur(calc(var(--lg-blur) * 0.7)) saturate(var(--lg-sat));
+}
+html.glass[data-liquid="1"] [data-lg-bar]::before { animation: none; opacity: 0.4; }
+html.glass[data-liquid="3"] [data-lg-bar]::before { opacity: 1; }
+/* Real motion-reactive highlight: the bar catches a touch more light on
+   hover/focus-within, echoing WWDC26's "reacts to movement with specular
+   highlights" behavior — subtle, never distracting. */
+html.glass [data-lg-bar]:hover {
+  -webkit-backdrop-filter: blur(calc(var(--lg-blur) * 1.05)) saturate(calc(var(--lg-sat) + 35%));
+  backdrop-filter: blur(calc(var(--lg-blur) * 1.05)) saturate(calc(var(--lg-sat) + 35%));
+}
+
 /* ---- Inputs, search, dropdowns, pills — EVERY element is liquid -------- */
 html.glass input,
 html.glass select,
@@ -298,7 +410,9 @@ html.glass .bg-warm-50 { background-color: var(--lg-shell) !important; }
 
 /* Command palette (⌘K) + dialogs: heavier frost + brighter rim. */
 html.glass .fixed .rounded-2xl.bg-white,
-html.glass.dark .fixed .rounded-2xl.bg-navy-900 {
+html.glass.dark .fixed .rounded-2xl.bg-navy-900,
+html.glass .fixed .rounded-3xl.bg-white,
+html.glass.dark .fixed .rounded-3xl.bg-navy-900 {
   background-color: var(--lg-card) !important;
   -webkit-backdrop-filter: blur(calc(var(--lg-blur) + 10px)) saturate(var(--lg-sat));
   backdrop-filter: blur(calc(var(--lg-blur) + 10px)) saturate(var(--lg-sat));
@@ -320,14 +434,17 @@ html.glass .bg-navy-950\/40 {
     backdrop-filter: none !important;
     background-color: rgba(255, 255, 255, 0.96) !important;
   }
-  html.glass .rounded-2xl.bg-white::before { animation: none; opacity: 0; }
+  html.glass .rounded-2xl.bg-white::before,
+  html.glass .rounded-3xl.bg-white::before { animation: none; opacity: 0; }
   html.glass.dark .bg-navy-900, html.glass.dark .bg-navy-800, html.glass.dark aside {
     background-color: rgba(17, 25, 43, 0.97) !important;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   html.glass .rounded-2xl.bg-white::before,
-  html.glass.dark .rounded-2xl.bg-navy-900::before { animation: none; }
+  html.glass.dark .rounded-2xl.bg-navy-900::before,
+  html.glass .rounded-3xl.bg-white::before,
+  html.glass.dark .rounded-3xl.bg-navy-900::before { animation: none; }
 }
 
 /* ---- Printing always plain — never glass (founder rule) ---------------- */
@@ -341,7 +458,8 @@ html.glass .bg-navy-950\/40 {
     backdrop-filter: none !important;
     background-color: #fff !important;
   }
-  html.glass .rounded-2xl.bg-white::before { display: none; }
+  html.glass .rounded-2xl.bg-white::before,
+  html.glass .rounded-3xl.bg-white::before { display: none; }
 }
 
 /* ===========================================================================
@@ -443,16 +561,23 @@ html.glass header,
 html.glass .bg-warm-50,
 html.glass aside,
 html.glass .fixed .rounded-2xl.bg-white,
-html.glass.dark .fixed .rounded-2xl.bg-navy-900 {
+html.glass.dark .fixed .rounded-2xl.bg-navy-900,
+html.glass .fixed .rounded-3xl.bg-white,
+html.glass.dark .fixed .rounded-3xl.bg-navy-900 {
   -webkit-backdrop-filter: blur(calc(var(--lg-blur) + var(--lg-user-blur-boost))) saturate(var(--lg-sat));
   backdrop-filter: blur(calc(var(--lg-blur) + var(--lg-user-blur-boost))) saturate(var(--lg-sat));
 }
 html.glass .rounded-2xl.bg-white::before,
-html.glass.dark .rounded-2xl.bg-navy-900::before {
+html.glass.dark .rounded-2xl.bg-navy-900::before,
+html.glass .rounded-3xl.bg-white::before,
+html.glass.dark .rounded-3xl.bg-navy-900::before {
   opacity: calc(0.12 + var(--lg-user-sheen-extra));
 }
-html.glass[data-liquid="1"] .rounded-2xl.bg-white::before { opacity: var(--lg-user-sheen-extra); }
-html.glass[data-liquid="3"] .rounded-2xl.bg-white::before { opacity: calc(0.22 + var(--lg-user-sheen-extra)); }
+html.glass[data-liquid="1"] .rounded-2xl.bg-white::before,
+html.glass[data-liquid="1"] .rounded-3xl.bg-white::before { opacity: var(--lg-user-sheen-extra); }
+html.glass[data-liquid="3"] .rounded-2xl.bg-white::before,
+html.glass[data-liquid="3"] .rounded-3xl.bg-white::before { opacity: calc(0.22 + var(--lg-user-sheen-extra)); }
+
 
 html.glass button.bg-green-500\/80,
 html.glass button.bg-green-500,
@@ -520,4 +645,43 @@ html.glass.dark .dashboard-metric-card {
   html { font-size: 16.5px; }
   .lucide { stroke-width: 1.85; }
   input, select, textarea { font-size: 15.25px !important; }
+}
+
+/* ===========================================================================
+   O.2 — PER-USER SOLID POPUP OVERRIDE (founder-requested 2026-07-02).
+   A personal preference (User.popupStyle, saved via POST /api/me/popup-style,
+   applied via <html data-popup-style="solid">) letting an individual user opt
+   POPUPS/MODALS specifically OUT of Liquid Glass, independent of:
+    - the company-only liquid_level / neyo_liquid_system_active (G.33), and
+    - the per-device blur/sheen intensity slider (I.81).
+   Deliberately scoped ONLY to modal-panel surfaces (".fixed" dialog panels +
+   the shared ⌘K / Dialog primitive), not the whole app shell — sidebar,
+   topbar and page cards keep the platform's Liquid Glass exactly as before,
+   since the founder's ask was specifically about "pressed pop-up screens".
+   Default remains "glass" (data-popup-style unset or "glass") — nothing
+   changes for a user who never touches this control. Printing stays plain
+   either way (unaffected — print rules already strip glass unconditionally).
+   ======================================================================== */
+html.glass[data-popup-style="solid"] .fixed .rounded-2xl.bg-white,
+html.glass[data-popup-style="solid"] .fixed .rounded-3xl.bg-white {
+  background-color: #ffffff !important; /* plain white — matches the "flat" theme's card colour */
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  border-color: rgba(28, 39, 64, 0.10) !important;
+  box-shadow: 0 1px 1px rgba(28, 39, 64, 0.05), 0 12px 32px -10px rgba(28, 39, 64, 0.22) !important;
+}
+html.glass.dark[data-popup-style="solid"] .fixed .rounded-2xl.bg-navy-900,
+html.glass.dark[data-popup-style="solid"] .fixed .rounded-3xl.bg-navy-900 {
+  background-color: #1c2740 !important; /* plain navy-900 — matches the "flat dark" theme's card colour */
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 14px 36px -10px rgba(0, 0, 0, 0.5) !important;
+}
+/* Solid popups drop the liquid sheen + specular inset entirely. */
+html.glass[data-popup-style="solid"] .fixed .rounded-2xl.bg-white::before,
+html.glass[data-popup-style="solid"] .fixed .rounded-3xl.bg-white::before,
+html.glass.dark[data-popup-style="solid"] .fixed .rounded-2xl.bg-navy-900::before,
+html.glass.dark[data-popup-style="solid"] .fixed .rounded-3xl.bg-navy-900::before {
+  display: none !important;
 }

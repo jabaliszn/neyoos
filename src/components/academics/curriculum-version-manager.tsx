@@ -118,7 +118,7 @@ export function CurriculumVersionManagerClient({ canManage }: { canManage: boole
         <div className="rounded-xl border border-dashed border-navy-200 p-10 text-center dark:border-navy-800">
           <GitBranch className="mx-auto h-8 w-8 text-navy-300" />
           <p className="mt-3 text-sm font-semibold text-navy-700 dark:text-navy-200">No curriculum versions yet</p>
-          <p className="mt-1 text-xs text-navy-500">Your active curriculum will appear here. Draft a new version when CBC updates, e.g. CBC 2027.</p>
+          <p className="mt-1 text-xs text-navy-500">Your active curriculum will appear here. Draft a new version when CBE updates, e.g. CBE 2027.</p>
         </div>
       ) : (
         /* 4) DATA state */
@@ -241,7 +241,7 @@ function CreateDraftDialog({ originalId, onClose, onDone }: any) {
           <p className="mb-4 text-xs text-navy-500">Clones the active curriculum into a safe sandbox. You can add or remove subjects and competencies without affecting live reports.</p>
           <div className="space-y-1">
             <Label>New Version Name</Label>
-            <Input value={versionName} onChange={(e) => setVersionName(e.target.value)} placeholder="e.g. CBC 2027 Update" />
+            <Input value={versionName} onChange={(e) => setVersionName(e.target.value)} placeholder="e.g. CBE 2027 Update" />
           </div>
         </div>
         <DialogFooter>

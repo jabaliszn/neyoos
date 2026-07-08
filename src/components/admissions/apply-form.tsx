@@ -81,7 +81,7 @@ export function ApplyForm({ schoolName }: { schoolName: string }) {
             <div>
               <Label htmlFor="cur">Curriculum</Label>
               <select id="cur" value={f.curriculum} onChange={set("curriculum")} className="mt-1 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm dark:border-navy-700 dark:bg-navy-800">
-                <option value="CBC">CBC</option><option value="8-4-4">8-4-4</option>
+                <option value="CBC">CBE</option><option value="8-4-4">8-4-4</option>
               </select>
             </div>
           </div>

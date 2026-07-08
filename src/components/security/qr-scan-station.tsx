@@ -34,6 +34,7 @@ interface PaymentResult {
   studentId: string; studentName: string; admissionNo: string; className: string;
   totalBalanceKes: number; guardianPhone: string | null; guardianName: string | null;
   invoices: { id: string; invoiceNo: string; description: string; balanceKes: number; dueDate: string }[];
+  hasFeeInvoices: boolean;
 }
 interface ScanEvent {
   id: string; studentName: string; admissionNo: string | null; action: string;
@@ -242,7 +243,11 @@ export function QrScanStation({ canMarkAttendance, canLookupPayment }: { canMark
                 </ul>
               )}
               {paymentResult.totalBalanceKes === 0 && (
-                <p className="mt-2 text-sm text-green-600">No outstanding balance — fully paid.</p>
+                paymentResult.hasFeeInvoices ? (
+                  <p className="mt-2 text-sm text-green-600">No outstanding balance — fully paid.</p>
+                ) : (
+                  <p className="mt-2 text-sm text-navy-400">No fees have been billed to this learner yet.</p>
+                )
               )}
             </div>
           )}

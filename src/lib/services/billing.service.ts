@@ -32,7 +32,7 @@ async function billingNoticeAlreadySent(subscriptionId: string, action: string) 
   return Boolean(existing);
 }
 
-async function sendBillingNotice(
+export async function sendBillingNotice(
   tenantId: string,
   subscriptionId: string,
   action: string,
@@ -77,7 +77,10 @@ function daysUntil(date: Date, now: Date) {
   return Math.max(0, Math.ceil((date.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
 }
 
-/** Ensure a tenant has a subscription row (defaults to Free Karibu). */
+/** Ensure a tenant has a subscription row. Part V (2026-07-06, founder-
+ * confirmed "migrate everyone now"): every NEW subscription row defaults to
+ * the real SIZE_BASED_V2 pricing mode — the old LEGACY_TIER plan system is
+ * fully retired for pricing purposes going forward. */
 export async function ensureSubscription(tenantId: string) {
   const existing = await db.subscription.findUnique({ where: { tenantId } });
   if (existing) return existing;
@@ -88,6 +91,7 @@ export async function ensureSubscription(tenantId: string) {
       tenantId,
       planKey: plan.key,
       status: "ACTIVE",
+      pricingMode: "SIZE_BASED_V2",
       grandfatheredPrice: plan.pricePerTerm,
       currentPeriodEnd: addDays(new Date(), TERM_DAYS),
     },

@@ -7,6 +7,7 @@ import { UserMenu } from "./user-menu";
 import { NotificationBell } from "./notification-bell";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { NeyoLogo } from "@/components/brand/neyo-logo";
+import { SchoolSwitcher } from "./school-switcher";
 
 /**
  * Top bar (Odoo module switcher + Linear Cmd+K search affordance).
@@ -19,6 +20,7 @@ export function Topbar({
   tenantLogoUrl,
   userName,
   userRole,
+  rawRole,
   canViewAs = false,
   onMenuClick,
 }: {
@@ -26,6 +28,7 @@ export function Topbar({
   tenantLogoUrl?: string | null;
   userName: string;
   userRole: string;
+  rawRole?: string;
   canViewAs?: boolean;
   onMenuClick: () => void;
 }) {
@@ -67,10 +70,14 @@ export function Topbar({
         ) : (
           <NeyoLogo variant="mark" className="h-8" title="NEYO" />
         )}
-        <button className="hidden items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold text-navy-800 hover:bg-navy-100 dark:text-navy-100 dark:hover:bg-navy-800 sm:flex">
-          {tenantName}
-          <ChevronDown className="h-4 w-4 text-navy-400" />
-        </button>
+        {rawRole === "PARENT" ? (
+          <SchoolSwitcher userRole={rawRole} currentTenantName={tenantName} />
+        ) : (
+          <button className="hidden items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold text-navy-800 hover:bg-navy-100 dark:text-navy-100 dark:hover:bg-navy-800 sm:flex">
+            {tenantName}
+            <ChevronDown className="h-4 w-4 text-navy-400" />
+          </button>
+        )}
       </div>
 
       {/* Cmd+K search */}

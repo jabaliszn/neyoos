@@ -275,6 +275,7 @@ export function buildCandidates(
       guardianName: rec.guardianName,
       guardianPhone,
       notes: rec.notes,
+      openingBalanceKes: rec.openingBalanceKes ? Number(rec.openingBalanceKes) : undefined,
     };
 
     const parsed = importedRowSchema.safeParse(candidate);
@@ -299,7 +300,18 @@ export function buildCandidates(
 
 
 
-async function duplicateIssues(user: SessionUser, candidates: PreviewRow[]): Promise<RowIssue[]> {
+/**
+ * R.1 — `updateExisting` (default true from the caller) changes what counts
+ * as a blocking "duplicate": WITHIN-THE-SAME-FILE collisions are ALWAYS a
+ * real problem (two rows can't both become the row that updates one real
+ * student without a human picking which), so those are always flagged. But
+ * a row that matches an EXISTING DB student is no longer treated as an
+ * error here — `commitImport`/`previewImport` instead route it through the
+ * real match-and-merge path (`matchExistingStudent`/`diffAgainstExisting`).
+ * Passing `updateExisting: false` restores the original strict M.4 behavior
+ * (any DB match rejects the whole import) for schools that want it.
+ */
+async function duplicateIssues(user: SessionUser, candidates: PreviewRow[], updateExisting = true): Promise<RowIssue[]> {
   const issues: RowIssue[] = [];
   const seen = new Map<string, number>();
   function checkInFile(row: PreviewRow, label: string, value?: string | null) {
@@ -320,6 +332,8 @@ async function duplicateIssues(user: SessionUser, candidates: PreviewRow[]): Pro
     checkInFile(c, "birth certificate number", c.birthCertNo);
     if (c.dateOfBirth) checkInFile(c, "student identity", `${c.firstName}|${c.lastName}|${c.dateOfBirth}`);
   }
+
+  if (updateExisting) return issues; // DB-level matches are handled by the smart update path, not rejected here
 
   const legacyNos = candidates.map((c) => ((c as PreviewRow & { legacyAdmissionNo?: string }).legacyAdmissionNo || c.admissionNo || "").trim()).filter(Boolean);
   const upis = candidates.map((c) => c.upiNumber?.trim()).filter(Boolean) as string[];
@@ -360,6 +374,165 @@ async function duplicateIssues(user: SessionUser, candidates: PreviewRow[]): Pro
 }
 
 // ---------------------------------------------------------------------------
+// R.1 — Smart create-or-update: match a row against an EXISTING student.
+//
+// The founder's real complaint: re-importing a register (e.g. adding a
+// "Guardian phone" or "Fee balance" column the school didn't have before)
+// used to either get the WHOLE import rejected as a duplicate, or — if a
+// school worked around that by renaming/tweaking rows — silently create a
+// SECOND student record for the same real child. Neither is acceptable.
+//
+// Real match priority (most certain first), same identifiers the existing
+// `duplicateIssues()` already treats as unique-enough to reject on:
+//   1. School admission number (legacyAdmissionNo/admissionNo column)
+//   2. UPI/NEMIS number
+//   3. Birth certificate number
+//   4. Same first+last name AND same date of birth
+//   5. Same first+last name AND a guardian who shares the SAME phone number
+//      already on file for that name — the founder's explicit example of
+//      "students with the same name, difference noticed in the parent phone
+//      number." This is intentionally the WEAKEST/last-resort match (name
+//      collisions are common in Kenyan schools), so it only ever fires when
+//      the guardian phone genuinely also matches a real existing guardian
+//      already linked to a same-named student.
+// ---------------------------------------------------------------------------
+
+export interface ExistingStudentMatch {
+  id: string;
+  matchedOn: "admissionNo" | "upiNumber" | "birthCertNo" | "name+dob" | "name+guardianPhone";
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  gender: string;
+  dateOfBirth: string | null;
+  classId: string | null;
+  legacyAdmissionNo: string | null;
+  admissionNo: string;
+  upiNumber: string | null;
+  birthCertNo: string | null;
+  notes: string | null;
+}
+
+/** Find at most one existing (non-deleted) student this row is really about. */
+export async function matchExistingStudent(c: PreviewRow): Promise<ExistingStudentMatch | null> {
+  const anyC = c as PreviewRow & { legacyAdmissionNo?: string; admissionNo?: string };
+  const legacy = (anyC.legacyAdmissionNo || anyC.admissionNo || "").trim();
+
+  const select = {
+    id: true, firstName: true, middleName: true, lastName: true, gender: true,
+    dateOfBirth: true, classId: true, legacyAdmissionNo: true, admissionNo: true,
+    upiNumber: true, birthCertNo: true, notes: true,
+  } as const;
+
+  if (legacy) {
+    const byAdm = await tenantDb().student.findFirst({
+      where: { deletedAt: null, OR: [{ legacyAdmissionNo: legacy }, { admissionNo: legacy }] },
+      select,
+    });
+    if (byAdm) return { ...byAdm, matchedOn: "admissionNo" };
+  }
+  if (c.upiNumber) {
+    const byUpi = await tenantDb().student.findFirst({ where: { deletedAt: null, upiNumber: c.upiNumber }, select });
+    if (byUpi) return { ...byUpi, matchedOn: "upiNumber" };
+  }
+  if (c.birthCertNo) {
+    const byBc = await tenantDb().student.findFirst({ where: { deletedAt: null, birthCertNo: c.birthCertNo }, select });
+    if (byBc) return { ...byBc, matchedOn: "birthCertNo" };
+  }
+  if (c.dateOfBirth) {
+    const byDob = await tenantDb().student.findFirst({
+      where: { deletedAt: null, firstName: c.firstName, lastName: c.lastName, dateOfBirth: c.dateOfBirth },
+      select,
+    });
+    if (byDob) return { ...byDob, matchedOn: "name+dob" };
+  }
+  // Last resort: same name AND the row's guardian phone already belongs to
+  // a guardian linked to a same-named student — the real signal the founder
+  // asked for to disambiguate two students who happen to share a name.
+  if (c.guardianPhone) {
+    const sameNameStudents = await tenantDb().student.findMany({
+      where: { deletedAt: null, firstName: c.firstName, lastName: c.lastName },
+      select: { ...select, guardians: { select: { guardian: { select: { phone: true } } } } },
+    });
+    const byPhone = sameNameStudents.find((s) => s.guardians.some((g) => g.guardian.phone === c.guardianPhone));
+    if (byPhone) {
+      const { guardians: _guardians, ...rest } = byPhone;
+      return { ...rest, matchedOn: "name+guardianPhone" };
+    }
+  }
+  return null;
+}
+
+/** A field that differs between the row and the existing record — surfaced
+ * to the school for an explicit yes/no before anything is overwritten. */
+export interface FieldConflict { field: string; existingValue: string; newValue: string }
+
+/** Compare a row's mapped fields against an existing student. Returns which
+ * fields are genuinely NEW (blank on the record, safe to fill for free) vs
+ * which are real CONFLICTS (both sides have a value, and they differ). */
+export function diffAgainstExisting(c: PreviewRow, existing: ExistingStudentMatch): { fillable: string[]; conflicts: FieldConflict[] } {
+  const fillable: string[] = [];
+  const conflicts: FieldConflict[] = [];
+  function compare(field: string, existingValue: string | null | undefined, newValue: string | undefined) {
+    if (!newValue) return; // nothing offered by the row
+    if (!existingValue) { fillable.push(field); return; }
+    if (existingValue.trim().toLowerCase() !== newValue.trim().toLowerCase()) {
+      conflicts.push({ field, existingValue, newValue });
+    }
+    // identical value on both sides: nothing to do, not a conflict, not "fillable"
+  }
+  // A matched-by-admissionNo/UPI/birth-cert row whose NAME genuinely differs
+  // from the record on file is a real conflict too — e.g. the admission
+  // number was reused for a different learner, or a typo in the sheet. Only
+  // compared when the match wasn't already made BY name (name+dob /
+  // name+guardianPhone matches are name-identical by construction).
+  if (existing.matchedOn !== "name+dob" && existing.matchedOn !== "name+guardianPhone") {
+    compare("firstName", existing.firstName, c.firstName);
+    compare("lastName", existing.lastName, c.lastName);
+  }
+  compare("middleName", existing.middleName, c.middleName);
+  compare("dateOfBirth", existing.dateOfBirth, c.dateOfBirth);
+  compare("upiNumber", existing.upiNumber, c.upiNumber);
+  compare("birthCertNo", existing.birthCertNo, c.birthCertNo);
+  compare("notes", existing.notes, c.notes);
+  return { fillable, conflicts };
+}
+
+/**
+ * R.1 — record an imported "opening balance" as a real, standalone ARREARS
+ * invoice — NEVER as an edit to any existing invoice's totals. This directly
+ * answers the founder's carry-forward concern: a school importing "this
+ * student owes KES 8,000 from last term" gets a real invoice a parent can
+ * see and pay, without ever touching money already recorded as paid.
+ * Idempotent per (student, amount) via a stable description, so re-running
+ * the same import file twice never double-bills a family.
+ */
+async function reconcileOpeningBalance(user: SessionUser, studentId: string, amountKes: number) {
+  const description = `Imported opening balance (${amountKes.toLocaleString("en-KE")})`;
+  const existing = await tenantDb().invoice.findFirst({ where: { studentId, description, kind: "ARREARS" } });
+  if (existing) return existing; // already recorded by an earlier run of this same import
+  const currentTerm = await tenantDb().academicTerm.findFirst({ where: { current: true } });
+  const year = currentTerm?.year ?? new Date().getFullYear();
+  const term = currentTerm?.term ?? 1;
+  const dueDate = currentTerm?.endDate ?? new Date().toISOString().slice(0, 10);
+  const invoiceNo = await nextTenantId(user.tenantId, "INVOICE");
+  const invoice = await tenantDb().invoice.create({
+    data: {
+      invoiceNo, studentId, description, totalKes: amountKes, paidKes: 0, discountKes: 0,
+      status: "UNPAID", kind: "ARREARS", dueDate, year, term,
+    } as never,
+  });
+  await db.auditLog.create({
+    data: {
+      tenantId: user.tenantId, actorId: user.id, actorName: user.fullName,
+      action: "finance.opening_balance_imported", entityType: "invoice", entityId: invoice.id,
+      metadata: JSON.stringify({ studentId, amountKes }),
+    },
+  });
+  return invoice;
+}
+
+// ---------------------------------------------------------------------------
 // Preview (tenant-aware: resolves classes + duplicate checks)
 // ---------------------------------------------------------------------------
 
@@ -372,7 +545,8 @@ export async function previewImport(
   rows: string[][],
   hasHeader: boolean,
   mapping?: ColumnMapping,
-  targetClassId?: string
+  targetClassId?: string,
+  updateExisting = true
 ) {
   return withTenant(user.tenantId, async () => {
     if (rows.length === 0) throw new ImportError("EMPTY", "The file has no rows.");
@@ -380,7 +554,7 @@ export async function previewImport(
     const finalMapping = mapping && mapping.length > 0 ? mapping : autoMapColumns(rows[0] ?? []);
 
     const { candidates, issues } = buildCandidates(rows, finalMapping, hasHeader);
-    const dupIssues = await duplicateIssues(user, candidates);
+    const dupIssues = await duplicateIssues(user, candidates, updateExisting);
     for (const d of dupIssues) {
       const row = candidates.find((c) => c._row === d.row);
       if (row) row._issues.push(d.message);
@@ -419,15 +593,28 @@ export async function previewImport(
       if (seen.has(k)) dupRows.push(c._row);
       seen.add(k);
     }
-    const names = candidates.map((c) => ({ firstName: c.firstName, lastName: c.lastName }));
-    const existing = await tenantDb().student.findMany({
-      where: { OR: names.slice(0, 200).map((n) => ({ AND: [{ firstName: n.firstName }, { lastName: n.lastName }] })) },
-      select: { firstName: true, lastName: true },
-    });
-    const existingKeys = new Set(existing.map((e) => `${e.firstName}|${e.lastName}`.toLowerCase()));
-    const possibleExisting = candidates
-      .filter((c) => existingKeys.has(`${c.firstName}|${c.lastName}`.toLowerCase()))
-      .map((c) => c._row);
+
+    // R.1 — real match-and-merge preview: for every row with no other error,
+    // check if it matches an existing student and, if so, what would be
+    // filled for free vs what's a genuine conflict needing confirmation.
+    const matchedRows: { row: number; matchedOn: ExistingStudentMatch["matchedOn"]; studentId: string; studentLabel: string; fillable: string[]; conflicts: FieldConflict[] }[] = [];
+    if (updateExisting) {
+      for (const c of candidates) {
+        if (c._issues.length > 0) continue;
+        const match = await matchExistingStudent(c);
+        if (!match) continue;
+        const { fillable, conflicts } = diffAgainstExisting(c, match);
+        matchedRows.push({
+          row: c._row,
+          matchedOn: match.matchedOn,
+          studentId: match.id,
+          studentLabel: `${[match.firstName, match.middleName, match.lastName].filter(Boolean).join(" ")} (${match.admissionNo})`,
+          fillable,
+          conflicts,
+        });
+      }
+    }
+    const possibleExisting = matchedRows.map((m) => m.row);
 
     const validCount = candidates.filter((c) => c._issues.length === 0).length;
     return {
@@ -441,6 +628,7 @@ export async function previewImport(
       unknownClasses: [...unknownClasses], // will be CREATED on commit
       duplicateInFileRows: dupRows,
       possibleExistingRows: possibleExisting,
+      matchedRows, // R.1 — real matches this import will UPDATE, not duplicate
       targetClass, // M.4 — set when this preview is scoped to one class only
     };
   });
@@ -458,14 +646,20 @@ export async function commitImport(
     rows: string[][];
     hasHeader: boolean;
     mapping: ColumnMapping;
+
     seedRequirements: boolean;
     skipInvalid: boolean;
     targetClassId?: string;
+    /** R.1 — see importCommitSchema for the full explanation. */
+    updateExisting?: boolean;
+    confirmedConflictRows?: number[];
   }
 ) {
   return withTenant(user.tenantId, async () => {
+    const updateExisting = input.updateExisting ?? true;
+    const confirmedConflictRows = new Set(input.confirmedConflictRows ?? []);
     const { candidates, issues } = buildCandidates(input.rows, input.mapping, input.hasHeader);
-    const dupIssues = await duplicateIssues(user, candidates);
+    const dupIssues = await duplicateIssues(user, candidates, updateExisting);
     if (dupIssues.length > 0) {
       throw new ImportError("DUPLICATE", `Import denied: ${dupIssues[0].message}`);
     }
@@ -523,9 +717,94 @@ export async function commitImport(
     } catch { master = []; }
 
     let createdCount = 0;
+    let updatedCount = 0;
     const failed: RowIssue[] = [...issues];
 
     for (const c of valid) {
+      // R.1 — check for a real existing-student match BEFORE creating a new
+      // row, so a re-imported register enriches the SAME real child instead
+      // of ever creating a second student for them.
+      const match = updateExisting ? await matchExistingStudent(c) : null;
+
+      if (match) {
+        try {
+          const { fillable, conflicts } = diffAgainstExisting(c, match);
+          const unresolvedConflicts = conflicts.filter((cf) => !confirmedConflictRows.has(c._row));
+          if (unresolvedConflicts.length > 0) {
+            // Never silently overwrite a real value that disagrees with what's
+            // already on file — report it back for the school to confirm.
+            failed.push({
+              row: c._row,
+              message: `Matches existing learner ${match.firstName} ${match.lastName} (${match.admissionNo}) but ${unresolvedConflicts.length} field(s) differ (${unresolvedConflicts.map((cf) => cf.field).join(", ")}) — review and re-import with confirmation to overwrite, or fix the sheet.`,
+            });
+            continue;
+          }
+
+          const updateData: Record<string, unknown> = {};
+          if (fillable.includes("firstName") || conflicts.some((cf) => cf.field === "firstName")) updateData.firstName = c.firstName;
+          if (fillable.includes("lastName") || conflicts.some((cf) => cf.field === "lastName")) updateData.lastName = c.lastName;
+          if (fillable.includes("middleName") || conflicts.some((cf) => cf.field === "middleName")) updateData.middleName = c.middleName || null;
+          if (fillable.includes("dateOfBirth") || conflicts.some((cf) => cf.field === "dateOfBirth")) updateData.dateOfBirth = c.dateOfBirth || null;
+          if (fillable.includes("upiNumber") || conflicts.some((cf) => cf.field === "upiNumber")) updateData.upiNumber = c.upiNumber || null;
+          if (fillable.includes("birthCertNo") || conflicts.some((cf) => cf.field === "birthCertNo")) updateData.birthCertNo = c.birthCertNo || null;
+          if (fillable.includes("notes") || conflicts.some((cf) => cf.field === "notes")) updateData.notes = c.notes || null;
+          // A class can always be safely (re)assigned on update — it's a
+          // real, current placement fact, not a disputed historical field.
+          if (!forcedClassId && c.className) {
+            const clsId = byKey.get(classKey(c.className));
+            if (clsId) updateData.classId = clsId;
+          } else if (forcedClassId) {
+            updateData.classId = forcedClassId;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            await tenantDb().student.update({ where: { id: match.id }, data: updateData as never });
+          }
+
+          // Add any NEW custom fields (never overwrite an existing one silently —
+          // StudentCustomField's own unique [studentId,label] constraint means a
+          // repeat label here is a real, explicit correction, which is fine).
+          if (c._customFields && c._customFields.length > 0) {
+            for (const f of c._customFields) {
+              await tenantDb().studentCustomField.upsert({
+                where: { studentId_label: { studentId: match.id, label: f.label } },
+                create: { studentId: match.id, label: f.label, value: f.value },
+                update: { value: f.value },
+              } as never);
+            }
+          }
+
+          // Add a guardian ONLY if this student doesn't already have one
+          // with the same phone (never duplicate a guardian link).
+          if (c.guardianName && c.guardianPhone) {
+            const existingLink = await tenantDb().studentGuardian.findFirst({
+              where: { studentId: match.id, guardian: { phone: c.guardianPhone } },
+            });
+            if (!existingLink) {
+              let guardian = await tenantDb().guardian.findFirst({ where: { phone: c.guardianPhone } });
+              if (!guardian) guardian = await tenantDb().guardian.create({ data: { fullName: c.guardianName, phone: c.guardianPhone } as never });
+              const hasPrimary = await tenantDb().studentGuardian.findFirst({ where: { studentId: match.id, isPrimary: true } });
+              await tenantDb().studentGuardian.create({
+                data: { studentId: match.id, guardianId: guardian.id, relationship: "Parent", isPrimary: !hasPrimary } as never,
+              });
+            }
+          }
+
+          // R.1 — opening balance: create a real ARREARS invoice for the
+          // amount, never edit an existing invoice's totals. Idempotent per
+          // import row via a stable description so re-running the same
+          // import twice does not double-bill a family.
+          if (c.openingBalanceKes && c.openingBalanceKes > 0) {
+            await reconcileOpeningBalance(user, match.id, c.openingBalanceKes);
+          }
+
+          updatedCount++;
+        } catch (e) {
+          failed.push({ row: c._row, message: e instanceof Error ? e.message.slice(0, 140) : "Could not update this learner." });
+        }
+        continue;
+      }
+
       try {
         const admissionNo = await nextTenantId(user.tenantId, "STUDENT");
         const legacyAdmissionNo = c.legacyAdmissionNo || c.admissionNo || null;
@@ -586,6 +865,14 @@ export async function commitImport(
             })) as never,
           });
         }
+
+        // R.1 — opening balance for a brand-new import row too (e.g. a
+        // school importing a mid-year transfer-in student with a known
+        // carried balance from their old school).
+        if (c.openingBalanceKes && c.openingBalanceKes > 0) {
+          await reconcileOpeningBalance(user, student.id, c.openingBalanceKes);
+        }
+
         createdCount++;
       } catch (e) {
         const msg = e instanceof Error && e.message.includes("Unique constraint")
@@ -601,6 +888,7 @@ export async function commitImport(
         source: input.source,
         totalRows: candidates.length,
         createdRows: createdCount,
+        updatedRows: updatedCount,
         failedRows: failed.length,
         errorRows: failed.length ? JSON.stringify(failed.slice(0, 200)) : null,
         targetClassId: forcedClassId,
@@ -617,11 +905,12 @@ export async function commitImport(
         action: "student.bulk_import",
         entityType: "studentImport",
         entityId: importRow.id,
+
         metadata: JSON.stringify({ source: input.source, total: candidates.length, created: createdCount, failed: failed.length }),
       },
     });
 
-    return { importId: importRow.id, totalRows: candidates.length, created: createdCount, failed };
+    return { importId: importRow.id, totalRows: candidates.length, created: createdCount, updated: updatedCount, failed };
   });
 }
 
@@ -635,6 +924,7 @@ export async function listImports(user: SessionUser) {
       source: r.source,
       totalRows: r.totalRows,
       createdRows: r.createdRows,
+      updatedRows: r.updatedRows,
       failedRows: r.failedRows,
       errorRows: r.errorRows ? (JSON.parse(r.errorRows) as RowIssue[]) : [],
       createdByName: r.createdByName,

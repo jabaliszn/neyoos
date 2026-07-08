@@ -91,20 +91,43 @@ export async function batchInvoice(user: SessionUser, structureId: string, dueDa
       select: { id: true, guardians: { include: { guardian: true } } },
     });
 
-    const isSiblingDiscountEnabled = (await db.platformSetting.findUnique({ where: { key: "enable_sibling_discount" } }))?.value === "true";
-    let siblingMap = new Map();
-    if (isSiblingDiscountEnabled) {
-      // Build a map of primary guardian ID to count of active students
+    // R.8 (2026-07-04) — retired the old platform-wide flat-10%
+    // `enable_sibling_discount` master switch. Every school now controls
+    // its own sibling-discount % directly (Tenant.siblingDiscountPct,
+    // default 0 = off, editable in Finance settings). Sibling detection
+    // also now uses the real phone+name fallback (expandGuardianFamilyIds),
+    // not just the primary-guardian-id-only grouping this used to do —
+    // catches genuine siblings whose parent has TWO separate Guardian
+    // records (e.g. two different imports) that were never formally linked.
+    // Dynamic import avoids a circular import: family.service.ts imports
+    // applyDiscount from THIS file (same pattern already used for R.3's
+    // consumeBiometricActionTicket below).
+    const { getSiblingDiscountSetting, expandGuardianFamilyIds } = await import("@/lib/services/family.service");
+    const { siblingDiscountPct } = await getSiblingDiscountSetting(user);
+    // guardianId -> count of ACTIVE students in that guardian's REAL family
+    // (phone+name fallback expanded), used below to decide who qualifies.
+    const siblingMap = new Map<string, number>();
+    if (siblingDiscountPct > 0) {
       const allActive = await tenantDb().student.findMany({
         where: { status: "ACTIVE" },
-        select: { id: true, guardians: { where: { isPrimary: true }, select: { guardianId: true } } }
+        select: { id: true, guardians: { where: { isPrimary: true }, select: { guardianId: true } } },
       });
-      allActive.forEach(s => {
-        if (s.guardians[0]) {
-          const gId = s.guardians[0].guardianId;
-          siblingMap.set(gId, (siblingMap.get(gId) || 0) + 1);
-        }
-      });
+      const primaryGuardianIdOf = new Map<string, string>(); // studentId -> guardianId
+      const studentCountByGuardian = new Map<string, number>(); // raw guardianId -> count
+      for (const s of allActive) {
+        const gId = s.guardians[0]?.guardianId;
+        if (!gId) continue;
+        primaryGuardianIdOf.set(s.id, gId);
+        studentCountByGuardian.set(gId, (studentCountByGuardian.get(gId) ?? 0) + 1);
+      }
+      const familyCache = new Map<string, number>(); // guardianId -> real family size
+      for (const gId of studentCountByGuardian.keys()) {
+        if (familyCache.has(gId)) continue;
+        const family = await expandGuardianFamilyIds([gId]);
+        const size = family.reduce((sum, fid) => sum + (studentCountByGuardian.get(fid) ?? 0), 0);
+        for (const fid of family) familyCache.set(fid, size);
+      }
+      for (const [gId, size] of familyCache) siblingMap.set(gId, size);
     }
     if (students.length === 0) throw new FinanceError("EMPTY", `No active students in ${structure.level}.`);
 
@@ -120,13 +143,13 @@ export async function batchInvoice(user: SessionUser, structureId: string, dueDa
       if (skip.has(st.id)) continue;
       
       let discountKes = 0;
-      let notes = null;
-      if (isSiblingDiscountEnabled && st.guardians[0]?.isPrimary) {
+      let discountReason: string | null = null;
+      if (siblingDiscountPct > 0 && st.guardians[0]?.isPrimary) {
          const count = siblingMap.get(st.guardians[0].guardianId) || 1;
          if (count > 1) {
-            // Apply a flat 10% discount for families with multiple kids for K.13
-            discountKes = Math.round(total * 0.1);
-            notes = `Applied 10% Sibling Discount (${count} siblings enrolled).`;
+            // R.8 — the school's OWN %, not a hardcoded flat 10%.
+            discountKes = Math.round((total * siblingDiscountPct) / 100);
+            discountReason = `Sibling discount (${siblingDiscountPct}%, ${count} siblings enrolled)`;
          }
       }
 
@@ -149,6 +172,14 @@ export async function batchInvoice(user: SessionUser, structureId: string, dueDa
           invoiceNo, studentId: st.id, structureId,
           description: `${structure.name} fees`,
           totalKes: total, dueDate, year: structure.year, term: structure.term,
+          // R.8 bug fix: this discount used to be computed above and then
+          // silently thrown away — the batch job never actually attached
+          // it to the invoice it created, so a family's "sibling discount"
+          // never showed up anywhere real. Now genuinely saved, with the
+          // invoice's status computed to reflect it from creation.
+          discountKes,
+          discountReason,
+          status: effectiveStatus({ totalKes: total, paidKes: 0, discountKes }),
         } as never,
       });
 
@@ -173,6 +204,19 @@ export async function batchInvoice(user: SessionUser, structureId: string, dueDa
       created++;
     }
     await audit(user, "finance.batch_invoiced", structureId, { created, skipped: skip.size, total });
+
+    // Part X — Developer Center 2.0: ONE real summary "invoice.created"
+    // event per batch run (never one per student — a real batch of
+    // hundreds of invoices would otherwise flood a real integration).
+    if (created > 0) {
+      try {
+        const { dispatchEvent } = await import("@/lib/services/webhook.service");
+        await dispatchEvent(user.tenantId, "invoice.created", {
+          structureId, structureName: structure.name, created, totalKes: total, batch: true,
+        });
+      } catch { /* best-effort */ }
+    }
+
     return { created, skipped: skip.size, totalKes: total };
   });
 }
@@ -192,15 +236,43 @@ export async function createManualInvoice(user: SessionUser, input: { studentId:
       } as never,
     });
     await audit(user, "finance.invoice_created", inv.id, { invoiceNo, totalKes: input.totalKes });
+
+    // Part X — Developer Center 2.0 (founder-requested 2026-07-06).
+    try {
+      const { dispatchEvent } = await import("@/lib/services/webhook.service");
+      await dispatchEvent(user.tenantId, "invoice.created", {
+        invoiceId: inv.id, invoiceNo, studentId: input.studentId, totalKes: input.totalKes, kind: "MANUAL",
+      });
+    } catch { /* best-effort */ }
+
     return inv;
   });
 }
 
-/** Record a payment against an invoice (Part 2 wires M-Pesa; this is the ledger move). */
-export async function applyPaymentToInvoice(user: SessionUser, invoiceId: string, amountKes: number) {
+/** R.3 — the real, deterministic action key an offline-payment ticket is
+ * bound to (invoice + amount) — a ticket minted for one payment can never
+ * be replayed against a different invoice or a different amount. */
+export function offlinePaymentActionKey(invoiceId: string, amountKes: number): string {
+  return `offline_payment:${invoiceId}:${amountKes}`;
+}
+
+/** Record a payment against an invoice (Part 2 wires M-Pesa; this is the ledger move).
+ * This is the Finance-page "cash/offline entry" path (distinct from the front
+ * desk's recordWalkInPayment, but the founder's biometric-gate requirement
+ * covers cash payments taken ANYWHERE in NEYO, so this is gated identically). */
+export async function applyPaymentToInvoice(user: SessionUser, invoiceId: string, amountKes: number, biometricTicket?: string) {
   return withTenant(user.tenantId, async () => {
     const inv = await tenantDb().invoice.findUnique({ where: { id: invoiceId } });
     if (!inv) throw new FinanceError("NOT_FOUND", "Invoice not found.");
+
+    // R.3 — real server-side enforcement, same pattern as recordWalkInPayment
+    // and applyDiscount: no client-trusted popup, a real single-use ticket.
+    const tenant = await db.tenant.findUnique({ where: { id: user.tenantId }, select: { requireBiometricForFinance: true } });
+    if (tenant?.requireBiometricForFinance) {
+      const { consumeBiometricActionTicket } = await import("@/lib/services/passkey.service");
+      await consumeBiometricActionTicket(user.id, user.tenantId, offlinePaymentActionKey(invoiceId, amountKes), biometricTicket);
+    }
+
     const paid = inv.paidKes + amountKes;
     const updated = await tenantDb().invoice.update({
       where: { id: invoiceId },
@@ -213,6 +285,19 @@ export async function applyPaymentToInvoice(user: SessionUser, invoiceId: string
     try {
       const { queueInvoiceAfterPayment } = await import("@/lib/services/print-queue.service");
       await queueInvoiceAfterPayment(user.tenantId, invoiceId, `System (payment by ${user.fullName})`);
+    } catch { /* best-effort */ }
+
+    // Part X — Developer Center 2.0: a manual/walk-in payment is just as
+    // real a "payment.recorded"/"invoice.paid" event as an M-Pesa one for
+    // any real school integration listening for it.
+    try {
+      const { dispatchEvent } = await import("@/lib/services/webhook.service");
+      await dispatchEvent(user.tenantId, "payment.recorded", {
+        invoiceId, amountKes, method: "MANUAL", recordedBy: user.fullName,
+      });
+      await dispatchEvent(user.tenantId, "invoice.paid", {
+        invoiceId, invoiceNo: updated.invoiceNo, paidKes: paid, totalKes: inv.totalKes, status: updated.status,
+      });
     } catch { /* best-effort */ }
 
     return updated;
@@ -340,11 +425,61 @@ export async function onPaymentPaid(paymentId: string) {
     await queueReceiptForPayment(payment.tenantId, payment.id, "System (M-Pesa)");
     await queueInvoiceAfterPayment(payment.tenantId, inv.id, "System (M-Pesa)");
   } catch { /* best-effort */ }
+
+  // R.5 — the receipt lands in the parent's NEYO portal automatically, even
+  // if the printer at the desk is off or nobody ever taps print. Never
+  // blocks the ledger write above, which has already completed by now.
+  try {
+    const { deliverReceiptToPortal } = await import("@/lib/services/receipt-delivery.service");
+    await deliverReceiptToPortal(payment.tenantId, payment.id);
+  } catch { /* best-effort */ }
+
+  // Part X — Developer Center 2.0 (founder-requested 2026-07-06): fire the
+  // real "payment.recorded"/"invoice.paid" webhooks to any real integration
+  // a school has subscribed (e.g. their own accounting system, per the
+  // founder's own "Example 7: Accounting" scenario). Best-effort — a real
+  // integration's downtime must never break NEYO's own ledger.
+  try {
+    const { dispatchEvent } = await import("@/lib/services/webhook.service");
+    await dispatchEvent(payment.tenantId, "payment.recorded", {
+      paymentId: payment.id,
+      invoiceId: inv.id,
+      amountKes: payment.amount,
+      mpesaRef: payment.mpesaRef,
+      method: "MPESA",
+    });
+    await dispatchEvent(payment.tenantId, "invoice.paid", {
+      invoiceId: inv.id,
+      invoiceNo: inv.invoiceNo,
+      paidKes: paid,
+      totalKes: inv.totalKes,
+      status: effectiveStatus({ ...inv, paidKes: paid }),
+    });
+  } catch { /* best-effort — a real integration outage never blocks the real ledger */ }
 }
 
 /** B.7.11: scholarships / discounts / bursaries as a waiver on the invoice. */
-export async function applyDiscount(user: SessionUser, invoiceId: string, amountKes: number, reason: string) {
+/** R.3 — the real, deterministic action key a discount ticket is bound to
+ * (invoice + amount) — a ticket minted for one discount can never be
+ * replayed against a different invoice or a different amount. */
+export function discountActionKey(invoiceId: string, amountKes: number): string {
+  return `fee_discount:${invoiceId}:${amountKes}`;
+}
+
+export async function applyDiscount(user: SessionUser, invoiceId: string, amountKes: number, reason: string, biometricTicket?: string) {
   return withTenant(user.tenantId, async () => {
+    // R.3 — real server-side enforcement: if this school has opted into
+    // requireBiometricForFinance, a fresh, single-use, server-verified
+    // fingerprint/Face ID/passkey ticket for THIS EXACT discount is
+    // mandatory — never optional, never skippable by calling the API
+    // directly. Covers BOTH the direct desk-discount flow and the sibling-
+    // discount shortcut (applySiblingDiscount), since both call this.
+    const tenant = await db.tenant.findUnique({ where: { id: user.tenantId }, select: { requireBiometricForFinance: true } });
+    if (tenant?.requireBiometricForFinance) {
+      const { consumeBiometricActionTicket } = await import("@/lib/services/passkey.service");
+      await consumeBiometricActionTicket(user.id, user.tenantId, discountActionKey(invoiceId, amountKes), biometricTicket);
+    }
+
     const inv = await tenantDb().invoice.findUnique({ where: { id: invoiceId } });
     if (!inv) throw new FinanceError("NOT_FOUND", "Invoice not found.");
     const discount = inv.discountKes + amountKes;
@@ -372,11 +507,21 @@ export async function studentOpenInvoices(user: SessionUser, studentId: string) 
       where: { studentId, status: { in: ["UNPAID", "PARTIAL"] } },
       orderBy: { dueDate: "asc" },
     });
-    return rows.map((r) => ({
-      id: r.id, invoiceNo: r.invoiceNo, description: r.description,
-      totalKes: r.totalKes, paidKes: r.paidKes, discountKes: r.discountKes,
-      balanceKes: r.totalKes - r.discountKes - r.paidKes, dueDate: r.dueDate, status: r.status,
-    }));
+    // R.2 — an empty result here is ambiguous by itself: it could mean the
+    // student genuinely has zero open balance (real invoices, all paid), OR
+    // that NO invoice has ever been raised for them at all (e.g. no fee
+    // structure configured yet). Callers must never render both cases as
+    // "fully paid" — the real, distinguishing signal is whether ANY invoice
+    // (open or already-settled) exists in their history at all.
+    const everHadAnyInvoice = rows.length > 0 || (await tenantDb().invoice.count({ where: { studentId } })) > 0;
+    return {
+      invoices: rows.map((r) => ({
+        id: r.id, invoiceNo: r.invoiceNo, description: r.description,
+        totalKes: r.totalKes, paidKes: r.paidKes, discountKes: r.discountKes,
+        balanceKes: r.totalKes - r.discountKes - r.paidKes, dueDate: r.dueDate, status: r.status,
+      })),
+      hasFeeInvoices: everHadAnyInvoice,
+    };
   });
 }
 

@@ -25,6 +25,11 @@ import { withTenant } from "@/lib/core/tenant-context";
 import { tenantDb } from "@/lib/core/tenant-db";
 import { createInApp } from "@/lib/services/notification.service";
 import type { SessionUser } from "@/lib/core/session";
+import {
+  KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE,
+  CORE_ESSENTIAL_MATHEMATICS,
+  COMMUNITY_SERVICE_LEARNING_SUBJECT,
+} from "@/lib/validations/pathways";
 
 export class TimetableEngineError extends Error {
   constructor(public code: "NOT_FOUND" | "INVALID" | "BUSY", message: string) {
@@ -61,8 +66,20 @@ export const CONSTRAINT_LABELS: Record<string, string> = {
   CUSTOM: "Custom school rule",
 };
 
-const DAYS = [1, 2, 3, 4, 5];
-const MAX_PERIODS = 8;
+// P.5 — Mon-Fri are always real school days. Saturday (6) is added PER-CLASS
+// inside the solve pass below (not hardcoded here) based on that class's own
+// real TimetableConfig.hasSaturday flag, so it goes through the exact same
+// teacher-clash / double-booking / time-off checking as any weekday, instead
+// of the older separate bolt-on Bulk/Fair Saturday tools that ran outside the
+// main CSP solver and could silently clash with it.
+const WEEKDAYS = [1, 2, 3, 4, 5];
+const SATURDAY = 6;
+// P.5 — default fallback only for a class with no TimetableConfig row yet.
+// Every real class's actual period count comes from its own
+// TimetableConfig.periodsPerDay (Mon-Fri) / saturdayPeriodsCount (Saturday) —
+// never a single hardcoded number for the whole school.
+const DEFAULT_PERIODS_PER_DAY = 8;
+const DEFAULT_SATURDAY_PERIODS = 4;
 
 function levelAwareTimetablePreset(levels: string[]) {
   const isSeniorSchool = levels.includes("SENIOR_SCHOOL");
@@ -306,6 +323,32 @@ async function buildAndSolve(tenantId: string, jobId: string) {
   if (data.classes.length === 0) throw new TimetableEngineError("NOT_FOUND", "No active classes found.");
 
   const subjectById = new Map(data.subjects.map((s) => [s.id, s]));
+  const configByClass = new Map(data.configs.map((c) => [c.classId, c]));
+
+  // P.5 — per-class day list and per-class-per-day period cap, driven entirely
+  // by each class's own real TimetableConfig row (never a single global
+  // constant). A class with hasSaturday !== false gets Saturday as a genuine
+  // 6th solved day, sized to its own saturdayPeriodsCount (a normal short day
+  // is NOT the same length as a weekday, so it correctly gets fewer periods).
+  function daysForClass(classId: string): number[] {
+    const cfg = configByClass.get(classId);
+    if (cfg?.hasSaturday === false) return WEEKDAYS;
+    return [...WEEKDAYS, SATURDAY];
+  }
+  function maxPeriodsForClass(classId: string, day: number): number {
+    const cfg = configByClass.get(classId);
+    if (day === SATURDAY) return cfg?.saturdayPeriodsCount ?? DEFAULT_SATURDAY_PERIODS;
+    return cfg?.periodsPerDay ?? DEFAULT_PERIODS_PER_DAY;
+  }
+  // A card spans multiple classIds for combinations; the card may only use a
+  // day/period that is valid (real school time) for EVERY member class.
+  function daysForCard(classIds: string[]): number[] {
+    const perClassDays = classIds.map((id) => new Set(daysForClass(id)));
+    return [...WEEKDAYS, SATURDAY].filter((d) => perClassDays.every((s) => s.has(d)));
+  }
+  function maxPeriodsForCard(classIds: string[], day: number): number {
+    return Math.min(...classIds.map((id) => maxPeriodsForClass(id, day)));
+  }
   const classLabel = (c: { level: string; stream: string | null }) => [c.level, c.stream].filter(Boolean).join(" ");
   const activeLevels = safeParse<string[]>(data.tenant?.educationLevelsOffered ?? "[]", []);
   const preset = levelAwareTimetablePreset(activeLevels);
@@ -357,13 +400,17 @@ async function buildAndSolve(tenantId: string, jobId: string) {
     return l;
   });
 
-  // Reserve lunch per class according to its config lunch shift.
+  // Reserve lunch per class according to its config lunch shift — only on
+  // days/periods that actually exist for that class (a short Saturday with
+  // fewer periods than the lunch slot simply has no lunch reservation that day,
+  // matching how a real short day works instead of forcing a phantom period).
   const lunchSlots: any[] = [];
   for (const c of data.classes) {
-    const cfg = data.configs.find((x) => x.classId === c.id);
+    const cfg = configByClass.get(c.id);
     const shift = cfg?.lunchShift ?? 1;
     const lunchPeriod = shift === 1 ? 5 : shift === 2 ? 6 : 7;
-    for (const day of DAYS) {
+    for (const day of daysForClass(c.id)) {
+      if (lunchPeriod > maxPeriodsForClass(c.id, day)) continue;
       classGrid.set(`${c.id}:${day}:${lunchPeriod}`, lunchSubject.id);
       lunchSlots.push({ tenantId, classId: c.id, subjectId: lunchSubject.id, teacherId: null, dayOfWeek: day, period: lunchPeriod, slotType: "ACADEMIC" });
     }
@@ -466,7 +513,7 @@ async function buildAndSolve(tenantId: string, jobId: string) {
 
   // Can a single period at (day, period) host this card across all its classes + teacher?
   function periodFree(card: Card, day: number, period: number): boolean {
-    if (period < 1 || period > MAX_PERIODS) return false;
+    if (period < 1 || period > maxPeriodsForCard(card.classIds, day)) return false;
     for (const cid of card.classIds) {
       if (classGrid.has(`${cid}:${day}:${period}`)) return false;
       if (morningViolation(card.subjectId, period)) return false;
@@ -499,7 +546,7 @@ async function buildAndSolve(tenantId: string, jobId: string) {
       const usedByOtherStreams = new Set<string>();
       for (const otherClassId of classesInLevel) {
         if (card.classIds.includes(otherClassId)) continue;
-        for (let p = 1; p <= MAX_PERIODS; p++) {
+        for (let p = 1; p <= maxPeriodsForClass(otherClassId, day); p++) {
           if (classGrid.get(`${otherClassId}:${day}:${p}`) === card.subjectId) usedByOtherStreams.add(otherClassId);
         }
       }
@@ -563,17 +610,18 @@ async function buildAndSolve(tenantId: string, jobId: string) {
   // candidate placements for a card on a given day
   function candidates(card: Card, day: number): number[][] {
     const out: number[][] = [];
+    const maxP = maxPeriodsForCard(card.classIds, day);
     if (card.size === 1) {
-      for (let p = 1; p <= MAX_PERIODS; p++) if (periodFree(card, day, p)) out.push([p]);
+      for (let p = 1; p <= maxP; p++) if (periodFree(card, day, p)) out.push([p]);
     } else {
       // double: try consecutive first
-      for (let p = 1; p < MAX_PERIODS; p++) {
+      for (let p = 1; p < maxP; p++) {
         if (periodFree(card, day, p) && periodFree(card, day, p + 1)) out.push([p, p + 1]);
       }
       // split double allowed (or forced by SPLIT_DOUBLE_HARD constraint): two non-adjacent periods same day
       if (card.splitAllowed) {
-        for (let p = 1; p <= MAX_PERIODS; p++) {
-          for (let q = p + 2; q <= MAX_PERIODS; q++) {
+        for (let p = 1; p <= maxP; p++) {
+          for (let q = p + 2; q <= maxP; q++) {
             if (periodFree(card, day, p) && periodFree(card, day, q)) out.push([p, q]);
           }
         }
@@ -589,7 +637,7 @@ async function buildAndSolve(tenantId: string, jobId: string) {
     const cached = candidateCache.get(card.id);
     if (cached) return cached;
     const placements: number[][] = [];
-    for (const day of DAYS) {
+    for (const day of daysForCard(card.classIds)) {
       if (!spreadOk(card, day)) continue;
       if (!singlePerDayOk(card, day)) continue;
       if (!streamDistributionOk(card, day)) continue;
@@ -660,7 +708,7 @@ async function buildAndSolve(tenantId: string, jobId: string) {
     for (const s of lunchSlots) classGrid.set(`${s.classId}:${s.dayOfWeek}:${s.period}`, lunchSubject.id);
     for (const card of cards) {
       let done = false;
-      for (const day of DAYS) {
+      for (const day of daysForCard(card.classIds)) {
         if (!spreadOk(card, day) || !singlePerDayOk(card, day) || !streamDistributionOk(card, day)) continue;
         const cs = candidates(card, day).filter((periods) => classStreamConflictOk(card, day, periods));
         if (cs.length > 0) { occupy(card, day, cs[0]); done = true; placed++; break; }
@@ -703,7 +751,13 @@ async function buildAndSolve(tenantId: string, jobId: string) {
 
   await withTenant(tenantId, async () => {
     const tdb = tenantDb();
-    await tdb.timetableSlot.deleteMany({});
+    // P.5 bugfix: this regenerate only OWNS "ACADEMIC" slots (Mon-Fri + the
+    // now-integrated Saturday). It must never wipe REMEDIAL/PREP/ACTIVITY rows
+    // created by the separate Bulk/Fair Saturday tools or the Activities
+    // timetable — a real pre-existing bug (unscoped deleteMany({})) found and
+    // fixed during the P.5 audit that silently destroyed those rows on every
+    // Master Button run.
+    await tdb.timetableSlot.deleteMany({ where: { slotType: "ACADEMIC" } });
     const validTeacherIds = new Set((await tdb.user.findMany({ where: { isActive: true }, select: { id: true } })).map((u) => u.id));
     const validClassIds = new Set(data.classes.map((c) => c.id));
     const validSubjectIds = new Set(data.subjects.map((s) => s.id).concat([lunchSubject.id]));
@@ -712,6 +766,110 @@ async function buildAndSolve(tenantId: string, jobId: string) {
   });
 
   return { slotsPlaced: slotRows.length, unplaced, warnings, fullySolved };
+}
+
+// ---------------------------------------------------------------------------
+// P.5 — Optional KICD Senior School 40-lesson/week template.
+// A school may apply this to a specific Senior School class in ONE action to
+// pre-fill its TimetableConfig + ClassSubjectNeed rows with the real KICD
+// numbers (English 5, Kiswahili 5, Math 5, CSL 3, 3 electives x 5, PE 3, ICT
+// Skills 2, PPI 1, Personal/Group Study 1 = 40). NEVER applied automatically
+// or forced — periodsPerDay/lessonDurationMins remain fully editable
+// afterward like any other class, matching the founder's explicit
+// "let a school tweak how they would like" instruction.
+// ---------------------------------------------------------------------------
+export async function applyKicdSeniorSchoolTemplate(
+  user: SessionUser,
+  input: { classId: string; electiveSubjectIds: string[] }
+) {
+  return withTenant(user.tenantId, async () => {
+    const tdb = tenantDb();
+    const cls = await tdb.schoolClass.findUnique({ where: { id: input.classId } });
+    if (!cls) throw new TimetableEngineError("NOT_FOUND", "Class not found.");
+    if (input.electiveSubjectIds.length !== 3) {
+      throw new TimetableEngineError("INVALID", "The KICD Senior School template needs exactly 3 real pathway electives for this class.");
+    }
+    const electiveSubjects = await tdb.subject.findMany({ where: { id: { in: input.electiveSubjectIds }, archived: false } });
+    if (electiveSubjects.length !== 3) throw new TimetableEngineError("NOT_FOUND", "One or more selected elective subjects no longer exist.");
+
+    // Match-or-create the real compulsory subjects this template needs,
+    // reusing existing rows wherever they already exist (never duplicating
+    // English/Kiswahili/Math/CSL, matching the project's non-duplication
+    // discipline used throughout Part P).
+    async function ensureSubject(name: string, code: string) {
+      const existing = await tdb.subject.findFirst({ where: { code } });
+      if (existing) return existing;
+      return tdb.subject.create({ data: { tenantId: user.tenantId, name, code, curriculum: "CBC" } });
+    }
+    const english = await ensureSubject("English", "ENG");
+    const kiswahili = await ensureSubject("Kiswahili", "KIS");
+    const csl = await ensureSubject(COMMUNITY_SERVICE_LEARNING_SUBJECT.name, COMMUNITY_SERVICE_LEARNING_SUBJECT.code);
+    const pe = await ensureSubject("Physical Education", "PE");
+    const ict = await ensureSubject("ICT Skills", "ICTS");
+    const ppi = await ensureSubject("Pastoral Programme of Instruction", "PPI");
+    const study = await ensureSubject("Personal/Group Study", "PGST");
+
+    // Mathematics variant: resolve from this class's OWN pathway allocations
+    // if any students are already allocated (STEM -> Core, else Essential),
+    // defaulting to Core Mathematics if the class has no allocation data yet
+    // (a school can correct this afterward like any ClassSubjectNeed row).
+    const allocatedGroups = await tdb.studentPathwayPreference.findMany({
+      where: { isAllocated: true, student: { classId: input.classId } },
+      include: { pathway: { select: { pathwayGroup: true } } },
+    });
+    const hasStem = allocatedGroups.some((p) => p.pathway.pathwayGroup === "STEM");
+    const mathDef = CORE_ESSENTIAL_MATHEMATICS.find((m) => m.compulsoryFor.includes(hasStem || allocatedGroups.length === 0 ? "STEM" : (allocatedGroups[0].pathway.pathwayGroup as any))) ?? CORE_ESSENTIAL_MATHEMATICS[0];
+    const math = await ensureSubject(mathDef.name, mathDef.code);
+
+    // Fill TimetableConfig with the real KICD structure (40 lessons, 40 min,
+    // 8 periods/day) — a starting point the school can still edit afterward.
+    await tdb.timetableConfig.upsert({
+      where: { classId: input.classId },
+      create: {
+        tenantId: user.tenantId,
+        classId: input.classId,
+        periodsPerDay: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.periodsPerDay,
+        lessonDurationMins: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.lessonDurationMins,
+        freePeriodsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.nonAcademicLessons.PERSONAL_GROUP_STUDY,
+        coCurricularCount: 0,
+        coCurricularName: "Games",
+        hasSaturday: true,
+        saturdayPeriodsCount: 4,
+      },
+      update: {
+        periodsPerDay: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.periodsPerDay,
+        lessonDurationMins: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.lessonDurationMins,
+      },
+    });
+
+    const needRows: { subjectId: string; lessonsPerWeek: number }[] = [
+      { subjectId: english.id, lessonsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.compulsorySubjectLessons.ENGLISH },
+      { subjectId: kiswahili.id, lessonsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.compulsorySubjectLessons.KISWAHILI_OR_KSL },
+      { subjectId: math.id, lessonsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.compulsorySubjectLessons.MATHEMATICS },
+      { subjectId: csl.id, lessonsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.compulsorySubjectLessons.COMMUNITY_SERVICE_LEARNING },
+      ...electiveSubjects.map((s) => ({ subjectId: s.id, lessonsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.electiveLessonsEach })),
+      { subjectId: pe.id, lessonsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.nonAcademicLessons.PE },
+      { subjectId: ict.id, lessonsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.nonAcademicLessons.ICT_SKILLS },
+      { subjectId: ppi.id, lessonsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.nonAcademicLessons.PPI },
+      { subjectId: study.id, lessonsPerWeek: KICD_SENIOR_SCHOOL_TIMETABLE_TEMPLATE.nonAcademicLessons.PERSONAL_GROUP_STUDY },
+    ];
+
+    for (const row of needRows) {
+      await tdb.classSubjectNeed.upsert({
+        where: { tenantId_classId_subjectId: { tenantId: user.tenantId, classId: input.classId, subjectId: row.subjectId } },
+        create: { tenantId: user.tenantId, classId: input.classId, subjectId: row.subjectId, lessonsPerWeek: row.lessonsPerWeek },
+        update: { lessonsPerWeek: row.lessonsPerWeek },
+      });
+    }
+
+    const totalLessons = needRows.reduce((sum, r) => sum + r.lessonsPerWeek, 0);
+    return {
+      classId: input.classId,
+      totalLessonsPerWeek: totalLessons,
+      mathVariantApplied: mathDef.name,
+      subjectsConfigured: needRows.length,
+    };
+  });
 }
 
 /** Derive which classes take a subject from student subject selections. */

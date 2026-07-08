@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { tenantDb } from "@/lib/core/tenant-db";
 import { withTenant } from "@/lib/core/tenant-context";
 import type { SessionUser } from "@/lib/core/session";
+import { startGeneration } from "@/lib/services/timetable-engine.service";
 
 export class AutoGroupingError extends Error {
   constructor(public code: "NOT_FOUND" | "INVALID" | "CONFLICT", message: string) {
@@ -179,6 +180,19 @@ export async function commitAutoGrouping(user: SessionUser, level: string) {
     const classIdsAtLevel = new Set(classes.map((c) => c.id));
     const activeTeacherIds = new Set((await tdb.user.findMany({ where: { tenantId: user.tenantId, isActive: true }, select: { id: true } })).map((u) => u.id));
 
+    // P.6 audit finding: this loop used to only update ClassSubjectNeed.teacherId
+    // / SchoolClass.classTeacherId and stop — the LIVE TimetableSlot rows a
+    // teacher/parent/student actually sees were never touched, so the real
+    // timetable would silently keep showing the OLD teacher until someone
+    // separately pressed "Generate Timetable" with no warning it had gone
+    // stale. Fixed to match the exact pattern already used correctly by
+    // `applyTeacherTransferReplacement`/`applyTeacherChangeWithImpact`:
+    // patch any existing live slots for the affected class+subject
+    // immediately, then trigger a real background regeneration so the whole
+    // timetable (which may also be affected by the student moves above,
+    // since combination-group membership can be subject-choice-derived) is
+    // fully reconciled, not just the two rows this function directly wrote.
+    let teacherReassignmentCount = 0;
     for (const cls of classes) {
       const needs = await tdb.classSubjectNeed.findMany({ where: { classId: cls.id } });
       for (const need of needs) {
@@ -187,6 +201,11 @@ export async function commitAutoGrouping(user: SessionUser, level: string) {
         const replacement = await chooseReplacementTeacher(tdb, user.tenantId, need.subjectId, need.teacherId);
         if (replacement) {
           await tdb.classSubjectNeed.update({ where: { id: need.id }, data: { teacherId: replacement.id } });
+          await tdb.timetableSlot.updateMany({
+            where: { classId: need.classId, subjectId: need.subjectId },
+            data: { teacherId: replacement.id },
+          });
+          teacherReassignmentCount++;
         }
       }
       if (cls.classTeacherId && activeTeacherIds.has(cls.classTeacherId)) continue;
@@ -194,6 +213,19 @@ export async function commitAutoGrouping(user: SessionUser, level: string) {
       if (candidate) {
         await tdb.schoolClass.update({ where: { id: cls.id }, data: { classTeacherId: candidate.id } });
       }
+    }
+
+    // Kick off a real background whole-school regeneration so the timetable
+    // fully reflects both the teacher reassignments above AND any knock-on
+    // effect of students moving between classes (e.g. combination-group
+    // membership derived from subject choices). Non-fatal if it fails to
+    // start — the direct slot patches above already keep the visible
+    // timetable correct for the specific reassignments made here.
+    let timetableJob: any = null;
+    if (teacherReassignmentCount > 0) {
+      try {
+        timetableJob = await startGeneration(user);
+      } catch { /* a generation may already be running; the direct patches above still apply */ }
     }
 
     const run = await tdb.promotionRun.create({
@@ -214,9 +246,16 @@ export async function commitAutoGrouping(user: SessionUser, level: string) {
         action: "auto_grouping.committed",
         entityType: "promotionRun",
         entityId: run.id,
-        metadata: JSON.stringify({ level, movedCount: preview.movedCount }),
+        metadata: JSON.stringify({ level, movedCount: preview.movedCount, teacherReassignmentCount, timetableJobId: timetableJob?.id ?? null }),
       },
     });
-    return { runId: run.id, movedCount: preview.movedCount, totalStudents: preview.totalStudents, summary: `Auto-grouped ${preview.totalStudents} students in ${level}.` };
+    return {
+      runId: run.id,
+      movedCount: preview.movedCount,
+      totalStudents: preview.totalStudents,
+      teacherReassignmentCount,
+      timetableJob,
+      summary: `Auto-grouped ${preview.totalStudents} students in ${level}${teacherReassignmentCount > 0 ? `; ${teacherReassignmentCount} teacher assignment(s) reconciled on the live timetable` : ""}.`,
+    };
   });
 }

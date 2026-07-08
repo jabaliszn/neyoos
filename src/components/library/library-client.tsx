@@ -12,6 +12,7 @@ import * as React from "react";
 import {
   Library, BookOpen, Plus, X, Loader2, AlertCircle, Search, ScanLine,
   CheckCircle2, Inbox, Banknote, FileText, Download, BookUp, Camera, Usb,
+  UploadCloud, Sparkles,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FileUpload, type UploadedFile } from "@/components/ui/file-upload";
 import { useToast } from "@/components/ui/toast";
 import { useBiometricGate } from "@/components/auth/biometric-gate";
+import { BundiIntelligentWizard } from "@/components/bundi/bundi-intelligent-wizard";
+
+const LIBRARY_BUNDI_FIELD_OPTIONS: Record<string, string> = {
+  title: "Title", author: "Author", isbn: "ISBN", category: "Category",
+  shelf: "Shelf", copiesTotal: "Copies", ignore: "— Skip —",
+};
 
 const kes = (n: number) => `KES ${n.toLocaleString("en-KE")}`;
 
@@ -73,6 +80,7 @@ function CatalogTab({ canManage }: { canManage: boolean }) {
   const [error, setError] = React.useState(false);
   const [q, setQ] = React.useState("");
   const [adding, setAdding] = React.useState(false);
+  const [importing, setImporting] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setError(false);
@@ -93,7 +101,12 @@ function CatalogTab({ canManage }: { canManage: boolean }) {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-300" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, author, ISBN…" className="w-64 rounded-full border border-navy-200 bg-white py-2 pl-9 pr-4 text-sm dark:border-navy-700 dark:bg-navy-900" />
         </div>
-        {canManage && <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> Add book</Button>}
+        {canManage && (
+          <>
+            <Button onClick={() => setAdding(true)}><Plus className="h-4 w-4" /> Add book</Button>
+            <Button variant="secondary" onClick={() => setImporting(true)}><UploadCloud className="h-4 w-4" /> Import books</Button>
+          </>
+        )}
       </div>
 
       {books === null ? (
@@ -128,11 +141,175 @@ function CatalogTab({ canManage }: { canManage: boolean }) {
         </div>
       )}
       {adding && <AddBookDialog onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
+      {importing && <ImportBooksModal onClose={() => setImporting(false)} onDone={() => { setImporting(false); load(); }} />}
+    </div>
+  );
+}
+
+// ---- Library Bulk Import Modal (N.1) --------------------------------------
+interface LibraryImportErrorItem { row: number; title: string; message: string }
+
+function ImportBooksModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [mode, setMode] = React.useState<"standard" | "bundi">("standard");
+  const [text, setText] = React.useState("");
+  const [file, setFile] = React.useState<File | null>(null);
+  const [hasHeader, setHasHeader] = React.useState(true);
+  const [importing, setImporting] = React.useState(false);
+  const [result, setResult] = React.useState<{ created: number; updated: number; skipped: number; errors: LibraryImportErrorItem[] } | null>(null);
+
+  async function handleImport() {
+    if (!text.trim() && !file) return;
+    setImporting(true);
+    setResult(null);
+    try {
+      let res: Response;
+      if (file) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("hasHeader", String(hasHeader));
+        res = await fetch("/api/library/import", { method: "POST", body: form });
+      } else {
+        res = await fetch("/api/library/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, hasHeader }),
+        });
+      }
+      const json = await res.json();
+      if (json.ok) {
+        setResult(json.data);
+        toast({
+          title: `Import completed: ${json.data.created} new book${json.data.created === 1 ? "" : "s"}, ${json.data.updated} updated`,
+          tone: json.data.created + json.data.updated > 0 ? "success" : "error",
+        });
+        if (json.data.created + json.data.updated > 0) onDone();
+      } else {
+        toast({ title: json.error?.message || "Import failed.", tone: "error" });
+      }
+    } catch {
+      toast({ title: "Failed to parse or submit import data.", tone: "error" });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const sample = "Title,Author,ISBN,Category,Shelf,Copies\nA River Between,Ngugi wa Thiong'o,9789966466472,Set Book,B2,5";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-3xl border border-navy-100 bg-white p-6 shadow-pop dark:border-navy-800 dark:bg-navy-900" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="space-y-0.5">
+            <h3 className="text-base font-bold text-navy-900 dark:text-navy-50">Bulk Import Books</h3>
+            <p className="text-xs text-navy-400">Upload CSV/XLSX or paste from Excel. An existing ISBN adds copies instead of duplicating the catalog entry.</p>
+          </div>
+          <button onClick={onClose} className="rounded-full p-1.5 text-navy-400 hover:bg-navy-50 dark:hover:bg-navy-800" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {!result && (
+          <div className="mb-4 flex gap-1.5 rounded-full bg-navy-50 p-1 text-xs font-semibold dark:bg-navy-800">
+            <button onClick={() => setMode("standard")} className={`flex-1 rounded-full px-3 py-1.5 transition-colors ${mode === "standard" ? "bg-white text-navy-900 shadow-sm dark:bg-navy-900 dark:text-navy-50" : "text-navy-500 dark:text-navy-400"}`}>
+              CSV / Excel / Paste
+            </button>
+            <button onClick={() => setMode("bundi")} className={`flex flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 transition-colors ${mode === "bundi" ? "bg-white text-navy-900 shadow-sm dark:bg-navy-900 dark:text-navy-50" : "text-navy-500 dark:text-navy-400"}`}>
+              <Sparkles className="h-3.5 w-3.5" /> Bundi Intelligent (scan)
+            </button>
+          </div>
+        )}
+
+        {mode === "bundi" && !result ? (
+          <BundiIntelligentWizard
+            domain="LIBRARY"
+            fieldOptions={LIBRARY_BUNDI_FIELD_OPTIONS}
+            onClose={onDone}
+            onDone={(r) => toast({ title: `${r.created} new book(s) imported via Bundi Intelligent`, tone: "success" })}
+          />
+        ) : (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-dashed border-green-200 bg-green-50/60 p-4 text-xs dark:border-green-900/40 dark:bg-green-950/15">
+            <p className="font-bold text-navy-800 dark:text-navy-100">Accepted columns</p>
+            <p className="mt-1 font-mono text-navy-600 dark:text-navy-300">Title · Author · ISBN · Category · Shelf · Copies</p>
+            <p className="mt-2 text-navy-500 dark:text-navy-400">Headers are auto-mapped. Only Title is required — everything else is optional.</p>
+          </div>
+
+          {!result ? (
+            <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="space-y-3">
+                <div>
+                  <Label>Upload a file</Label>
+                  <input
+                    type="file" accept=".csv,.tsv,.txt,.xlsx"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    className="mt-1 w-full rounded-2xl border border-navy-200 bg-white p-2 text-xs dark:border-navy-700 dark:bg-navy-900"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-navy-600 dark:text-navy-300">
+                  <input type="checkbox" checked={hasHeader} onChange={(e) => setHasHeader(e.target.checked)} className="h-4 w-4 rounded border-navy-300 text-green-600 focus:ring-green-500" />
+                  First row is a header
+                </label>
+                <p className="text-[11px] text-navy-400">Example: <span className="font-mono">{sample.split("\n")[0]}</span></p>
+              </div>
+              <div>
+                <Label>…or paste rows here</Label>
+                <textarea
+                  value={text} onChange={(e) => { setText(e.target.value); setFile(null); }}
+                  rows={7} placeholder={sample}
+                  className="mt-1 w-full rounded-2xl border border-navy-200 bg-white p-3 font-mono text-xs dark:border-navy-700 dark:bg-navy-900"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-2xl border border-green-100 bg-green-50 p-3 dark:border-green-900/40 dark:bg-green-950/20">
+                  <p className="text-xl font-black text-green-700 dark:text-green-300">{result.created}</p>
+                  <p className="text-[10px] uppercase text-green-600 dark:text-green-400">New books</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-blue-950/20">
+                  <p className="text-xl font-black text-blue-700 dark:text-blue-300">{result.updated}</p>
+                  <p className="text-[10px] uppercase text-blue-600 dark:text-blue-400">Copies added</p>
+                </div>
+                <div className="rounded-2xl border border-red-100 bg-red-50 p-3 dark:border-red-900/40 dark:bg-red-950/20">
+                  <p className="text-xl font-black text-red-700 dark:text-red-300">{result.skipped}</p>
+                  <p className="text-[10px] uppercase text-red-600 dark:text-red-400">Skipped</p>
+                </div>
+              </div>
+              {result.errors.length > 0 && (
+                <div className="max-h-40 overflow-y-auto rounded-2xl border border-navy-100 p-3 text-xs dark:border-navy-800">
+                  {result.errors.map((e, i) => (
+                    <p key={i} className="text-red-600 dark:text-red-400">Row {e.row} ({e.title}): {e.message}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        )}
+
+        {mode !== "bundi" || result ? (
+          <div className="mt-6 flex justify-end gap-2">
+            {!result ? (
+              <>
+                <Button variant="ghost" onClick={onClose}>Cancel</Button>
+                <Button onClick={handleImport} disabled={importing || (!text.trim() && !file)}>
+                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />} Import
+                </Button>
+              </>
+            ) : (
+              <Button onClick={onClose}>Done</Button>
+            )}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function AddBookDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+
   const { toast } = useToast();
   const [f, setF] = React.useState({ title: "", author: "", isbn: "", category: "", shelf: "", copiesTotal: "1" });
   const [file, setFile] = React.useState<UploadedFile | null>(null);

@@ -69,7 +69,7 @@ export function EcosystemTrendsTab() {
         <Card>
           <CardHeader className="pb-3 border-b border-navy-50 dark:border-navy-800">
             <CardTitle className="flex items-center text-navy-950 dark:text-white text-base">
-              <PieChart className="mr-2 h-5 w-5 text-purple-500" /> CBC Competency Health
+              <PieChart className="mr-2 h-5 w-5 text-purple-500" /> CBE Competency Health
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4">

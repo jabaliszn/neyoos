@@ -73,7 +73,18 @@ export const lessonObservationSchema = z.object({
   date: dateYmd.optional(),
 });
 
-/** Real KE subject sets (B.4 CBC + 8-4-4 support) — used by seed + "quick add". */
+/** Real KE subject sets (B.4 CBC + 8-4-4 support) — used by seed + "quick add".
+ * P.6 (2026-07-02): Religious Education is a real Kenyan school subject choice
+ * offered as CRE (Christian) / IRE (Islamic) / HRE (Hindu) — a school picks
+ * whichever the learner's family practises. Previously this quick-add preset
+ * (used by the "Add CBC set" / "Add 8-4-4 set" buttons that bootstrap a
+ * school's whole subject list, independent of Senior School pathways) only
+ * ever offered CRE, silently leaving IRE/HRE unavailable for any school that
+ * hadn't separately gone through the Senior School official-pathway seeding
+ * flow (P.1) where all three already existed. Now all three real options are
+ * offered together at this general level too, matching the founder's "HRE
+ * alongside the existing CRE/IRE options wherever Religious Education is
+ * offered as a subject choice" instruction. */
 export const KE_SUBJECT_PRESETS: Record<"CBC" | "8-4-4", { name: string; code: string }[]> = {
   CBC: [
     { name: "English", code: "ENG" },
@@ -81,7 +92,9 @@ export const KE_SUBJECT_PRESETS: Record<"CBC" | "8-4-4", { name: string; code: s
     { name: "Mathematics", code: "MAT" },
     { name: "Integrated Science", code: "ISC" },
     { name: "Social Studies", code: "SST" },
-    { name: "CRE", code: "CRE" },
+    { name: "Christian Religious Education", code: "CRE" },
+    { name: "Islamic Religious Education", code: "IRE" },
+    { name: "Hindu Religious Education", code: "HRE" },
     { name: "Agriculture & Nutrition", code: "AGN" },
     { name: "Pre-Technical Studies", code: "PTS" },
     { name: "Creative Arts & Sports", code: "CAS" },
@@ -95,7 +108,9 @@ export const KE_SUBJECT_PRESETS: Record<"CBC" | "8-4-4", { name: string; code: s
     { name: "Physics", code: "PHY" },
     { name: "History & Government", code: "HIS" },
     { name: "Geography", code: "GEO" },
-    { name: "CRE", code: "CRE" },
+    { name: "Christian Religious Education", code: "CRE" },
+    { name: "Islamic Religious Education", code: "IRE" },
+    { name: "Hindu Religious Education", code: "HRE" },
     { name: "Business Studies", code: "BST" },
     { name: "Agriculture", code: "AGR" },
     { name: "Computer Studies", code: "CMP" },

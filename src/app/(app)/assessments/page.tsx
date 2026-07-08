@@ -24,7 +24,7 @@ export default async function AssessmentsPage() {
             Flexible Assessments
           </h1>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-navy-500 dark:text-navy-400">
-            Plan and record projects, practicals, oral work, observations and portfolio evidence while keeping Exams, CBC and LMS intact.
+            Plan and record projects, practicals, oral work, observations and portfolio evidence while keeping Exams, CBE and LMS intact.
           </p>
         </div>
       </div>

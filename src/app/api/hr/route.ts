@@ -1,10 +1,15 @@
 /**
  * B.9 HR hub API.
- * GET  ?view=directory|leave|mine|postings|file&userId=
+ * GET  ?view=directory|leave|mine|postings|file|substitutes&leaveRequestId=&userId=
  * POST {action: profile|promote|leave_apply|leave_decide|posting|application|
- *       app_status|appraisal|disciplinary|training}
+ *       app_status|appraisal|disciplinary|training|substitute_decide|
+ *       substitute_reassign|substitute_revert}
  * Reads: staff.view (leave_apply/mine = any staff). Writes: staff.manage
  * except leave_apply (self-service).
+ * T.12 (founder-requested 2026-07-07): substitute_* actions cover real,
+ * date-scoped substitute-teacher coverage proposals generated automatically
+ * when leave is approved (see substitute.service.ts) — a human must still
+ * explicitly confirm/decline/reassign every one before it goes live.
  */
 import { NextRequest } from "next/server";
 import { z } from "zod";
@@ -16,6 +21,12 @@ import {
   listLeave, leaveBalances, listPostings, createPosting, addApplication,
   setApplicationStatus, addAppraisal, addDisciplinary, addTraining, staffFile,
 } from "@/lib/services/hr.service";
+import {
+  listSubstituteAssignments, decideSubstitute, reassignSubstitute, revertSubstitute, myCoverageToday,
+} from "@/lib/services/substitute.service";
+import {
+  decideSubstituteSchema, reassignSubstituteSchema, revertSubstituteSchema,
+} from "@/lib/validations/substitute";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +40,18 @@ export async function GET(req: NextRequest) {
       const user = await requireUser();
       return ok({ leave: await listLeave(user, true), balances: await leaveBalances(user, user.id) });
     }
+    if (view === "my-coverage") {
+      const user = await requireUser(); // any staff member — their own real substitute-coverage duties
+      return ok({ coverage: await myCoverageToday(user) });
+    }
     const user = await requirePermission("staff.view");
     if (view === "directory") return ok({ staff: await staffDirectory(user) });
     if (view === "leave") return ok({ leave: await listLeave(user, false) });
     if (view === "postings") return ok({ postings: await listPostings(user) });
+    if (view === "substitutes") {
+      const leaveRequestId = sp.get("leaveRequestId") ?? undefined;
+      return ok({ assignments: await listSubstituteAssignments(user, leaveRequestId) });
+    }
     if (view === "file") {
       const userId = sp.get("userId");
       if (!userId) return fail("MISSING", "userId required.", 400);
@@ -73,6 +92,18 @@ export async function POST(req: NextRequest) {
       case "leave_decide": {
         const { leaveId, approve, note } = z.object({ leaveId: z.string(), approve: z.boolean(), note: z.string().max(200).optional() }).parse(body);
         return ok(await decideLeave(user, leaveId, approve, note));
+      }
+      case "substitute_decide": {
+        const input = decideSubstituteSchema.parse(body);
+        return ok(await decideSubstitute(user, input.substituteAssignmentId, input.approve, input.declineReason));
+      }
+      case "substitute_reassign": {
+        const input = reassignSubstituteSchema.parse(body);
+        return ok(await reassignSubstitute(user, input.substituteAssignmentId, input.substituteTeacherId));
+      }
+      case "substitute_revert": {
+        const input = revertSubstituteSchema.parse(body);
+        return ok(await revertSubstitute(user, input.substituteAssignmentId));
       }
       case "posting": {
         const input = z.object({ title: z.string().min(3).max(100), description: z.string().max(1000).optional(), deadline: dateYmd.optional().or(z.literal("")) }).parse(body);

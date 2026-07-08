@@ -164,6 +164,17 @@ export async function publishExam(user: SessionUser, examId: string, published: 
           });
         }
       }
+
+      // Part X — Developer Center 2.0 (founder-requested 2026-07-06): fire
+      // the real "exam.published" webhook — e.g. a real Ministry/CBE
+      // curriculum-content integration (the founder's own "Example 5")
+      // could react to a results release. Best-effort only.
+      try {
+        const { dispatchEvent } = await import("@/lib/services/webhook.service");
+        await dispatchEvent(user.tenantId, "exam.published", {
+          examId, examName: exam.name, studentCount: students.length,
+        });
+      } catch { /* best-effort */ }
     }
 
     return { id: examId, published };

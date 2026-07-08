@@ -57,9 +57,9 @@ function assertScore(user: SessionUser) {
 }
 
 const DEFAULT_CBC_RUBRIC = {
-  name: "CBC Comprehensive Rubric",
-  description: "Standard 4-level evaluation rubric for CBC subjects and formative projects.",
-  category: "CBC",
+  name: "CBE Comprehensive Rubric",
+  description: "Standard 4-level evaluation rubric for CBE subjects and formative projects.",
+  category: "CBC", // internal stored value — always rendered as "CBE" to users, see curriculumLabel()/UI badges
   levels: [
     { level: 4, code: "EE", label: "Exceeding Expectation", descriptor: "Learner correctly performs the task with exceptional creativity and deep mastery.", points: 100 },
     { level: 3, code: "ME", label: "Meeting Expectation", descriptor: "Learner correctly performs the task following instructions independently.", points: 75 },

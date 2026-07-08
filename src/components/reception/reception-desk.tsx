@@ -18,6 +18,7 @@ import {
   Users,
   BadgeCheck,
   Clock,
+  Fingerprint,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -28,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { TableContainer } from "@/components/ui/table";
+import { useBiometricGate } from "@/components/auth/biometric-gate";
 
 // ---- types -----------------------------------------------------------------
 interface Visitor {
@@ -592,17 +594,51 @@ function VisitorDialog({ onClose, onSaved }: { onClose: () => void; onSaved: (v:
 // ---- payment dialog --------------------------------------------------------
 function PaymentDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { saving, run } = useSaver();
+  const { requireBiometric } = useBiometricGate();
   const [f, setF] = React.useState({ amount: "", phone: "", method: "cash", accountRef: "", mpesaRef: "", description: "" });
+  const [requiresBiometric, setRequiresBiometric] = React.useState(false);
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+
+  React.useEffect(() => {
+    fetch("/api/finance/security").then((r) => r.json()).then((j) => {
+      if (j.ok) setRequiresBiometric(j.data.requireBiometricForFinance);
+    }).catch(() => {});
+  }, []);
+
+  function submit() {
+    const doSave = (biometricTicket: string | null) =>
+      run("/api/reception/payments", { ...f, amount: f.amount, biometricTicket: biometricTicket ?? undefined }, () => onSaved(), "Payment recorded");
+    if (requiresBiometric) {
+      // R.3 — this school requires a fresh fingerprint/Face ID/passkey check
+      // before a payment (cash especially) can be recorded, to prevent
+      // "clearing" fees that were never actually paid. The server itself
+      // (not just this popup) verifies and consumes a real single-use
+      // ticket bound to this exact amount + method + account reference.
+      requireBiometric(
+        `Record ${f.method === "cash" ? "cash" : f.method} payment of KES ${f.amount || "0"}`,
+        (ticket) => doSave(ticket),
+        `cash_payment:${f.method}:${f.amount}:${f.accountRef ?? ""}`
+      );
+      return;
+    }
+    doSave(null);
+  }
+
   return (
     <Dialog title="Record walk-in payment" onClose={onClose} footer={
       <>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button disabled={saving} onClick={() => run("/api/reception/payments", { ...f, amount: f.amount }, () => onSaved(), "Payment recorded")}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />} Record payment
+        <Button disabled={saving || !f.amount} onClick={submit}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : requiresBiometric ? <Fingerprint className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+          {requiresBiometric ? "Verify & record payment" : "Record payment"}
         </Button>
       </>
     }>
+      {requiresBiometric && (
+        <p className="mb-3 flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+          <Fingerprint className="h-4 w-4 shrink-0" /> This school requires a fingerprint/Face ID check before recording a payment.
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Amount (KES)"><Input type="number" value={f.amount} onChange={(e) => set("amount", e.target.value)} placeholder="5000" autoFocus /></Field>
         <Field label="Method">
@@ -648,6 +684,7 @@ function StkFeesDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   const [hits, setHits] = React.useState<{ id: string; title: string; subtitle: string }[]>([]);
   const [student, setStudent] = React.useState<{ id: string; title: string } | null>(null);
   const [invoices, setInvoices] = React.useState<{ id: string; invoiceNo: string; description: string; balanceKes: number; dueDate: string }[] | null>(null);
+  const [hasFeeInvoices, setHasFeeInvoices] = React.useState(true);
   const [invoiceId, setInvoiceId] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [amount, setAmount] = React.useState("");
@@ -669,6 +706,7 @@ function StkFeesDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     const json = await res.json();
     if (json.ok) {
       setInvoices(json.data.invoices);
+      setHasFeeInvoices(json.data.hasFeeInvoices);
       if (json.data.invoices[0]) {
         setInvoiceId(json.data.invoices[0].id);
         setAmount(String(json.data.invoices[0].balanceKes));
@@ -723,7 +761,11 @@ function StkFeesDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
       )}
       {invoices !== null && (
         invoices.length === 0 ? (
-          <p className="rounded-xl bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-300">No outstanding invoices — fully paid. 🎉</p>
+          hasFeeInvoices ? (
+            <p className="rounded-xl bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-300">No outstanding invoices — fully paid. 🎉</p>
+          ) : (
+            <p className="rounded-xl bg-navy-50 px-3 py-2 text-sm text-navy-500 dark:bg-navy-800 dark:text-navy-400">No fees have been billed to this learner yet — nothing to collect here.</p>
+          )
         ) : (
           <>
             <Field label="Invoice">
@@ -768,7 +810,7 @@ function InquiryDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
       <Field label="Curriculum">
         <select value={f.curriculum} onChange={(e) => set("curriculum", e.target.value)} className="w-full rounded-2xl border border-navy-200 bg-white px-3.5 py-2.5 text-sm focus:border-navy-300 focus:outline-none focus:ring-2 focus:ring-green-500/30 dark:border-navy-700 dark:bg-navy-900">
           <option value="">Not specified</option>
-          <option value="CBC">CBC</option>
+          <option value="CBC">CBE</option>
           <option value="8-4-4">8-4-4</option>
         </select>
       </Field>

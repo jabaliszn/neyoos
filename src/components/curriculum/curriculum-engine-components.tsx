@@ -242,7 +242,7 @@ export function CurriculumEngineHero({ canManage, onCreateCurriculum }: { canMan
               {canManage && onCreateCurriculum ? (
                 <Button onClick={onCreateCurriculum}><Plus className="h-4 w-4" /> New curriculum</Button>
               ) : null}
-              <Badge tone="blue"><BookOpen className="h-3.5 w-3.5" /> CBC, 8-4-4, Cambridge, custom</Badge>
+              <Badge tone="blue"><BookOpen className="h-3.5 w-3.5" /> CBE, 8-4-4, Cambridge, custom</Badge>
               <Badge tone="neutral"><Link2 className="h-3.5 w-3.5" /> Extends existing academics</Badge>
             </div>
           </div>
@@ -323,7 +323,7 @@ export function CurriculumEmptyState({ canManage, onCreateCurriculum }: { canMan
     <EmptyState
       icon={Compass}
       title="No curriculum configured yet"
-      description="Start with CBC Kenya, 8-4-4 Legacy, Cambridge or a custom school framework. Existing subjects and classes will be mapped after the structure is created."
+      description="Start with CBE Kenya, 8-4-4 Legacy, Cambridge or a custom school framework. Existing subjects and classes will be mapped after the structure is created."
       action={canManage && onCreateCurriculum ? <Button onClick={onCreateCurriculum}><Plus className="h-4 w-4" /> Create curriculum</Button> : undefined}
     />
   );
@@ -486,7 +486,7 @@ export function CurriculumForm({
   return (
     <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (!disabled) onSubmit(draft); }}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <div><Label>Curriculum name</Label><Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="CBC Kenya" /></div>
+        <div><Label>Curriculum name</Label><Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="CBE Kenya" /></div>
         <div><Label>Country / context</Label><Input value={draft.country} onChange={(e) => setDraft({ ...draft, country: e.target.value })} placeholder="Kenya" /></div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -583,7 +583,7 @@ export function CurriculumMappingReviewTable({ board }: { board: CurriculumBoard
           <MappingRow icon={BookOpen} label="Subjects" total={board.mappings.subjects.length} unmapped={board.summary.unmappedSubjects} />
           <MappingRow icon={School} label="Classes" total={board.mappings.classes.length} unmapped={board.summary.unmappedClasses} />
           <MappingRow icon={CalendarDays} label="Academic terms" total={board.mappings.terms.length} unmapped={board.summary.unmappedTerms} />
-          <MappingRow icon={ListChecks} label="CBC strands" total={board.mappings.strands.length} unmapped={board.mappings.strands.filter((strand) => !strand.learningAreaId).length} />
+          <MappingRow icon={ListChecks} label="CBE strands" total={board.mappings.strands.length} unmapped={board.mappings.strands.filter((strand) => !strand.learningAreaId).length} />
         </TBody>
       </Table>
     </TableContainer>

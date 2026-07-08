@@ -80,7 +80,7 @@ export async function renderReportCardPdf(d: ReportCardData): Promise<Buffer> {
         </View>
 
         <Text style={s.title}>
-          {d.examName.toUpperCase()} — TERM {d.term}, {d.year} {d.curriculum === "CBC" ? "(CBC ASSESSMENT REPORT)" : "(REPORT CARD)"}
+          {d.examName.toUpperCase()} — TERM {d.term}, {d.year} {d.curriculum === "CBC" ? "(CBE ASSESSMENT REPORT)" : "(REPORT CARD)"}
         </Text>
 
         <View style={s.metaRow}>

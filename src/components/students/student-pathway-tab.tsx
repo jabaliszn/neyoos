@@ -27,6 +27,9 @@ type Readiness = {
   portfolioEvidenceCount: number;
   overallReadiness: "READY" | "ALMOST" | "DEVELOPING" | "NO_DATA";
   subjects: { subjectName: string; isCore: boolean; minScorePct: number | null; studentAvgPct: number | null; met: boolean }[];
+  kjseaScorePct: number | null;
+  kjseaYear: number | null;
+  kjseaInfluencedReadiness: boolean;
 };
 
 const READINESS_TONE: Record<string, string> = {
@@ -117,6 +120,11 @@ export function StudentPathwayTab({ studentId }: { studentId: string }) {
                       {r.isChoice && <Badge tone="neutral" className="text-[9px]">Choice #{r.choiceOrder}</Badge>}
                       {r.isRecommended && <Badge tone="green" className="text-[9px]">Recommended</Badge>}
                       {r.capacity != null && <Badge tone="neutral" className="text-[9px]">{r.allocatedCount}/{r.capacity}{r.seatsLeft === 0 ? " · Full" : ""}</Badge>}
+                      {r.kjseaScorePct != null && (
+                        <Badge tone={r.kjseaInfluencedReadiness ? "amber" : "neutral"} className="text-[9px]" title={`KJSEA ${r.kjseaYear ?? ""}: real Grade 9→10 national placement score`}>
+                          KJSEA {r.kjseaScorePct}%{r.kjseaInfluencedReadiness ? " · influenced verdict" : ""}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-[10px] font-bold ${READINESS_TONE[r.overallReadiness]}`}>

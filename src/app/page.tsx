@@ -318,12 +318,12 @@ export default async function Home() {
 
       <section className="px-4 py-16 sm:px-6">
         <div className="mx-auto max-w-7xl">
-          <SectionTitle eyebrow="Academics" title="CBC and 8-4-4 pathways" text="Clear learning structures for Kenyan families." />
+          <SectionTitle eyebrow="Academics" title="CBE and 8-4-4 pathways" text="Clear learning structures for Kenyan families." />
           <div className="grid gap-5 md:grid-cols-2">
             <article className="rounded-3xl border border-white/70 bg-white/75 p-7 shadow-card backdrop-blur-xl dark:border-white/10 dark:bg-navy-900/50">
               <GraduationCap className="h-8 w-8 text-green-600" />
               <h3 className="mt-5 text-xl font-black text-navy-950 dark:text-white">Competency Based Curriculum</h3>
-              <p className="mt-3 text-sm leading-7 text-navy-500 dark:text-navy-300">CBC support for Grade 1–9, including learning outcomes, formative observations and parent-friendly reports.</p>
+              <p className="mt-3 text-sm leading-7 text-navy-500 dark:text-navy-300">CBE support for Grade 1–9, including learning outcomes, formative observations and parent-friendly reports.</p>
             </article>
             <article className="rounded-3xl border border-white/70 bg-white/75 p-7 shadow-card backdrop-blur-xl dark:border-white/10 dark:bg-navy-900/50">
               <Building2 className="h-8 w-8 text-blue-600" />

@@ -24,7 +24,7 @@ export default async function RubricSettingsPage() {
             Rubrics & Evidence Engine
           </h1>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-navy-500 dark:text-navy-400">
-            Configure customizable evaluation rubrics, master levels, points and qualitative descriptors. Existing formal exams, CBC observations and LMS work stay intact.
+            Configure customizable evaluation rubrics, master levels, points and qualitative descriptors. Existing formal exams, CBE observations and LMS work stay intact.
           </p>
         </div>
       </div>

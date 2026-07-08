@@ -44,6 +44,13 @@ model Tenant {
   referrals          Tenant[] @relation("TenantReferrals")
   hasClaimedReferral Boolean  @default(false)
 
+  // Part V — Capacity-Based Pricing 2.0 real reverse relations.
+  pricingSnapshots    TenantPricingSnapshot[]
+  schoolQuoteRequests SchoolQuoteRequest[]
+
+  // W.1 — Storage Intelligence Engine (founder-requested 2026-07-06).
+  storageOptimizerRuns StorageOptimizerRun[]
+
   isDemo               Boolean   @default(false)
   demoExpiresAt        DateTime? // when the demo tenant is purged (null = not a demo / kept)
   // G.21 (founder 2026-06-12): DAY | BOARDING | DAY_AND_BOARDING — gates the
@@ -52,6 +59,21 @@ model Tenant {
   // G.24 uniform supplier/tailor (orders are relayed to them).
   uniformSupplierName  String?
   uniformSupplierPhone String? // +254...
+
+  // P.1 (2026-07-02): Kenya CBE Senior School pathway configuration. A school
+  // offering Senior School (Grades 10-12) declares itself TRIPLE (all three
+  // official KICD pathways: STEM, Social Sciences, Arts & Sports Science) or
+  // DUAL (STEM + exactly one other, e.g. "STEAMS"/"STEMS" combinations) — a
+  // real classification KICD publishes for senior schools, not a NEYO invention.
+  // "NONE" (default) = school has not configured Senior School pathways yet
+  // (e.g. a primary-only or junior-only school) — no behaviour change for
+  // any existing tenant until they explicitly configure this.
+  pathwaySchoolType    String    @default("NONE") // NONE | TRIPLE | DUAL
+  // JSON array of the pathway GROUP KEYS this school actually offers, e.g.
+  // ["STEM","SOCIAL_SCIENCES"] for a Dual school. Drives which official
+  // KICD pathways get seeded/shown; independent of custom pathways a school
+  // may still create for their own tracking.
+  enabledPathwayGroups String?   @default("[]")
 
   // Calendar preferences (A.17.3): opt-in to showing religious moments.
   showReligiousHolidays Boolean @default(true)
@@ -87,6 +109,31 @@ model Tenant {
   // G.12 Sibling Intelligence: default % discount applied to a sibling's fee
   // invoice when a family has 2+ children enrolled (0 = off; bursar applies it).
   siblingDiscountPct          Int @default(0)
+
+  // T.8 (founder-requested 2026-07-06): "a school choses what they would
+  // like in their system" — the real mid-term transport route/shift change
+  // billing rule is explicitly NEVER a fixed platform decision. Off
+  // (NEXT_TERM_ONLY, no mid-term financial adjustment at all) is the safe
+  // default for every existing school. PRORATE = charge/refund only for the
+  // remaining real days at the new route's rate. TOPUP = a real new
+  // top-up invoice for the new route's full remaining-term fee, no refund
+  // logic. NEXT_TERM_ONLY = the change only affects billing starting the
+  // school's own next real term invoicing run.
+  transportMidTermBillingRule String @default("NEXT_TERM_ONLY") // PRORATE | TOPUP | NEXT_TERM_ONLY
+  // T.8 — real, explicit parent-portal opt-in gate (mirrors
+  // requireBiometricForFinance's own proven on/off pattern exactly). Off by
+  // default — a school must explicitly turn this on before any parent can
+  // submit a real transport route-change request via their own portal.
+  allowParentTransportRequests Boolean @default(false)
+
+  // R.3 (2026-07-03, founder request): require a real fingerprint/Face ID/
+  // passkey check (WebAuthn, works on iPhone Face ID, Android fingerprint,
+  // Windows Hello — any platform authenticator, not NEYO-specific hardware)
+  // before a cash payment can be RECORDED or a fee discount/waiver can be
+  // APPLIED. Off by default — a school opts in once its staff have real
+  // passkeys registered (Settings → Security). Server-side enforced (a real
+  // short-lived signed ticket, not just a screen popup a request could skip).
+  requireBiometricForFinance Boolean @default(false)
 
   // G.34 Security Hardening: enforce 2FA for all leadership/staff roles
   enforce2Fa Boolean @default(false)
@@ -147,6 +194,7 @@ model Tenant {
   documentVerifications      DocumentVerification[]
   apiKeys                    ApiKey[]
   webhookSubscriptions       WebhookSubscription[]
+  apiUsageLogs                ApiUsageLog[]
   webhookDeliveries          WebhookDelivery[]
   calendarEvents             CalendarEvent[]
   visitorLogs                VisitorLog[]
@@ -267,6 +315,9 @@ model Tenant {
   examTimetableSlots         ExamTimetableSlot[]
   examMaterialRecords        ExamMaterialRecord[]
   promisesToPay              PromiseToPay[]
+  transportRouteChangeRequests TransportRouteChangeRequest[]
+  transportShifts            TransportShift[]
+  substituteAssignments      SubstituteAssignment[]
   reportCardDayCheckIns      ReportCardDayCheckIn[]
   newsPosts                  NewsPost[]
   publicSiteSettings         PublicSiteSettings?
@@ -301,8 +352,13 @@ model Tenant {
   ReferralCredit             ReferralCredit[]
   KnecExportBatch            KnecExportBatch[]
   BundiImportUnlockCode      BundiImportUnlockCode[]
-  BundiFieldTemplate         BundiFieldTemplate?
+  BundiFieldTemplate         BundiFieldTemplate[]
   BundiImportSession         BundiImportSession[]
+  BundiLearnedCorrection     BundiLearnedCorrection[]
+  BundiDocumentTemplate      BundiDocumentTemplate[]
+  StaffImport                StaffImport[]
+  LibraryImport              LibraryImport[]
+  SchoolActivity              SchoolActivity[]
   MasterReportCard           MasterReportCard[]
   CombinationGroup           CombinationGroup[]
   TimetableConstraint        TimetableConstraint[]
@@ -314,6 +370,7 @@ model Tenant {
   TeacherTransferImpact      TeacherTransferImpact[]
   CalendarFeedToken          CalendarFeedToken[]
   QrScanEvent                QrScanEvent[]
+  StudentNationalAssessment  StudentNationalAssessment[]
 
   @@index([osKey])
   lessonObservations LessonObservation[]
@@ -358,8 +415,74 @@ model LeaveRequest {
   decisionNote  String?
   createdAt     DateTime  @default(now())
 
+  // T.12 (founder-requested 2026-07-07) — real substitute-teacher coverage
+  // proposals generated the moment this leave is approved (never fully
+  // automatic — founder's own confirmed answer: PROPOSE a substitute for a
+  // human, usually the deputy/HOD, to explicitly confirm before it goes
+  // live on the real timetable a parent/student would see).
+  substituteAssignments SubstituteAssignment[]
+
   @@index([tenantId, userId])
   @@index([tenantId, status])
+}
+
+// T.12 — a real, DATE-SCOPED substitute-teacher coverage record for one
+// real TimetableSlot during one real approved LeaveRequest's real date
+// range. Deliberately NEVER mutates the underlying TimetableSlot itself
+// (that row is a permanent weekly TEMPLATE, reused every week all year —
+// overwriting its own real teacherId would silently and permanently lose
+// the original teacher, and would still be "covering" long after the real
+// leave ends). Instead this is a real, separate, per-date overlay row a
+// school confirms/declines, and the real substitute's own name is what
+// every date-aware read path (teacher portal "today", parent/student
+// timetable views, printed timetables) overlays on top of the slot's own
+// base teacher for exactly the real leave's own date range.
+model SubstituteAssignment {
+  id             String       @id @default(cuid())
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leaveRequestId String
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+
+  timetableSlotId String
+  timetableSlot   TimetableSlot @relation(fields: [timetableSlotId], references: [id], onDelete: Cascade)
+
+  originalTeacherId   String // the real teacher on leave (denormalised off the slot at proposal time, for a stable audit trail even if the slot's own teacherId is later independently edited)
+  originalTeacherName String
+  substituteTeacherId String? // null while a real qualified candidate could not be found (founder-confirmed: leave the gap visible + notify leadership, never silently fabricate a name)
+  substituteTeacherName String?
+
+  // The real, actual dated coverage window this substitution applies to —
+  // NOT necessarily the full leave range, since a slot only recurs on its
+  // own specific real weekday; computed as the real leave-range dates that
+  // land on this slot's own dayOfWeek.
+  coverageDates String // JSON array of real "YYYY-MM-DD" dates within the leave range that land on this slot's dayOfWeek
+
+  status String @default("PROPOSED") // PROPOSED | CONFIRMED | DECLINED | REVERTED | UNFILLED
+  // UNFILLED = a real, honest "no qualified free teacher was found" state
+  // (founder-confirmed: leave the slot visibly needing coverage + alert
+  // leadership, never silently mark a class as covered when it is not).
+
+  confirmedById   String?
+  confirmedByName String?
+  confirmedAt     DateTime?
+  declineReason   String?
+
+  // T.12 — real, founder-confirmed manual-return handling: a staff member
+  // explicitly marks the original teacher back (rather than a same-day
+  // automatic reversion), since a teacher may return early or need their
+  // leave extended — this timestamp is set only once a human confirms it.
+  revertedById   String?
+  revertedByName String?
+  revertedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, leaveRequestId])
+  @@index([tenantId, timetableSlotId])
+  @@index([tenantId, status])
+  @@index([tenantId, substituteTeacherId])
 }
 
 // B.9 recruitment.
@@ -1064,6 +1187,21 @@ model Subject {
   departmentId              String?
   department                Department?                 @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   archived                  Boolean                     @default(false)
+  // P.2 (2026-07-02): Kenya CBE Senior School compulsory-subject variants.
+  // "Mathematics" splits into two REAL, separately-taught, separately-graded
+  // subjects at Senior School: Core Mathematics (STEM pathway) vs Essential
+  // Mathematics (non-STEM, practical/utilitarian) — same compulsory learning
+  // area, genuinely different syllabus/subject rows, never one subject with
+  // a cosmetic label swap. Null for every other (non-Math, non-Senior)
+  // subject — zero behaviour change for existing rows.
+  mathVariant               String?                     // "CORE" | "ESSENTIAL" | null
+  // JSON array of pathway group keys this subject is COMPULSORY for, e.g.
+  // ["STEM"] for Core Mathematics, ["SOCIAL_SCIENCES","ARTS_SPORTS"] for
+  // Essential Mathematics. Null/empty = not a compulsory-by-pathway subject
+  // (ordinary elective, unaffected). Reused by P.3 for Community Service
+  // Learning (compulsory for ALL pathway groups) so this stays one shared
+  // mechanism rather than a Math-only special case.
+  compulsoryPathwayGroups   String?                     @default("[]")
   timetableSlots            TimetableSlot[]
   lessonPlans               LessonPlan[]
   homework                  Homework[]
@@ -1142,6 +1280,10 @@ model TimetableSlot {
   slotType           String            @default("ACADEMIC") // ACADEMIC | REMEDIAL | PREP | ACTIVITY
   weekRotation       String            @default("ALL") // ALL | WEEK_A | WEEK_B for alternating Saturdays
   venue              String? // classroom/lab/hall for venue printing
+
+  // T.12 — real, date-scoped substitute-coverage overlays proposed against
+  // this real recurring slot (never mutates this row's own teacherId).
+  substituteAssignments SubstituteAssignment[]
 
   @@unique([tenantId, classId, dayOfWeek, period, slotType])
   @@index([tenantId, teacherId, dayOfWeek, period])
@@ -1516,7 +1658,16 @@ model TransportRoute {
   tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name       String // "Route A — Kasarani"
   stops      String? // JSON array of stop names, in order
-  termFeeKes Int      @default(0) // per-term transport fee (B.7 invoicing)
+  termFeeKes Int      @default(0) // per-term transport fee (B.7 invoicing) — the real DEFAULT/fallback fee when a shift has no fee override of its own
+  // T.8 (founder-requested 2026-07-06): a route's OWN direct vehicle/driver
+  // fields are kept for full real backward compatibility with every
+  // existing school's real data (a school that never adopts shifts keeps
+  // working exactly as before, zero migration risk) — but a route that HAS
+  // real TransportShift rows is now the richer, real "one route, many
+  // shifts" model (e.g. Route A Morning uses Bus 1, Route A Afternoon uses
+  // Bus 2), each shift with its OWN real vehicle/driver/time window/seat
+  // cap/fee. assignStudent() real-prefers a specific real shift when the
+  // route has any; falls back to the route's own direct vehicle otherwise.
   vehicleId  String?
   vehicle    Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   driverId   String?
@@ -1525,9 +1676,53 @@ model TransportRoute {
   createdAt  DateTime @default(now())
 
   assignments TransportAssignment[]
+  shifts      TransportShift[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
+}
+
+// T.8 — Transport Shifts (founder-requested 2026-07-06, "new TransportShift
+// child model" — a real, separate real-world timeslot under one route, each
+// with its OWN vehicle/driver/time window/seat cap/fee override, so ONE
+// route (e.g. "Route A — Kasarani") can genuinely run a MORNING shift with
+// one bus and an AFTERNOON shift with a completely different bus, a real,
+// common Kenyan school/matatu scheduling pattern a single route-to-vehicle
+// FK could never represent.
+model TransportShift {
+  id       String         @id @default(cuid())
+  tenantId String
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  routeId  String
+  route    TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  name      String // "Morning", "Afternoon", "Evening" — school's own real label, never hardcoded
+  startTime String? // "06:30" — real, optional, for real display/sorting only, never enforced as a hard scheduling constraint here
+  endTime   String?
+
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driverId  String?
+  driver    Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
+
+  // T.8 — "a school can customize the seats number to their liking too": a
+  // REAL, school-chosen effective capacity independent of the vehicle's own
+  // physical seat count (e.g. deliberately leaving safety-margin seats
+  // empty). Null = fall back to the real vehicle's own physical capacity.
+  seatCapOverride Int?
+
+  // Real, optional per-shift fee override — null = fall back to the real
+  // parent route's own termFeeKes, so a school that doesn't care about
+  // per-shift pricing pays nothing extra in complexity.
+  termFeeKesOverride Int?
+
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  assignments TransportAssignment[]
+
+  @@unique([tenantId, routeId, name])
+  @@index([tenantId, routeId])
 }
 
 // I.47 — hardware connection registry: truthful status, never fake connected.
@@ -1600,6 +1795,7 @@ model Driver {
   createdAt     DateTime @default(now())
 
   routes TransportRoute[]
+  shifts TransportShift[]
 
   @@unique([tenantId, licenseNo])
   @@index([tenantId])
@@ -1619,6 +1815,7 @@ model Vehicle {
   createdAt        DateTime @default(now())
 
   routes          TransportRoute[]
+  shifts          TransportShift[]
   maintenanceLogs VehicleMaintenance[]
   fuelLogs        FuelLog[]
 
@@ -1667,6 +1864,11 @@ model TransportAssignment {
   tenantId    String
   routeId     String
   route       TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  // T.8 — real, optional link to the specific real shift this assignment
+  // rides (null for a school that never adopted shifts — the assignment
+  // simply uses the route's own direct vehicle, exactly as before).
+  shiftId     String?
+  shift       TransportShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   studentId   String
   studentName String
   admissionNo String
@@ -1675,6 +1877,51 @@ model TransportAssignment {
   releasedAt  DateTime?
 
   @@index([tenantId, routeId])
+  @@index([tenantId, studentId])
+  @@index([tenantId, shiftId])
+}
+
+// T.8 — a real parent-portal-initiated request to change transport route
+// and/or shift, gated by a real school-level opt-in toggle
+// (Tenant.allowParentTransportRequests). NEVER applies itself — a school
+// staff member must explicitly approve it (mirroring the same real
+// pending-then-approved shape as B.25 Procurement's expense-approval flow
+// and R.6's waive/unwaive pattern), at which point the real fee adjustment
+// (per the school's own chosen Tenant.transportMidTermBillingRule) is
+// applied atomically with the real route/shift reassignment.
+model TransportRouteChangeRequest {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  requestedById   String // the real parent/guardian portal User who submitted this
+  requestedByName String
+
+  currentRouteId String?
+  currentShiftId String?
+  requestedRouteId String
+  requestedShiftId String?
+  requestedPickupStop String?
+  reason               String?
+
+  status String @default("PENDING") // PENDING | APPROVED | DECLINED | CANCELLED
+
+  decidedById   String?
+  decidedByName String?
+  decidedAt     DateTime?
+  declineReason String?
+
+  // Real, honest record of what billing action (if any) was taken when this
+  // was approved — never silent, always auditable after the fact.
+  billingActionTaken String? // NONE | PRORATED | TOPUP_INVOICE_CREATED | DEFERRED_TO_NEXT_TERM
+  billingNote         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
   @@index([tenantId, studentId])
 }
 
@@ -2466,6 +2713,10 @@ model StudentTransfer {
 
 // B.1 bulk import history. One row per committed import run (CSV/XLSX/paste).
 // errorRows keeps the per-row failures as JSON so the bursar can fix + retry.
+// R.1 (2026-07-03) — "smart import" (create-OR-update): a re-import matching
+// an EXISTING student (by admission no/UPI/birth-cert/name+DOB/name+guardian
+// phone) now fills in missing fields and adds new info instead of always
+// being rejected as a duplicate or silently creating a second student row.
 model StudentImport {
   id            String   @id @default(cuid())
   tenantId      String
@@ -2474,6 +2725,7 @@ model StudentImport {
   source        String // "csv" | "xlsx" | "paste"
   totalRows     Int
   createdRows   Int
+  updatedRows   Int      @default(0) // R.1 — rows that matched an existing student and were enriched, not duplicated
   failedRows    Int
   errorRows     String? // JSON [{row, message}] (null when none)
   targetClassId String? // M.4 — set when this run imported into ONE specific class only
@@ -2545,6 +2797,26 @@ model TenantStorageProvider {
   lastUpgradePromptAt DateTime?
   upgradePlan         String?
   notes               String?
+
+  // R.7 — School-Linked External Storage. A real founder request: a school
+  // that doesn't want to pay NEYO for extra storage can paste a link to
+  // their OWN external storage (Google Drive/Dropbox/OneDrive/etc folder)
+  // as their real overflow destination. A bare pasted link genuinely cannot
+  // receive automatic uploads from NEYO (Drive/Dropbox require a real OAuth
+  // connection to write files, a much bigger, separate project) — so this
+  // is honestly modeled as a real, verified signpost: NEYO keeps doing all
+  // the real uploading/storing it already does, and clearly surfaces this
+  // link as "move your older files here yourself" the moment NEYO's own
+  // storage genuinely starts filling up, with automatic fallback to NEYO's
+  // own paid storage warning if the school ignores it.
+  linkedStorageUrl         String? // the real pasted folder link
+  linkedStorageLabel       String? // e.g. "School Google Drive" — the school's own name for it
+  linkedStorageProvider    String? // GOOGLE_DRIVE | DROPBOX | ONEDRIVE | OTHER — auto-detected from the URL, never guessed silently
+  linkedStorageAddedById   String?
+  linkedStorageAddedAt     DateTime?
+  linkedStorageVerifiedAt  DateTime? // last time NEYO confirmed the link is genuinely still reachable (a real HTTP check, not just saved)
+  linkedStorageLastCheckOk Boolean   @default(false)
+
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -2587,8 +2859,49 @@ model StoredFile {
   uploadedById     String
   createdAt        DateTime @default(now())
 
+  // W.1 — Storage Intelligence Engine (founder-requested 2026-07-06). A real
+  // 3-tier file-lifecycle classification, never silently guessed: PERMANENT
+  // (student/fee/attendance/certificate/CBE-evidence records — the school's
+  // real official records, NEVER auto-deleted), GENERATED (a real,
+  // regenerate-on-demand artifact like a report-card PDF — safe to prune,
+  // NEYO can always rebuild it from the underlying data), TEMPORARY (a real
+  // failed-import scratch file, OCR working image, draft export — safe to
+  // auto-delete after a short real window). Defaults to PERMANENT so any
+  // pre-existing/unclassified file is always treated as the safest, never-
+  // delete case until explicitly reclassified by the real upload call site.
+  lifecycleTier  String    @default("PERMANENT") // PERMANENT | GENERATED | TEMPORARY
+  lastAccessedAt DateTime? // real, updated whenever the file is genuinely re-served/downloaded — used to flag truly unused uploads, never guessed
+
   @@index([tenantId])
   @@index([category])
+  @@index([lifecycleTier])
+}
+
+// W.1 — Storage Intelligence Engine (founder-requested 2026-07-06). A real,
+// auditable record of every nightly (or manually-triggered) storage-cleanup
+// run — what was found, what was actually deleted, and how much real space
+// was freed. Schools never see this; it lives entirely inside NEYO Ops.
+model StorageOptimizerRun {
+  id       String  @id @default(cuid())
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  triggeredBy     String // "SCHEDULED_CRON" | a real SUPER_ADMIN user id for a manual run
+  triggeredByName String @default("Storage Intelligence Engine")
+
+  duplicateFilesFound   Int   @default(0)
+  duplicateBytesFound   BigInt @default(0)
+  temporaryFilesDeleted Int   @default(0)
+  temporaryBytesFreed   BigInt @default(0)
+  unusedFilesFlagged    Int   @default(0) // real files with no lastAccessedAt in N+ months — flagged, never auto-deleted
+  totalBytesFreed       BigInt @default(0)
+
+  dryRun Boolean @default(false) // a real preview run (report only, deletes nothing) vs a real committed cleanup
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([createdAt])
 }
 
 // A conversation thread (A.8). type: DIRECT | GROUP | ANNOUNCEMENT.
@@ -2835,6 +3148,24 @@ model Subscription {
 
   addOns String? // JSON array of add-on keys currently active
 
+  // Part V — Capacity-Based Pricing 2.0 (founder-confirmed 2026-07-06,
+  // "migrate everyone now"): which pricing philosophy this school is on.
+  // LEGACY_TIER = the old plans.ts tiered/module-gated system (kept working
+  // for historical reference only; the founder confirmed every real school
+  // is migrated to SIZE_BASED_V2, this field exists so the migration itself
+  // is a real, trackable, auditable one-time event rather than an ambiguous
+  // silent switch).
+  pricingMode String @default("SIZE_BASED_V2") // LEGACY_TIER | SIZE_BASED_V2
+
+  // Part V — the school's REAL, currently-active computed price (KES/term)
+  // under the new size-based engine. Distinct from grandfatheredPrice
+  // (the legacy field) so the two systems' pricing history is never
+  // conflated — a school migrated to SIZE_BASED_V2 has its real active
+  // price here, computed by pricing-engine.service.ts, changing ONLY at a
+  // real renewal boundary per the founder's own confirmed "next billing"
+  // answer, never mid-term.
+  sizeBasedPriceKes Int @default(0)
+
   currentPeriodStart DateTime  @default(now())
   currentPeriodEnd   DateTime // when the next payment is due
   graceEndsAt        DateTime? // set when payment missed; data preserved until/after
@@ -2846,6 +3177,112 @@ model Subscription {
 
   @@index([tenantId])
   @@index([status])
+}
+
+// Part V — Capacity-Based Pricing 2.0 (founder-confirmed 2026-07-06). A real,
+// persisted snapshot of the EXACT inputs a school's current price was
+// computed from — the real "baseline" every future reprice-trigger check
+// compares real current numbers against. Without a real stored baseline,
+// there is nothing to measure "usage grew by X%" against. A new real row is
+// created every time the price is (re)computed, giving NEYO Ops a genuine,
+// permanent, auditable history of every price change and why.
+model TenantPricingSnapshot {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // The real inputs the price below was computed from.
+  studentCount        Int
+  staffCount          Int
+  parentCount         Int // ALL parents, live or dormant (founder's own explicit answer)
+  estimatedStorageGb  Float // the ESTIMATE, never the real measured bytes (founder: never show schools a real GB number)
+  estimatedAiOcrUsage Float @default(0) // Part V.8-resolved: AI/OCR folded into the score, marketed as "no setup fee"
+
+  // W.2 — Real, honest alumni long-term-storage factor (founder-requested
+  // 2026-07-06, only active when NEYO Ops has switched
+  // `alumniStorageFactorEnabled` ON in the pricing_engine_v2 config). A
+  // school with zero graduated/imported alumni records always gets 0 here
+  // — this whole factor is a genuine no-op for the overwhelming majority
+  // of schools until they actually import historical/alumni records.
+  alumniRecordCount    Int     @default(0) // real count of Student rows with status = GRADUATED at calculation time
+  alumniStorageGbAdded Float   @default(0) // the real extra estimated GB this alumni volume adds to the score
+  alumniFactorApplied  Boolean @default(false) // true only when this snapshot's price genuinely includes the alumni factor — never silently applied
+
+  // The real computed result.
+  rawScore      Float
+  monthlyPriceKes Int
+
+  // Why this snapshot was created — real, honest, auditable, never silent.
+  reason String // INITIAL_SIGNUP | REPRICE_THRESHOLD_CROSSED | MANUAL_OPS_OVERRIDE | DISCRETIONARY_DECREASE
+
+  // Who/what triggered it (a real staff actor for manual/discretionary
+  // reasons; null for the automatic scheduled reprice-check job).
+  triggeredById   String?
+  triggeredByName String?
+  note            String? // real free-text, e.g. why a discretionary decrease was approved
+
+  calculatedAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, calculatedAt])
+}
+
+// Part V — Capacity-Based Pricing 2.0 (founder-confirmed 2026-07-06). A real
+// quotation request — a prospective school (which may not even have a real
+// Tenant yet, only having tried the real G.14 demo) requests a quote,
+// declares their real expected student/staff/parent counts, sees an
+// instant real computed price, and can optionally request a real
+// NEYO-Ops-reviewed formal quotation document + real onboarding assistance
+// (data import help, staff training, a guided walkthrough) — the founder's
+// own explicit "option 2 but they can be assisted" answer: self-serve
+// activation, human help offered alongside it, never gating it.
+model SchoolQuoteRequest {
+  id String @id @default(cuid())
+
+  // Nullable: a genuinely prospective school requesting a quote BEFORE
+  // signing up at all has no real tenantId yet. Once they accept and go
+  // live via signupSchool(), this is backfilled to the real new tenant.
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  schoolName   String
+  contactName  String
+  contactEmail String
+  contactPhone String
+
+  // Real declared numbers (or a real, honest "unsure, estimate for us" flag).
+  declaredStudentCount Int?
+  declaredStaffCount   Int?
+  declaredParentCount  Int?
+  requestedEstimate    Boolean @default(false) // true = "estimate for me based on typical schools this size"
+
+  // The real instantly-computed price shown to the prospect immediately.
+  instantQuotedPriceKes Int?
+
+  // The real, optional, NEYO-Ops-reviewed formal quotation (a real PDF
+  // document, reusing the existing @react-pdf/renderer system — never a
+  // new document system). Ops MAY adjust the price for a real, justified
+  // reason (always audit-logged).
+  formalQuoteRequested Boolean @default(false)
+  finalQuotedPriceKes  Int?
+  quotedById           String?
+  quotedByName         String?
+  quotedAt             DateTime?
+  quotePdfUrl          String?
+
+  status String @default("REQUESTED") // REQUESTED | QUOTED | ACCEPTED | DECLINED | LIVE
+
+  // The founder's own explicit, non-blocking human-assistance offer.
+  onboardingAssistanceRequested Boolean @default(false)
+  onboardingAssistanceNote      String?
+  onboardingAssistanceDoneAt    DateTime?
+
+  acceptedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status])
+  @@index([tenantId])
 }
 
 // A payment attempt/record against a subscription (A.5/A.6).
@@ -2926,6 +3363,30 @@ model User {
   passwordHash String? // Argon2id in production (A.14)
   isActive     Boolean @default(true)
   language     String  @default("en") // A.15 preferred UI language: en | sw
+  popupStyle   String  @default("glass") // O.2 personal popup rendering: glass | solid
+  lgContrast   String  @default("company") // O.3 personal colour-intensity override: company | 1 | 2 | 3
+  // Shell Version personal override (founder-requested "NEYO 2.0" phase 2,
+  // 2026-07-04): null = "follow the platform/school default"; "v1" | "v2" =
+  // this staff member's own explicit personal choice, independent of
+  // whatever NEYO Ops/their school has set. Only ever effective once NEYO
+  // Ops has released the personal-toggle capability (see PlatformSetting
+  // shell_personal_toggle_released / shell_personal_toggle_early_access in
+  // shell-version.service.ts) — mirrors the exact same company-then-
+  // personal layering already used by lgContrast above.
+  shellVersion String? // "v1" | "v2" | null (follow default)
+
+  // Part V — Capacity-Based Pricing 2.0 (founder-confirmed 2026-07-06): a
+  // real, narrow, explicitly-grantable delegation. The founder's own words:
+  // "option 1 [SUPER_ADMIN only] but when the ceo allows a staff to do so no
+  // issue eg the ceo of neyo" — the rare, human-reviewed discretionary
+  // price-DECREASE exception (a school's usage genuinely, drastically
+  // dropped) defaults to SUPER_ADMIN-only, but the founder (acting as CEO)
+  // can explicitly delegate this specific capability to a named staff
+  // member without promoting them to SUPER_ADMIN. Settable ONLY by a real
+  // SUPER_ADMIN (enforced in the service layer, not just by this being a
+  // rarely-set column), always audit-logged when granted/revoked AND when
+  // actually used.
+  canApplyDiscretionaryDecrease Boolean @default(false)
 
   // Two-factor authentication (A.1, TOTP / RFC 6238)
   totpSecret     String? // base32 secret; null until setup begins
@@ -2948,8 +3409,40 @@ model User {
   StudentGoal          StudentGoal[]
   calendarFeedToken    CalendarFeedToken?
 
+  // R.4 Multi-School Parent Accounts: this User row is one PARENT account at
+  // ONE school. linkedAsPrimary/linkedAsLinked let the SAME real person
+  // switch between their separate accounts at DIFFERENT NEYO schools without
+  // merging the underlying tenant-scoped User rows (each school keeps its
+  // own account, own audit trail, own permissions — nothing is shared).
+  linkedAsPrimary LinkedGuardianAccount[] @relation("LinkPrimaryUser")
+  linkedAsLinked  LinkedGuardianAccount[] @relation("LinkLinkedUser")
+
   @@index([tenantId])
   @@index([role])
+}
+
+// R.4 — Multi-School Parent Accounts. Connects two SEPARATE, real PARENT
+// User accounts (each at its own tenant/school) that belong to the SAME real
+// person, once verified by a fresh OTP to their own phone (never automatic,
+// per founder's explicit choice — no accidental linking of a shared/reused
+// number). Bidirectional in practice: either side can switch to the other,
+// so the link is modeled once and read from both directions.
+model LinkedGuardianAccount {
+  id        String @id @default(cuid())
+  // The account the link was INITIATED from (the one the parent was signed
+  // into when they tapped "Add another school").
+  primaryUserId String
+  primaryUser   User   @relation("LinkPrimaryUser", fields: [primaryUserId], references: [id], onDelete: Cascade)
+  // The other real school account, now linked and switchable to.
+  linkedUserId String
+  linkedUser   User   @relation("LinkLinkedUser", fields: [linkedUserId], references: [id], onDelete: Cascade)
+
+  verifiedAt DateTime @default(now()) // OTP-verified at creation — never unverified
+  createdAt  DateTime @default(now())
+
+  @@unique([primaryUserId, linkedUserId])
+  @@index([primaryUserId])
+  @@index([linkedUserId])
 }
 
 model OAuthConnectedAccount {
@@ -2998,6 +3491,29 @@ model Credential {
   createdAt    DateTime  @default(now())
 
   @@index([userId])
+}
+
+// R.3 — a real, server-issued, short-lived, single-use proof that a
+// specific user genuinely passed a fingerprint/Face ID/passkey check for a
+// specific real action (e.g. "record a KES 5,000 cash payment"). Issued
+// ONLY by verifyActionAssertion() after a real WebAuthn assertion succeeds;
+// the money-moving route itself must present this ticket and have it
+// consumed (marked usedAt) before the action proceeds — closing the real
+// gap where a screen popup alone could be bypassed by calling the API
+// directly. `actionKey` binds the ticket to one specific real operation
+// (e.g. a stable hash of the amount+studentId) so a ticket for one payment
+// can never be replayed against a different one.
+model BiometricActionTicket {
+  id        String    @id @default(cuid())
+  userId    String
+  tenantId  String
+  actionKey String // e.g. "cash_payment:<amountKes>:<accountRef>" — binds the ticket to ONE real operation
+  createdAt DateTime  @default(now())
+  expiresAt DateTime // short-lived (see BIOMETRIC_TICKET_TTL_MINUTES)
+  usedAt    DateTime? // set the moment the protected route consumes it — never reusable after
+
+  @@index([userId])
+  @@index([tenantId])
 }
 
 // Short-lived WebAuthn challenge for register/login (A.1).
@@ -3171,7 +3687,7 @@ model ApiKey {
   tenantId    String
   tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String // human label, e.g. "SIS integration"
-  keyPrefix   String // non-secret, for display: "neyo_sk_3f9c…"
+  keyPrefix   String // non-secret, for display: "neyo_sk_3f9c…" (or "neyo_partner_…" for a NEYO Partner key)
   keyHash     String    @unique // SHA-256 of the full secret
   scopes      String // JSON array of permission strings this key may use
   lastUsedAt  DateTime?
@@ -3180,8 +3696,39 @@ model ApiKey {
   createdById String?
   createdAt   DateTime  @default(now())
 
+  // Part X — Developer Center 2.0 (founder-requested 2026-07-06). A real,
+  // explicit key TIER, never inferred from the token prefix alone:
+  //   SCHOOL       — a school's own key, self-issued from Settings →
+  //                   Developer, for THEIR OWN third-party integrations
+  //                   (their own finance system, biometric device, etc.).
+  //                   Same real auth/rate-limit/scope mechanism as every
+  //                   other key — no separate system, per the founder's
+  //                   own confirmed answer.
+  //   NEYO_PARTNER — a key NEYO ITSELF issues (SUPER_ADMIN only, via NEYO
+  //                   Ops) for NEYO's own future first-party accessories
+  //                   (e.g. a NEYO-built fingerprint device or ID
+  //                   printer) — a genuinely more privileged, explicitly
+  //                   NEYO-vetted tier, real-audited separately from a
+  //                   school's own self-service keys.
+  tier String @default("SCHOOL") // SCHOOL | NEYO_PARTNER
+  // Real, honest sandbox/live distinction (founder's own "Sandbox" ask,
+  // D.5) — a sandbox key only ever reads/writes a real, isolated demo
+  // dataset, NEVER a real school's live data, so a developer can build and
+  // test safely before ever touching production. `tenantId` above always
+  // stays the OWNING school (for real listing/management/ownership in
+  // their own Settings → Developer page); `sandboxTenantId` is the real,
+  // separate, isolated demo-style tenant this key actually reads/writes
+  // against when `environment === "sandbox"` — a genuinely different real
+  // tenant, never the school's own live data, even though the SAME school
+  // owns/manages the key.
+  environment String @default("live") // live | sandbox
+  sandboxTenantId String?
+
+  usageLogs ApiUsageLog[]
+
   @@index([tenantId])
   @@index([keyHash])
+  @@index([tier])
 }
 
 // A tenant's webhook endpoint. Each delivery is HMAC-signed (A.16.5) with
@@ -3227,6 +3774,39 @@ model WebhookDelivery {
   @@index([tenantId])
   @@index([status, nextAttemptAt])
   @@index([subscriptionId])
+}
+
+// Part X — Developer Center 2.0 (founder-requested 2026-07-06). A real,
+// lightweight per-request audit row for EVERY real Public API call — the
+// exact real data NEYO Ops needs to answer "total requests / active
+// integrations / failed calls / slow endpoints / top developers / usage by
+// school / security alerts" honestly, without guessing. Written by the
+// same real `authenticateApiRequest()` middleware every /api/v1/* route
+// already calls, so covering the API surface costs zero new integration
+// work per route as the surface grows.
+model ApiUsageLog {
+  id       String  @id @default(cuid())
+  tenantId String? // null only for a genuinely failed/unauthenticated request (no real key resolved yet)
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  apiKeyId String?
+  apiKey   ApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+
+  method       String // GET | POST | PUT | PATCH | DELETE
+  path         String // e.g. "/api/v1/students"
+  statusCode   Int
+  durationMs   Int
+  requestBytes Int @default(0)
+
+  // Real, honest security-relevant classification — never a raw guess,
+  // only ever set by the real authentication/authorization outcome itself.
+  outcome String // OK | UNAUTHENTICATED | INVALID_TOKEN | INSUFFICIENT_SCOPE | RATE_LIMITED | SERVER_ERROR
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@index([statusCode])
+  @@index([createdAt])
 }
 
 // =============================================================================
@@ -3448,6 +4028,8 @@ model Student {
   learnerJourneyPins      LearnerJourneyPin[]
   documentVerifications    DocumentVerification[]
   qrScanEvents             QrScanEvent[]            @relation("QrScanStudent")
+  nationalAssessments      StudentNationalAssessment[]
+  transportRouteChangeRequests TransportRouteChangeRequest[]
 
   @@unique([tenantId, admissionNo])
   @@index([tenantId])
@@ -4057,6 +4639,12 @@ model TimetableConfig {
   hasPreps       Boolean @default(false)
   lunchShift     Int     @default(1)
   hasSaturday    Boolean @default(true) // class-level Saturday toggle
+  // P.5 — how many real timetable periods exist on Saturday for this class
+  // (independent of periodsPerDay, since Saturday is normally a short day).
+  // The main whole-school solver treats Saturday as a first-class day within
+  // the SAME conflict-checked pass as Mon-Fri whenever hasSaturday is true,
+  // instead of the separate bolt-on Bulk/Fair Saturday tools existing before.
+  saturdayPeriodsCount Int @default(4)
 }
 
 // I.97 — syllabus coverage / scope tracking per class + subject + term.
@@ -4819,6 +5407,14 @@ model Pathway {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // P.1 (2026-07-02): official KICD taxonomy tagging. A school-created CUSTOM
+  // pathway leaves both null — only pathways seeded via the official KICD
+  // taxonomy (or explicitly tagged by a school) carry these, so existing
+  // pathway rows/behaviour are completely unaffected.
+  pathwayGroup String? // STEM | SOCIAL_SCIENCES | ARTS_SPORTS | null (custom)
+  trackName    String? // e.g. "Pure Sciences", "Humanities & Business Studies", "Performing Arts"
+  isOfficial   Boolean  @default(false) // true = seeded from the real KICD taxonomy, not school-authored
+
   subjectRequirements PathwaySubjectRequirement[]
   studentPreferences  StudentPathwayPreference[]
 
@@ -4855,6 +5451,45 @@ model StudentPathwayPreference {
   updatedAt     DateTime @updatedAt
 
   @@unique([tenantId, studentId, pathwayId])
+}
+
+// PART P.4 (2026-07-02) — Kenya CBE National Assessment Milestones.
+// Real EXTERNAL KNEC/KICD national assessment results (KPSEA Grade 6, KJSEA
+// Grade 9, Senior Secondary Assessment Grade 12 — plus the legacy KCPE/KCSE
+// still relevant for the last 8-4-4 cohorts transitioning out), DISTINCT
+// from the existing internal Exam/ExamResult model (school-set CATs/exams)
+// and from ExamMaterialRecord (which only tracks application/registration
+// LOGISTICS, never an actual received result). A record here is entered
+// once a school receives/confirms the real KNEC result for a learner.
+model StudentNationalAssessment {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  milestone String // KPSEA | KJSEA | SENIOR_SECONDARY_ASSESSMENT | KCPE | KCSE
+  year      Int
+  indexNo   String? // KNEC index/candidate number, when issued
+
+  overallScorePct Int? // 0-100 aggregate, where the milestone reports one (e.g. KJSEA)
+  overallGrade    String? // letter/level grade where the milestone reports one (e.g. legacy KCSE)
+
+  // JSON array of {subjectName, subjectCode, score, grade} — per-subject
+  // breakdown where the milestone reports subject-level results.
+  subjectsJson String @default("[]")
+
+  status       String   @default("CONFIRMED") // PENDING | CONFIRMED | DISPUTED
+  recordedById String
+  recordedByName String
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, studentId, milestone, year])
+  @@index([tenantId, studentId])
+  @@index([tenantId, milestone])
 }
 
 // PART J.11 — Talent Tracking & Co-Curricular Growth
@@ -5473,17 +6108,25 @@ model BundiImportUnlockCode {
 
 // A school's own description of their register's columns/fields BEFORE any
 // AI mapping happens (checklist requirement: "school can describe their own
-// fields to Bundi"). One saved template per tenant; editable each session.
+// fields to Bundi"). One saved template per tenant PER DOMAIN (Student/Staff/
+// Library each keep their own field description) — editable each session.
 model BundiFieldTemplate {
   id          String   @id @default(cuid())
-  tenantId    String   @unique
+  tenantId    String
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // N.1 — which real NEYO import this template feeds: STUDENT | STAFF | LIBRARY.
+  // Kept as a plain string (not an enum) to match this codebase's existing
+  // convention for domain/status fields, and so a school can adopt a NEW
+  // Bundi domain in the future without a schema migration.
+  domain      String   @default("STUDENT")
   // JSON array of {label, description, mapsTo} the school wrote themselves,
   // e.g. [{label:"Adm No (old book)", description:"Written top-left of each row", mapsTo:"legacyAdmissionNo"}]
   fieldsJson  String
   updatedById String
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
+
+  @@unique([tenantId, domain])
 }
 
 // One handwritten-import attempt: upload -> (AI-assisted, cost-tracked)
@@ -5494,14 +6137,55 @@ model BundiImportSession {
   id            String   @id @default(cuid())
   tenantId      String
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  unlockCodeId  String
-  unlockCode    BundiImportUnlockCode @relation(fields: [unlockCodeId], references: [id])
+  // N.1 (2026-07-02) — unlock codes now gate ONLY the legacy/manual "premium"
+  // provider path (OPENAI_VISION/ANTHROPIC_VISION, still real but costlier).
+  // "Bundi Intelligent" (local OCR + rules, escalating to the cheap Google
+  // Vision API only when genuinely needed) is open to every school with NO
+  // code required — per the founder's explicit "this one should not require
+  // any code to unlock... make it usable" instruction, now that Ops has
+  // real evidence the confidence-based pipeline keeps AI usage tiny. NULL
+  // here means "no code was used" (an Intelligent session), never an
+  // accidental bypass of the legacy path, which still always requires one.
+  unlockCodeId  String?
+  unlockCode    BundiImportUnlockCode? @relation(fields: [unlockCodeId], references: [id])
+
+  // N.1 — which real extraction path this session used: BUNDI_INTELLIGENT
+  // (open, local-OCR-first, no code) or LEGACY_PROVIDER (the original
+  // code-gated OpenAI/Anthropic/Google Vision-as-sole-step path).
+  pipeline String @default("BUNDI_INTELLIGENT")
+
+  // N.1 (2026-07-02) — "Bundi Intelligent" multi-domain import. Previously
+  // hardcoded to students only (studentImportId was the only outcome link);
+  // now a session targets exactly one of STUDENT | STAFF | LIBRARY, each
+  // committing through that domain's own REAL standard import engine —
+  // never a second, weaker write path, matching the original M.5 contract
+  // extended across every domain instead of duplicating it per-domain.
+  domain String @default("STUDENT")
+
+  // N.1 — the school's own plain-language context for this specific batch,
+  // e.g. "This is Grade 1's admission register" or "This is the Library
+  // accession ledger, 2019-2021". Feeds DIRECTLY into the Bundi Intelligent
+  // rules stage (e.g. pre-filtering valid class names to just Grade 1
+  // streams) so the founder's "if one says this is grade one" ask is a real
+  // signal the pipeline consumes, not just a label shown back to the user.
+  contextNote String?
 
   status String @default("UPLOADED") // UPLOADED | EXTRACTING | REVIEW | COMMITTED | FAILED | CANCELLED
 
   fileKey     String // StoredFile key of the uploaded scan/photo (A.9, encrypted at rest)
   fileName    String
   pageCount   Int      @default(1)
+
+  // N.1 — "Bundi Intelligent" pipeline stage tracking. A session that never
+  // needed AI (every field confident enough after OCR + rules) has
+  // aiInvoked:false and near-zero cost — this is the real, queryable proof
+  // the confidence-based cost-cutting pipeline is actually working, not
+  // just a design doc.
+  ocrConfidenceAvgPct Int?     // average OCR confidence across all extracted cells, 0-100
+  fieldsTotal         Int      @default(0)
+  fieldsAiEscalated   Int      @default(0) // how many cells were actually low-confidence enough to need AI
+  aiInvoked           Boolean  @default(false)
+  templateMatchId     String?  // set when a previously-learned BundiDocumentTemplate layout was reused (skips re-detection)
 
   provider      String? // e.g. "openai_vision" — set once NEYO Ops configures a real provider
   model         String? // e.g. "gpt-4o" — the exact model used, for cost auditing
@@ -5514,7 +6198,9 @@ model BundiImportSession {
   reviewedRowsJson  String? // school-edited rows, ready for commitImport()
   errorMessage      String?
 
-  studentImportId String? // set once committed, links to the REAL StudentImport history row
+  studentImportId String? // set once committed (domain=STUDENT), links to the REAL StudentImport history row
+  staffImportId   String? // set once committed (domain=STAFF), links to the REAL StaffImport history row
+  libraryImportId String? // set once committed (domain=LIBRARY), links to the REAL LibraryImport history row
 
   createdById   String
   createdByName String
@@ -5522,6 +6208,176 @@ model BundiImportSession {
   updatedAt     DateTime @updatedAt
 
   @@index([tenantId, status])
+  @@index([tenantId, domain])
   @@index([unlockCodeId])
 }
 
+// N.1 — "Bundi Intelligent" learned corrections. When a school fixes an
+// OCR/AI mistake during review, the (domain, fieldLabel, wrongText,
+// correctText) pattern is remembered so future sessions apply it as a FREE
+// deterministic rule before ever reaching AI — the founder's "learn from
+// corrections" cost-cutting requirement, implemented as real per-tenant
+// (never cross-tenant — one school's handwriting quirks are not another's)
+// stored patterns, not a vague promise.
+model BundiLearnedCorrection {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  domain      String // STUDENT | STAFF | LIBRARY
+  fieldLabel  String // the school's own column label this correction applies to
+  wrongText   String // what OCR/AI produced
+  correctText String // what the school corrected it to
+  timesSeen   Int      @default(1) // how many times this exact correction has recurred (confidence signal)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, domain, fieldLabel, wrongText])
+  @@index([tenantId, domain])
+}
+
+// N.1 — "Bundi Intelligent" template memoization. When a register's column
+// LAYOUT (not its data) has been seen before for a tenant+domain, future
+// scans of the same physical form skip AI-assisted table/field detection
+// entirely and reuse the known field positions — the founder's "cache
+// repeated work" cost-cutting requirement. A layout signature is a simple,
+// real, deterministic fingerprint of the detected column count + header
+// text (never an AI-generated guess), so matching is fast and free.
+model BundiDocumentTemplate {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  domain         String // STUDENT | STAFF | LIBRARY
+  layoutSignature String // deterministic fingerprint, e.g. "5col:admno|name|class|dob|guardian"
+  label          String // human label the school can give it, e.g. "Grade 1 Admission Form v3"
+  fieldsJson     String // the learned {label, mapsTo} column layout for this signature
+  timesUsed      Int      @default(1)
+  lastUsedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@unique([tenantId, domain, layoutSignature])
+  @@index([tenantId, domain])
+}
+
+// N.1 — real bulk import history for Staff, mirroring the existing
+// StudentImport history model (M.1) so NEYO Ops/school leadership has the
+// exact same audit trail for staff bulk imports that already existed for
+// students — previously importStaffBatch() recorded only an AuditLog entry
+// with no queryable import-run history of its own.
+model StaffImport {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fileName      String?
+  source        String // "csv" | "xlsx" | "paste" | "bundi"
+  totalRows     Int
+  createdRows   Int
+  failedRows    Int
+  errorRows     String? // JSON [{row, message}] (null when none)
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// N.1 — real bulk import history for the Library catalog (B.15). The
+// Library previously had ZERO bulk-import mechanism of any kind (standard
+// or Bundi) — a genuine, previously-unbuilt gap identified during this
+// session's audit, not a pre-existing feature being extended.
+model LibraryImport {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fileName      String?
+  source        String // "csv" | "xlsx" | "paste" | "bundi"
+  totalRows     Int
+  createdRows   Int
+  updatedRows   Int      @default(0) // existing ISBN matched -> copiesTotal increased, not duplicated
+  failedRows    Int
+  errorRows     String? // JSON [{row, message}] (null when none)
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// R.6 — School Activities / Trips (founder-requested "Form 4 trip" style
+// optional fee-collection tracking). A real, separate model from B.7 fee
+// invoicing/fee structures on purpose: an activity is OPTIONAL — a student
+// who neither pays nor gets an explicit waiver owes NOTHING, ever, ever
+// showing up as a fee balance. Only two real events ever create a real
+// Invoice for a student: (1) a real payment is actually collected (invoice
+// created already fully paid, zero balance), or (2) staff explicitly
+// records a waiver/promise-to-pay for a student who is going without having
+// paid yet — from THAT moment it behaves exactly like any other real fee
+// balance (arrears, reminders, promise-to-pay), per the founder's own exact
+// specification. Creating the activity for one or more classes immediately
+// builds the full roster of every real student in those classes (matching
+// the founder's "if a school has a trip for grade 1 to grade 3, all of them
+// are added in the list") — participation membership is the roster ITSELF,
+// never a separate opt-in step, since paying is what actually confirms
+// going.
+model SchoolActivity {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String // "Form 4 Mombasa Trip"
+  description String?
+  amountKes   Int // the real per-student cost/contribution amount
+  year        Int
+  term        Int
+  eventDate   String? // YYYY-MM-DD, optional (some activities are ongoing)
+  archived    Boolean  @default(false)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  classes      SchoolActivityClass[]
+  participants ActivityParticipant[]
+
+  @@index([tenantId])
+  @@index([tenantId, year, term])
+}
+
+// Which real classes this activity's roster is drawn from (a real school
+// can run one trip across several classes/grades at once).
+model SchoolActivityClass {
+  id         String         @id @default(cuid())
+  tenantId   String
+  activityId String
+  activity   SchoolActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  classId    String
+
+  @@unique([activityId, classId])
+  @@index([tenantId])
+}
+
+// One real row per real student on the roster. `status` is the real, honest
+// truth of where that student stands — never inferred solely from whether
+// an Invoice happens to exist, since most participants will genuinely have
+// NO invoice at all (the whole point of this feature).
+//   NOT_PAID   — on the roster, nothing collected, no waiver — owes NOTHING.
+//   PAID       — a real payment was collected; invoiceId is set and that
+//                invoice is fully paid (zero balance) the moment it's created.
+//   WAIVED     — staff explicitly recorded "going without paying yet" for a
+//                real parent request; invoiceId is set with a REAL open
+//                balance from that moment on, behaving exactly like any
+//                other fee invoice (arrears, reminders, promise-to-pay).
+model ActivityParticipant {
+  id           String          @id @default(cuid())
+  tenantId     String
+  activityId   String
+  activity     SchoolActivity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  studentId    String
+  status       String          @default("NOT_PAID") // NOT_PAID | PAID | WAIVED
+  invoiceId    String? // set only for PAID or WAIVED — NEVER for NOT_PAID
+  waivedReason String? // e.g. "Parent asked to pay after half-term"
+  waivedById   String?
+  waivedAt     DateTime?
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([activityId, studentId])
+  @@index([tenantId])
+  @@index([tenantId, status])
+}

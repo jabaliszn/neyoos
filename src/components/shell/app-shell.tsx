@@ -22,6 +22,7 @@ export function AppShell({
   tenantLogoUrl,
   userName = "Wanjiru Kamau",
   userRole = "Principal",
+  rawRole,
   enabledModules,
   hiddenNav,
   platformHiddenHrefs,
@@ -32,6 +33,7 @@ export function AppShell({
   tenantLogoUrl?: string | null;
   userName?: string;
   userRole?: string;
+  rawRole?: string;
   enabledModules?: string[];
   hiddenNav?: Record<string, string[]>;
   platformHiddenHrefs?: string[];
@@ -50,6 +52,7 @@ export function AppShell({
         tenantLogoUrl={tenantLogoUrl}
         userName={userName}
         userRole={userRole}
+        rawRole={rawRole}
         canViewAs={canViewAs}
         onMenuClick={() => setMobileOpen(true)}
       />

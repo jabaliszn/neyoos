@@ -57,8 +57,21 @@ export const walkInPaymentSchema = z.object({
   accountRef: z.string().trim().max(40).optional(), // adm no / invoice
   mpesaRef: z.string().trim().max(40).optional(), // when method=mpesa/bank slip ref
   description: z.string().trim().max(120).optional(),
+  // R.3 — a real, server-verified single-use ticket proving a fresh
+  // fingerprint/Face ID/passkey check for THIS exact payment. Required only
+  // when the school has turned on requireBiometricForFinance; ignored
+  // (never required) for schools that haven't opted in.
+  biometricTicket: z.string().trim().max(80).optional(),
 });
 export type WalkInPaymentInput = z.infer<typeof walkInPaymentSchema>;
+
+/** R.3 — the real, deterministic action key a cash-payment ticket is bound
+ * to (amount + method + accountRef) — matches exactly what the client asks
+ * the server to mint a ticket for, so a ticket minted for one payment can
+ * never be replayed against a different amount or a different student. */
+export function cashPaymentActionKey(input: { amount: number | string; method: string; accountRef?: string }): string {
+  return `cash_payment:${input.method}:${input.amount}:${input.accountRef ?? ""}`;
+}
 
 // A.18.6 — admission inquiry capture
 export const admissionInquirySchema = z.object({

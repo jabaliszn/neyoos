@@ -50,6 +50,12 @@ const nextConfig = {
       "@react-pdf/renderer",
       "exceljs",
       "pino",
+      // Bundi Intelligent (N.1) — tesseract.js spawns a real Node worker
+      // thread that loads its own script file relative to its own package
+      // directory at runtime; letting webpack bundle it breaks that lookup
+      // (the worker script ends up missing from .next/worker-script). Kept
+      // external so Node resolves it normally, exactly like sharp above.
+      "tesseract.js",
     ],
   },
 };

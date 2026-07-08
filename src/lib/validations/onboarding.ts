@@ -31,6 +31,16 @@ export const signupSchema = z.object({
       return n;
     }),
   password: setPasswordSchema.shape.password,
+  // Part V — Capacity-Based Pricing 2.0 (founder-confirmed 2026-07-06):
+  // "they get their price in their first launch so that they know the
+  // amount of money they would pay" — real declared numbers collected at
+  // signup, feeding the real pricing engine immediately. All optional so a
+  // school that genuinely doesn't know yet can still sign up; the pricing
+  // engine falls back to 0 (which simply means "no size-based charge yet"
+  // until a school completes this step) rather than blocking signup.
+  expectedStudentCount: z.coerce.number().int().min(0).max(50000).optional(),
+  expectedStaffCount: z.coerce.number().int().min(0).max(5000).optional(),
+  expectedParentCount: z.coerce.number().int().min(0).max(100000).optional(),
 });
 
 /** Invite staff during onboarding (or later). */

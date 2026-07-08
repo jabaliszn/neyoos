@@ -12,14 +12,14 @@ export async function GET(req: NextRequest) {
     const redeemCode = req.nextUrl.searchParams.get("accessCode");
     if (redeemCode) {
       const result = await redeemTransferPassport(user, transferPassportRedeemSchema.parse({ accessCode: redeemCode }));
-      return ok({ data: result });
+      return ok(result);
     }
 
     const studentId = req.nextUrl.searchParams.get("studentId");
     if (!studentId) return fail("INVALID", "studentId required", 400);
 
     const transfers = await getOutgoingTransfers(user, studentId);
-    return ok({ data: transfers });
+    return ok(transfers);
   } catch (error) {
     if ((error as any).name === "ZodError") {
       return fail("INVALID", (error as any).errors?.[0]?.message || "Invalid request", 400);
@@ -35,11 +35,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     if (body?.action === "redeem") {
       const result = await redeemTransferPassport(user, transferPassportRedeemSchema.parse(body));
-      return ok({ data: result });
+      return ok(result);
     }
     const data = transferPassportRequestSchema.parse(body);
     const request = await initiateTransferPassport(user, data);
-    return ok({ data: request }, 201);
+    return ok(request, 201);
   } catch (error) {
     if ((error as any).name === "ZodError") {
       return fail("INVALID", (error as any).errors?.[0]?.message || "Invalid request", 400);

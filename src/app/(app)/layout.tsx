@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
+import { AppShellV2 } from "@/components/shell/app-shell-v2";
+import { resolveShellVersion } from "@/lib/services/shell-version.service";
 import { effectivePermissionsForUser, getSessionContext } from "@/lib/core/session";
 import { ROLE_LABELS } from "@/lib/core/roles";
 import { db } from "@/lib/db";
@@ -34,7 +36,7 @@ export default async function AppLayout({
   // Effective tenant for the top-bar module switcher and branding.
   const tenant = await db.tenant.findUnique({
     where: { id: user.tenantId },
-    select: { name: true, slug: true, logoUrl: true },
+    select: { name: true, slug: true, logoUrl: true, brandPrimary: true, brandAccent: true },
   });
 
   // A.2.3 enforcement: skip while impersonating (admin operates cross-tenant).
@@ -74,6 +76,13 @@ export default async function AppLayout({
   // G.14 — demo banner when the session's tenant is a sandboxed demo.
   const demo = await demoStatus(user.tenantId);
 
+  // Shell Version (founder-requested "NEYO 2.0", 2026-07-04): resolved
+  // server-side so there is zero flash-of-wrong-shell on first paint.
+  // Shell V1 (today's sidebar) stays the default; Shell V2 (floating
+  // brand-colored bottom bar + left Activity/Intercom rail) only renders
+  // when NEYO Ops has switched the platform default to "v2".
+  const shellVersion = await resolveShellVersion(user);
+
   return (
     <PermissionsProvider initialRole={user.role} initialSecondaryRole={user.secondaryRole} initialPermissions={permissions}>
       <LangProvider initialLang={isLang(user.language) ? user.language : "en"}>
@@ -85,18 +94,37 @@ export default async function AppLayout({
           />
         )}
         {isViewAs && <ViewAsBanner actingAs={user.fullName} />}
-        <AppShell
-          tenantName={tenant?.name ?? "NEYO"}
-          tenantLogoUrl={tenant?.logoUrl}
-          userName={user.fullName}
-          userRole={ROLE_LABELS[user.role]}
-          enabledModules={enabledModules}
-          hiddenNav={hiddenNav}
-          platformHiddenHrefs={platformHiddenHrefs}
-          canViewAs={canViewAs}
-        >
-          {children}
-        </AppShell>
+        {shellVersion === "v2" ? (
+          <AppShellV2
+            tenantName={tenant?.name ?? "NEYO"}
+            tenantLogoUrl={tenant?.logoUrl}
+            userName={user.fullName}
+            userRole={ROLE_LABELS[user.role]}
+            rawRole={user.role}
+            enabledModules={enabledModules}
+            hiddenNav={hiddenNav}
+            platformHiddenHrefs={platformHiddenHrefs}
+            canViewAs={canViewAs}
+            brandPrimary={tenant?.brandPrimary}
+            brandAccent={tenant?.brandAccent}
+          >
+            {children}
+          </AppShellV2>
+        ) : (
+          <AppShell
+            tenantName={tenant?.name ?? "NEYO"}
+            tenantLogoUrl={tenant?.logoUrl}
+            userName={user.fullName}
+            userRole={ROLE_LABELS[user.role]}
+            rawRole={user.role}
+            enabledModules={enabledModules}
+            hiddenNav={hiddenNav}
+            platformHiddenHrefs={platformHiddenHrefs}
+            canViewAs={canViewAs}
+          >
+            {children}
+          </AppShell>
+        )}
       </LangProvider>
     </PermissionsProvider>
   );
